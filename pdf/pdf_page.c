@@ -285,6 +285,52 @@ found:
 	return useBM;
 }
 
+static void
+pdf_load_transition(pdf_document *xref, pdf_page *page, pdf_obj *transdict)
+{
+	char *name;
+	pdf_obj *obj;
+	int type;
+
+	obj = pdf_dict_gets(transdict, "D");
+	page->transition.duration = (obj ? pdf_to_real(obj) : 1);
+
+	page->transition.vertical = (pdf_to_name(pdf_dict_gets(transdict, "Dm"))[0] != 'H');
+	page->transition.outwards = (pdf_to_name(pdf_dict_gets(transdict, "M"))[0] != 'I');
+	/* FIXME: If 'Di' is None, it should be handled differently, but
+	 * this only affects Fly, and we don't implement that currently. */
+	page->transition.direction = (pdf_to_int(pdf_dict_gets(transdict, "Di")));
+	/* FIXME: Read SS for Fly when we implement it */
+	/* FIXME: Read B for Fly when we implement it */
+
+	name = pdf_to_name(pdf_dict_gets(transdict, "S"));
+	if (!strcmp(name, "Split"))
+		type = FZ_TRANSITION_SPLIT;
+	else if (!strcmp(name, "Blinds"))
+		type = FZ_TRANSITION_BLINDS;
+	else if (!strcmp(name, "Box"))
+		type = FZ_TRANSITION_BOX;
+	else if (!strcmp(name, "Wipe"))
+		type = FZ_TRANSITION_WIPE;
+	else if (!strcmp(name, "Dissolve"))
+		type = FZ_TRANSITION_DISSOLVE;
+	else if (!strcmp(name, "Glitter"))
+		type = FZ_TRANSITION_GLITTER;
+	else if (!strcmp(name, "Fly"))
+		type = FZ_TRANSITION_FLY;
+	else if (!strcmp(name, "Push"))
+		type = FZ_TRANSITION_PUSH;
+	else if (!strcmp(name, "Cover"))
+		type = FZ_TRANSITION_COVER;
+	else if (!strcmp(name, "Uncover"))
+		type = FZ_TRANSITION_UNCOVER;
+	else if (!strcmp(name, "Fade"))
+		type = FZ_TRANSITION_FADE;
+	else
+		type = FZ_TRANSITION_NONE;
+	page->transition.type = type;
+}
+
 pdf_page *
 pdf_load_page(pdf_document *xref, int number)
 {
@@ -361,7 +407,16 @@ pdf_load_page(pdf_document *xref, int number)
 	if (obj)
 	{
 		page->links = pdf_load_link_annots(xref, obj, page->ctm);
-		page->annots = pdf_load_annots(xref, obj);
+		page->annots = pdf_load_annots(xref, obj, page->ctm);
+	}
+
+	page->duration = pdf_to_real(pdf_dict_gets(pageobj, "Dur"));
+
+	obj = pdf_dict_gets(pageobj, "Trans");
+	page->transition_present = (obj != NULL);
+	if (obj)
+	{
+		pdf_load_transition(xref, page, obj);
 	}
 
 	page->resources = pdf_dict_gets(pageobj, "Resources");
@@ -377,7 +432,7 @@ pdf_load_page(pdf_document *xref, int number)
 			page->transparency = 1;
 
 		for (annot = page->annots; annot && !page->transparency; annot = annot->next)
-			if (pdf_resources_use_blending(ctx, annot->ap->resources))
+			if (annot->ap && pdf_resources_use_blending(ctx, annot->ap->resources))
 				page->transparency = 1;
 	}
 	fz_catch(ctx)
@@ -414,5 +469,10 @@ pdf_free_page(pdf_document *xref, pdf_page *page)
 		fz_drop_link(xref->ctx, page->links);
 	if (page->annots)
 		pdf_free_annot(xref->ctx, page->annots);
+	/* xref->focus, when not NULL, refers to one of
+	 * the annotations and must be NULLed when the
+	 * annotations are destroyed. xref->focus_obj
+	 * keeps track of the actual annotation object. */
+	xref->focus = NULL;
 	fz_free(xref->ctx, page);
 }

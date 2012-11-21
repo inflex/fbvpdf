@@ -28,9 +28,10 @@ static HDC hdc;
 static HBRUSH bgbrush;
 static HBRUSH shbrush;
 static BITMAPINFO *dibinf;
-static HCURSOR arrowcurs, handcurs, waitcurs;
+static HCURSOR arrowcurs, handcurs, waitcurs, caretcurs;
 static LRESULT CALLBACK frameproc(HWND, UINT, WPARAM, LPARAM);
 static LRESULT CALLBACK viewproc(HWND, UINT, WPARAM, LPARAM);
+static int timer_pending = 0;
 
 static int justcopied = 0;
 
@@ -99,6 +100,77 @@ void winerror(pdfapp_t *app, char *msg)
 	exit(1);
 }
 
+void winalert(pdfapp_t *app, fz_alert_event *alert)
+{
+	int buttons = MB_OK;
+	int icon = MB_ICONWARNING;
+	int pressed = FZ_ALERT_BUTTON_NONE;
+
+	switch (alert->icon_type)
+	{
+	case FZ_ALERT_ICON_ERROR:
+		icon = MB_ICONERROR;
+		break;
+	case FZ_ALERT_ICON_WARNING:
+		icon = MB_ICONWARNING;
+		break;
+	case FZ_ALERT_ICON_QUESTION:
+		icon = MB_ICONQUESTION;
+		break;
+	case FZ_ALERT_ICON_STATUS:
+		icon = MB_ICONINFORMATION;
+		break;
+	}
+
+	switch (alert->button_group_type)
+	{
+	case FZ_ALERT_BUTTON_GROUP_OK:
+		buttons = MB_OK;
+		break;
+	case FZ_ALERT_BUTTON_GROUP_OK_CANCEL:
+		buttons = MB_OKCANCEL;
+		break;
+	case FZ_ALERT_BUTTON_GROUP_YES_NO:
+		buttons = MB_YESNO;
+		break;
+	case FZ_ALERT_BUTTON_GROUP_YES_NO_CANCEL:
+		buttons = MB_YESNOCANCEL;
+		break;
+	}
+
+	pressed = MessageBoxA(hwndframe, alert->message, alert->title, icon|buttons);
+
+	switch (pressed)
+	{
+	case IDOK:
+		alert->button_pressed = FZ_ALERT_BUTTON_OK;
+		break;
+	case IDCANCEL:
+		alert->button_pressed = FZ_ALERT_BUTTON_CANCEL;
+		break;
+	case IDNO:
+		alert->button_pressed = FZ_ALERT_BUTTON_NO;
+		break;
+	case IDYES:
+		alert->button_pressed = FZ_ALERT_BUTTON_YES;
+	}
+}
+
+void winprint(pdfapp_t *app)
+{
+	MessageBoxA(hwndframe, "The MuPDF library supports printing, but this application currently does not", "Print document", MB_ICONWARNING);
+}
+
+int winsavequery(pdfapp_t *app)
+{
+	switch(MessageBoxA(hwndframe, "File has unsaved changes. Do you want to save", "MuPDF", MB_YESNOCANCEL))
+	{
+	case IDYES: return SAVE;
+	case IDNO: return DISCARD;
+	default: return CANCEL;
+	}
+}
+
 int winfilename(wchar_t *buf, int len)
 {
 	OPENFILENAME ofn;
@@ -115,8 +187,42 @@ int winfilename(wchar_t *buf, int len)
 	return GetOpenFileNameW(&ofn);
 }
 
+int wingetsavepath(pdfapp_t *app, char *buf, int len)
+{
+	OPENFILENAMEA ofn;
+	buf[0] = 0;
+	if (strlen(filename) < (unsigned int)len)
+		strcpy(buf, filename);
+	memset(&ofn, 0, sizeof(OPENFILENAME));
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = hwndframe;
+	ofn.lpstrFile = buf;
+	ofn.nMaxFile = len;
+	ofn.lpstrInitialDir = NULL;
+	ofn.lpstrTitle = "MuPDF: Save PDF file";
+	ofn.lpstrFilter = "Documents (*.pdf;*.xps;*.cbz;*.zip)\0*.zip;*.cbz;*.xps;*.pdf\0PDF Files (*.pdf)\0*.pdf\0XPS Files (*.xps)\0*.xps\0CBZ Files (*.cbz;*.zip)\0*.zip;*.cbz\0All Files\0*\0\0";
+	ofn.Flags = OFN_HIDEREADONLY;
+	if (GetSaveFileNameA(&ofn))
+	{
+		if (strlen(buf) < sizeof(filename))
+			strcpy(filename, buf);
+
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
 static char pd_filename[256] = "The file is encrypted.";
 static char pd_password[256] = "";
+static char td_textinput[1024] = "";
+static int td_retry = 0;
+static int cd_nopts;
+static int *cd_nvals;
+static char **cd_opts;
+static char **cd_vals;
 static int pd_okay = 0;
 
 INT CALLBACK
@@ -133,6 +239,91 @@ dlogpassproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case 1:
 			pd_okay = 1;
 			GetDlgItemTextA(hwnd, 3, pd_password, sizeof pd_password);
+			EndDialog(hwnd, 1);
+			return TRUE;
+		case 2:
+			pd_okay = 0;
+			EndDialog(hwnd, 1);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
+INT CALLBACK
+dlogtextproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch(message)
+	{
+	case WM_INITDIALOG:
+		SetDlgItemTextA(hwnd, 3, td_textinput);
+		if (!td_retry)
+			ShowWindow(GetDlgItem(hwnd, 4), SW_HIDE);
+		return TRUE;
+	case WM_COMMAND:
+		switch(wParam)
+		{
+		case 1:
+			pd_okay = 1;
+			GetDlgItemTextA(hwnd, 3, td_textinput, sizeof td_textinput);
+			EndDialog(hwnd, 1);
+			return TRUE;
+		case 2:
+			pd_okay = 0;
+			EndDialog(hwnd, 1);
+			return TRUE;
+		}
+		break;
+	case WM_CTLCOLORSTATIC:
+		if ((HWND)lParam == GetDlgItem(hwnd, 4))
+		{
+			SetTextColor((HDC)wParam, RGB(255,0,0));
+			SetBkMode((HDC)wParam, TRANSPARENT);
+
+			return (INT)GetStockObject(NULL_BRUSH);
+		}
+		break;
+	}
+	return FALSE;
+}
+
+INT CALLBACK
+dlogchoiceproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	HWND listbox;
+	int i;
+	int item;
+	int sel;
+	switch(message)
+	{
+	case WM_INITDIALOG:
+		listbox = GetDlgItem(hwnd, 3);
+		for (i = 0; i < cd_nopts; i++)
+			SendMessageA(listbox, LB_ADDSTRING, 0, (LPARAM)cd_opts[i]);
+
+		/* FIXME: handle multiple select */
+		if (*cd_nvals > 0)
+		{
+			item = SendMessageA(listbox, LB_FINDSTRINGEXACT, -1, (LPARAM)cd_vals[0]);
+			if (item != LB_ERR)
+				SendMessageA(listbox, LB_SETCURSEL, item, 0);
+		}
+		return TRUE;
+	case WM_COMMAND:
+		switch(wParam)
+		{
+		case 1:
+			listbox = GetDlgItem(hwnd, 3);
+			*cd_nvals = 0;
+			for (i = 0; i < cd_nopts; i++)
+			{
+				item = SendMessageA(listbox, LB_FINDSTRINGEXACT, -1, (LPARAM)cd_opts[i]);
+				sel = SendMessageA(listbox, LB_GETSEL, item, 0);
+				if (sel && sel != LB_ERR)
+					cd_vals[(*cd_nvals)++] = cd_opts[i];
+			}
+			pd_okay = 1;
 			EndDialog(hwnd, 1);
 			return TRUE;
 		case 2:
@@ -162,6 +353,32 @@ char *winpassword(pdfapp_t *app, char *filename)
 	if (pd_okay)
 		return pd_password;
 	return NULL;
+}
+
+char *wintextinput(pdfapp_t *app, char *inittext, int retry)
+{
+	int code;
+	td_retry = retry;
+	strncpy(td_textinput, inittext?inittext:"", sizeof(td_textinput));
+	code = DialogBoxW(NULL, L"IDD_DLOGTEXT", hwndframe, dlogtextproc);
+	if (code <= 0)
+		winerror(app, "cannot create text input dialog");
+	if (pd_okay)
+		return td_textinput;
+	return NULL;
+}
+
+int winchoiceinput(pdfapp_t *app, int nopts, char *opts[], int *nvals, char *vals[])
+{
+	int code;
+	cd_nopts = nopts;
+	cd_nvals = nvals;
+	cd_opts = opts;
+	cd_vals = vals;
+	code = DialogBoxW(NULL, L"IDD_DLOGLIST", hwndframe, dlogchoiceproc);
+	if (code <= 0)
+		winerror(app, "cannot create text input dialog");
+	return pd_okay;
 }
 
 INT CALLBACK
@@ -316,6 +533,7 @@ void winopen()
 	arrowcurs = LoadCursor(NULL, IDC_ARROW);
 	handcurs = LoadCursor(NULL, IDC_HAND);
 	waitcurs = LoadCursor(NULL, IDC_WAIT);
+	caretcurs = LoadCursor(NULL, IDC_IBEAM);
 
 	/* And a background color */
 	bgbrush = CreateSolidBrush(RGB(0x70,0x70,0x70));
@@ -371,8 +589,11 @@ void winopen()
 
 void winclose(pdfapp_t *app)
 {
-	pdfapp_close(app);
-	exit(0);
+	if (pdfapp_preclose(app))
+	{
+		pdfapp_close(app);
+		exit(0);
+	}
 }
 
 void wincursor(pdfapp_t *app, int curs)
@@ -383,6 +604,8 @@ void wincursor(pdfapp_t *app, int curs)
 		SetCursor(handcurs);
 	if (curs == WAIT)
 		SetCursor(waitcurs);
+	if (curs == CARET)
+		SetCursor(caretcurs);
 }
 
 void wintitle(pdfapp_t *app, char *title)
@@ -602,8 +825,24 @@ void winopenuri(pdfapp_t *app, char *buf)
 	ShellExecuteA(hwndframe, "open", buf, 0, 0, SW_SHOWNORMAL);
 }
 
+#define OUR_TIMER_ID 1
+
+void winadvancetimer(pdfapp_t *app, float delay)
+{
+	timer_pending = 1;
+	SetTimer(hwndview, OUR_TIMER_ID, (unsigned int)(1000*delay), NULL);
+}
+
+static void killtimer(pdfapp_t *app)
+{
+	timer_pending = 0;
+}
+
 void handlekey(int c)
 {
+	if (timer_pending)
+		killtimer(&gapp);
+
 	if (GetCapture() == hwndview)
 		return;
 
@@ -635,6 +874,9 @@ void handlekey(int c)
 
 void handlemouse(int x, int y, int btn, int state)
 {
+	if (state != 0 && timer_pending)
+		killtimer(&gapp);
+
 	if (state != 0 && justcopied)
 	{
 		justcopied = 0;
@@ -698,6 +940,10 @@ frameproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_NOTIFY:
 	case WM_COMMAND:
 		return SendMessage(hwndview, message, wParam, lParam);
+
+	case WM_CLOSE:
+		if (!pdfapp_preclose(&gapp))
+			return 0;
 	}
 
 	return DefWindowProc(hwnd, message, wParam, lParam);
@@ -732,6 +978,7 @@ viewproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		winblit();
 		hdc = NULL;
 		EndPaint(hwnd, &ps);
+		pdfapp_postblit(&gapp);
 		return 0;
 	}
 
@@ -782,6 +1029,17 @@ viewproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		else
 			handlekey(LOWORD(wParam) & MK_SHIFT ? '-' : 'j');
 		return 0;
+
+	/* Timer */
+	case WM_TIMER:
+		if (wParam == OUR_TIMER_ID && timer_pending && gapp.presentation_mode)
+		{
+			timer_pending = 0;
+			handlekey(VK_RIGHT + 256);
+			handlemouse(oldx, oldy, 0, 0); /* update cursor */
+			return 0;
+		}
+		break;
 
 	/* Keyboard events */
 

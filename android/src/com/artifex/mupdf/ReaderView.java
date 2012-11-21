@@ -28,7 +28,6 @@ public class ReaderView extends AdapterView<Adapter>
 
 	private static final int  FLING_MARGIN      = 100;
 	private static final int  GAP               = 20;
-	private static final int  SCROLL_SPEED      = 2;
 
 	private static final float MIN_SCALE        = 1.0f;
 	private static final float MAX_SCALE        = 5.0f;
@@ -55,6 +54,10 @@ public class ReaderView extends AdapterView<Adapter>
 	private int               mScrollerLastX;
 	private int               mScrollerLastY;
 	private boolean           mScrollDisabled;
+
+	static abstract class ViewMapper {
+		abstract void applyToView(View view);
+	}
 
 	public ReaderView(Context context) {
 		super(context);
@@ -107,6 +110,11 @@ public class ReaderView extends AdapterView<Adapter>
 			onChildSetup(mChildViews.keyAt(i), mChildViews.valueAt(i));
 	}
 
+	public void applyToChildren(ViewMapper mapper) {
+		for (int i = 0; i < mChildViews.size(); i++)
+			mapper.applyToView(mChildViews.valueAt(i));
+	}
+
 	protected void onChildSetup(int i, View v) {}
 
 	protected void onMoveToChild(int i) {}
@@ -137,7 +145,8 @@ public class ReaderView extends AdapterView<Adapter>
 			// End of an inertial scroll and the user is not interacting.
 			// The layout is stable
 			View v = mChildViews.get(mCurrent);
-			postSettle(v);
+			if (v != null)
+				postSettle(v);
 		}
 	}
 

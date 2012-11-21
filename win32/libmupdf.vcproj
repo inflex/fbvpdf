@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\scripts;..\fitz;..\pdf;..\thirdparty\jbig2dec;..\thirdparty\jpeg-9;..\thirdparty\openjpeg-1.5.0-patched\libopenjpeg;..\thirdparty\zlib-1.2.7;..\thirdparty\freetype-2.4.10\include"
+				AdditionalIncludeDirectories="..\scripts;..\fitz;..\pdf;..\thirdparty\jbig2dec;..\thirdparty\jpeg;..\thirdparty\openjpeg\libopenjpeg;..\thirdparty\zlib;..\thirdparty\freetype\include"
 				PreprocessorDefinitions="DEBUG=1"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -106,7 +106,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\scripts;..\fitz;..\pdf;..\thirdparty\jbig2dec;..\thirdparty\jpeg-9;..\thirdparty\openjpeg-1.5.0-patched\libopenjpeg;..\thirdparty\zlib-1.2.7;..\thirdparty\freetype-2.4.10\include"
+				AdditionalIncludeDirectories="..\scripts;..\fitz;..\pdf;..\thirdparty\jbig2dec;..\thirdparty\jpeg;..\thirdparty\openjpeg\libopenjpeg;..\thirdparty\zlib;..\thirdparty\freetype\include"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
 				WarningLevel="3"
@@ -166,7 +166,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\scripts;..\fitz;..\pdf;..\thirdparty\jbig2dec;..\thirdparty\jpeg-9;..\thirdparty\openjpeg-1.5.0-patched\libopenjpeg;..\thirdparty\zlib-1.2.7;..\thirdparty\freetype-2.4.10\include"
+				AdditionalIncludeDirectories="..\scripts;..\fitz;..\pdf;..\thirdparty\jbig2dec;..\thirdparty\jpeg;..\thirdparty\openjpeg\libopenjpeg;..\thirdparty\zlib;..\thirdparty\freetype\include"
 				PreprocessorDefinitions="MEMENTO=1;DEBUG=1"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -258,11 +258,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\pdf\pdf_event.c"
+				>
+			</File>
+			<File
 				RelativePath="..\pdf\pdf_font.c"
 				>
 			</File>
 			<File
 				RelativePath="..\pdf\pdf_fontfile.c"
+				>
+			</File>
+			<File
+				RelativePath="..\pdf\pdf_form.c"
 				>
 			</File>
 			<File
@@ -275,6 +283,10 @@
 			</File>
 			<File
 				RelativePath="..\pdf\pdf_interpret.c"
+				>
+			</File>
+			<File
+				RelativePath="..\pdf\pdf_js_none.c"
 				>
 			</File>
 			<File
@@ -386,6 +398,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\fitz\base_trans.c"
+				>
+			</File>
+			<File
 				RelativePath="..\fitz\crypt_aes.c"
 				>
 			</File>
@@ -423,6 +439,10 @@
 			</File>
 			<File
 				RelativePath="..\fitz\doc_document.c"
+				>
+			</File>
+			<File
+				RelativePath="..\fitz\doc_interactive.c"
 				>
 			</File>
 			<File
@@ -539,6 +559,10 @@
 			</File>
 			<File
 				RelativePath="..\fitz\stm_buffer.c"
+				>
+			</File>
+			<File
+				RelativePath="..\fitz\stm_comp_buf.c"
 				>
 			</File>
 			<File
