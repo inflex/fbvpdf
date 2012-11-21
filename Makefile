@@ -149,6 +149,17 @@ $(MUPDF) : $(addprefix $(OUT)/, x11_main.o x11_image.o pdfapp.o)
 	$(LINK_CMD) $(X11_LIBS)
 endif
 
+ifeq "$(WIN32GUI)" "yes"
+MUPDF := $(OUT)/mupdf
+WINDRES ?= windres
+W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
+$(OUT)/%.o : apps/%.rc
+	$(WINDRES) -i $< -o $@ --include-dir=apps
+$(MUPDF) : $(FITZ_LIB) $(THIRD_LIBS)
+$(MUPDF) : $(addprefix $(OUT)/, win_main.o win_res.o pdfapp.o)
+	$(LINK_CMD) $(W32_LIBS)
+endif
+
 # --- Format man pages ---
 
 %.txt: %.1
