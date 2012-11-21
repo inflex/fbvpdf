@@ -147,13 +147,13 @@ $(MUVIEW) : $(addprefix $(OUT)/, x11_main.o x11_image.o pdfapp.o)
 endif
 
 ifeq "$(WIN32GUI)" "yes"
-MUPDF := $(OUT)/mupdf
+MUVIEW := $(OUT)/mupdf
 WINDRES ?= windres
 W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
 $(OUT)/%.o : apps/%.rc
 	$(WINDRES) -i $< -o $@ --include-dir=apps
-$(MUPDF) : $(FITZ_LIB) $(THIRD_LIBS)
-$(MUPDF) : $(addprefix $(OUT)/, win_main.o win_res.o pdfapp.o)
+$(MUVIEW) : $(FITZ_LIB) $(THIRD_LIBS)
+$(MUVIEW) : $(addprefix $(OUT)/, win_main.o win_res.o pdfapp.o)
 	$(LINK_CMD) $(W32_LIBS)
 endif
 
