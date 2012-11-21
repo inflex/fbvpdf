@@ -47,9 +47,9 @@ lab_to_rgb(fz_context *ctx, fz_colorspace *cs, float *lab, float *rgb)
 	r = (3.240449f * x + -1.537136f * y + -0.498531f * z) * 0.830026f;
 	g = (-0.969265f * x + 1.876011f * y + 0.041556f * z) * 1.05452f;
 	b = (0.055643f * x + -0.204026f * y + 1.057229f * z) * 1.1003f;
-	rgb[0] = sqrtf(CLAMP(r, 0, 1));
-	rgb[1] = sqrtf(CLAMP(g, 0, 1));
-	rgb[2] = sqrtf(CLAMP(b, 0, 1));
+	rgb[0] = sqrtf(fz_clamp(r, 0, 1));
+	rgb[1] = sqrtf(fz_clamp(g, 0, 1));
+	rgb[2] = sqrtf(fz_clamp(b, 0, 1));
 }
 
 static void
@@ -115,11 +115,10 @@ load_separation(pdf_document *xref, pdf_obj *array)
 		fz_throw(ctx, "too many components in colorspace");
 
 	base = pdf_load_colorspace(xref, baseobj);
-	/* RJW: "cannot load base colorspace (%d %d R)", pdf_to_num(baseobj), pdf_to_gen(baseobj) */
 
 	fz_try(ctx)
 	{
-		tint = pdf_load_function(xref, tintobj);
+		tint = pdf_load_function(xref, tintobj, n, base->n);
 		/* RJW: fz_drop_colorspace(ctx, base);
 		 * "cannot load tint function (%d %d R)", pdf_to_num(tintobj), pdf_to_gen(tintobj) */
 
@@ -160,7 +159,7 @@ indexed_to_rgb(fz_context *ctx, fz_colorspace *cs, float *color, float *rgb)
 	float alt[FZ_MAX_COLORS];
 	int i, k;
 	i = color[0] * 255;
-	i = CLAMP(i, 0, idx->high);
+	i = fz_clampi(i, 0, idx->high);
 	for (k = 0; k < idx->base->n; k++)
 		alt[k] = idx->lookup[i * idx->base->n + k] / 255.0f;
 	idx->base->to_rgb(ctx, idx->base, alt, rgb);
@@ -203,7 +202,7 @@ pdf_expand_indexed_pixmap(fz_context *ctx, fz_pixmap *src)
 		{
 			int v = *s++;
 			int a = *s++;
-			v = MIN(v, high);
+			v = fz_mini(v, high);
 			for (k = 0; k < n; k++)
 				*d++ = fz_mul255(lookup[v * n + k], a);
 			*d++ = a;
@@ -234,13 +233,12 @@ load_indexed(pdf_document *xref, pdf_obj *array)
 	fz_try(ctx)
 	{
 		base = pdf_load_colorspace(xref, baseobj);
-		/* "cannot load base colorspace (%d %d R)", pdf_to_num(baseobj), pdf_to_gen(baseobj) */
 
 		idx = fz_malloc_struct(ctx, struct indexed);
 		idx->lookup = NULL;
 		idx->base = base;
 		idx->high = pdf_to_int(highobj);
-		idx->high = CLAMP(idx->high, 0, 255);
+		idx->high = fz_clampi(idx->high, 0, 255);
 		n = base->n * (idx->high + 1);
 		idx->lookup = fz_malloc_array(ctx, 1, n);
 
@@ -340,7 +338,6 @@ pdf_load_colorspace_imp(pdf_document *xref, pdf_obj *obj)
 				}
 
 				return pdf_load_colorspace(xref, obj);
-				/* RJW: "cannot load pattern (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj) */
 			}
 
 			else if (!strcmp(pdf_to_name(name), "G"))
@@ -399,7 +396,6 @@ pdf_load_colorspace(pdf_document *xref, pdf_obj *obj)
 	}
 
 	cs = pdf_load_colorspace_imp(xref, obj);
-	/* RJW: "cannot load colorspace (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj) */
 
 	pdf_store_item(ctx, obj, cs, cs->size);
 

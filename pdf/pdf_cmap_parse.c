@@ -53,8 +53,6 @@ pdf_lex_cmap(fz_stream *file, pdf_lexbuf *buf)
 {
 	int tok = pdf_lex(file, buf);
 
-	/* RJW: Lost debugging here: "cannot parse cmap token" */
-
 	if (tok == PDF_TOK_KEYWORD)
 		tok = pdf_cmap_token_from_keyword(buf->scratch);
 
@@ -62,62 +60,52 @@ pdf_lex_cmap(fz_stream *file, pdf_lexbuf *buf)
 }
 
 static void
-pdf_parse_cmap_name(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_cmap_name(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 
-	buf.size = PDF_LEXBUF_SMALL;
-	tok = pdf_lex_cmap(file, &buf);
-	/* RJW: Lost debugging: "syntaxerror in cmap" */
+	tok = pdf_lex_cmap(file, buf);
 
 	if (tok == PDF_TOK_NAME)
-		fz_strlcpy(cmap->cmap_name, buf.scratch, sizeof(cmap->cmap_name));
+		fz_strlcpy(cmap->cmap_name, buf->scratch, sizeof(cmap->cmap_name));
 	else
 		fz_warn(ctx, "expected name after CMapName in cmap");
 }
 
 static void
-pdf_parse_wmode(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_wmode(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 
-	buf.size = PDF_LEXBUF_SMALL;
-	tok = pdf_lex_cmap(file, &buf);
-	/* RJW: Lost debugging: "syntaxerror in cmap" */
+	tok = pdf_lex_cmap(file, buf);
 
 	if (tok == PDF_TOK_INT)
-		pdf_set_cmap_wmode(ctx, cmap, buf.i);
+		pdf_set_cmap_wmode(ctx, cmap, buf->i);
 	else
 		fz_warn(ctx, "expected integer after WMode in cmap");
 }
 
 static void
-pdf_parse_codespace_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_codespace_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 	int lo, hi;
 
-	buf.size = PDF_LEXBUF_SMALL;
 	while (1)
 	{
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: Lost debugging: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == TOK_END_CODESPACE_RANGE)
 			return;
 
 		else if (tok == PDF_TOK_STRING)
 		{
-			lo = pdf_code_from_string(buf.scratch, buf.len);
-			tok = pdf_lex_cmap(file, &buf);
-			/* RJW: Lost debugging: "syntaxerror in cmap" */
+			lo = pdf_code_from_string(buf->scratch, buf->len);
+			tok = pdf_lex_cmap(file, buf);
 			if (tok == PDF_TOK_STRING)
 			{
-				hi = pdf_code_from_string(buf.scratch, buf.len);
-				pdf_add_codespace(ctx, cmap, lo, hi, buf.len);
+				hi = pdf_code_from_string(buf->scratch, buf->len);
+				pdf_add_codespace(ctx, cmap, lo, hi, buf->len);
 			}
 			else break;
 		}
@@ -129,17 +117,14 @@ pdf_parse_codespace_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 }
 
 static void
-pdf_parse_cid_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_cid_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 	int lo, hi, dst;
 
-	buf.size = PDF_LEXBUF_SMALL;
 	while (1)
 	{
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: Lost debugging: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == TOK_END_CID_RANGE)
 			return;
@@ -147,38 +132,33 @@ pdf_parse_cid_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 		else if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string or endcidrange");
 
-		lo = pdf_code_from_string(buf.scratch, buf.len);
+		lo = pdf_code_from_string(buf->scratch, buf->len);
 
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: Lost debugging: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 		if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string");
 
-		hi = pdf_code_from_string(buf.scratch, buf.len);
+		hi = pdf_code_from_string(buf->scratch, buf->len);
 
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: Lost debugging: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 		if (tok != PDF_TOK_INT)
 			fz_throw(ctx, "expected integer");
 
-		dst = buf.i;
+		dst = buf->i;
 
 		pdf_map_range_to_range(ctx, cmap, lo, hi, dst);
 	}
 }
 
 static void
-pdf_parse_cid_char(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_cid_char(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 	int src, dst;
 
-	buf.size = PDF_LEXBUF_SMALL;
 	while (1)
 	{
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == TOK_END_CID_CHAR)
 			return;
@@ -186,33 +166,28 @@ pdf_parse_cid_char(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 		else if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string or endcidchar");
 
-		src = pdf_code_from_string(buf.scratch, buf.len);
+		src = pdf_code_from_string(buf->scratch, buf->len);
 
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
-
+		tok = pdf_lex_cmap(file, buf);
 		if (tok != PDF_TOK_INT)
 			fz_throw(ctx, "expected integer");
 
-		dst = buf.i;
+		dst = buf->i;
 
 		pdf_map_range_to_range(ctx, cmap, src, src, dst);
 	}
 }
 
 static void
-pdf_parse_bf_range_array(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, int lo, int hi)
+pdf_parse_bf_range_array(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf, int lo, int hi)
 {
-	pdf_lexbuf buf;
 	int tok;
 	int dst[256];
 	int i;
 
-	buf.size = PDF_LEXBUF_SMALL;
 	while (1)
 	{
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == PDF_TOK_CLOSE_ARRAY)
 			return;
@@ -221,12 +196,12 @@ pdf_parse_bf_range_array(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, int l
 		else if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string or ]");
 
-		if (buf.len / 2)
+		if (buf->len / 2)
 		{
-			for (i = 0; i < buf.len / 2; i++)
-				dst[i] = pdf_code_from_string(&buf.scratch[i * 2], 2);
+			for (i = 0; i < buf->len / 2; i++)
+				dst[i] = pdf_code_from_string(&buf->scratch[i * 2], 2);
 
-			pdf_map_one_to_many(ctx, cmap, lo, dst, buf.len / 2);
+			pdf_map_one_to_many(ctx, cmap, lo, dst, buf->len / 2);
 		}
 
 		lo ++;
@@ -234,17 +209,14 @@ pdf_parse_bf_range_array(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, int l
 }
 
 static void
-pdf_parse_bf_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_bf_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 	int lo, hi, dst;
 
-	buf.size = PDF_LEXBUF_SMALL;
 	while (1)
 	{
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == TOK_END_BF_RANGE)
 			return;
@@ -252,23 +224,21 @@ pdf_parse_bf_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 		else if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string or endbfrange");
 
-		lo = pdf_code_from_string(buf.scratch, buf.len);
+		lo = pdf_code_from_string(buf->scratch, buf->len);
 
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 		if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string");
 
-		hi = pdf_code_from_string(buf.scratch, buf.len);
+		hi = pdf_code_from_string(buf->scratch, buf->len);
 
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == PDF_TOK_STRING)
 		{
-			if (buf.len == 2)
+			if (buf->len == 2)
 			{
-				dst = pdf_code_from_string(buf.scratch, buf.len);
+				dst = pdf_code_from_string(buf->scratch, buf->len);
 				pdf_map_range_to_range(ctx, cmap, lo, hi, dst);
 			}
 			else
@@ -276,10 +246,10 @@ pdf_parse_bf_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 				int dststr[256];
 				int i;
 
-				if (buf.len / 2)
+				if (buf->len / 2)
 				{
-					for (i = 0; i < buf.len / 2; i++)
-						dststr[i] = pdf_code_from_string(&buf.scratch[i * 2], 2);
+					for (i = 0; i < buf->len / 2; i++)
+						dststr[i] = pdf_code_from_string(&buf->scratch[i * 2], 2);
 
 					while (lo <= hi)
 					{
@@ -293,8 +263,7 @@ pdf_parse_bf_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 
 		else if (tok == PDF_TOK_OPEN_ARRAY)
 		{
-			pdf_parse_bf_range_array(ctx, cmap, file, lo, hi);
-			/* RJW: "cannot map bfrange" */
+			pdf_parse_bf_range_array(ctx, cmap, file, buf, lo, hi);
 		}
 
 		else
@@ -305,19 +274,16 @@ pdf_parse_bf_range(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 }
 
 static void
-pdf_parse_bf_char(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
+pdf_parse_bf_char(fz_context *ctx, pdf_cmap *cmap, fz_stream *file, pdf_lexbuf *buf)
 {
-	pdf_lexbuf buf;
 	int tok;
 	int dst[256];
 	int src;
 	int i;
 
-	buf.size = PDF_LEXBUF_SMALL;
 	while (1)
 	{
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 
 		if (tok == TOK_END_BF_CHAR)
 			return;
@@ -325,18 +291,17 @@ pdf_parse_bf_char(fz_context *ctx, pdf_cmap *cmap, fz_stream *file)
 		else if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string or endbfchar");
 
-		src = pdf_code_from_string(buf.scratch, buf.len);
+		src = pdf_code_from_string(buf->scratch, buf->len);
 
-		tok = pdf_lex_cmap(file, &buf);
-		/* RJW: "syntaxerror in cmap" */
+		tok = pdf_lex_cmap(file, buf);
 		/* Note: does not handle /dstName */
 		if (tok != PDF_TOK_STRING)
 			fz_throw(ctx, "expected string");
 
-		if (buf.len / 2)
+		if (buf->len / 2)
 		{
-			for (i = 0; i < buf.len / 2; i++)
-				dst[i] = pdf_code_from_string(&buf.scratch[i * 2], 2);
+			for (i = 0; i < buf->len / 2; i++)
+				dst[i] = pdf_code_from_string(&buf->scratch[i * 2], 2);
 			pdf_map_one_to_many(ctx, cmap, src, dst, i);
 		}
 	}
@@ -351,7 +316,7 @@ pdf_load_cmap(fz_context *ctx, fz_stream *file)
 	int tok;
 	const char *where;
 
-	buf.size = PDF_LEXBUF_SMALL;
+	pdf_lexbuf_init(ctx, &buf, PDF_LEXBUF_SMALL);
 	cmap = pdf_new_cmap(ctx);
 
 	strcpy(key, ".notdef");
@@ -373,12 +338,12 @@ pdf_load_cmap(fz_context *ctx, fz_stream *file)
 				if (!strcmp(buf.scratch, "CMapName"))
 				{
 					where = " after CMapName";
-					pdf_parse_cmap_name(ctx, cmap, file);
+					pdf_parse_cmap_name(ctx, cmap, file, &buf);
 				}
 				else if (!strcmp(buf.scratch, "WMode"))
 				{
 					where = " after WMode";
-					pdf_parse_wmode(ctx, cmap, file);
+					pdf_parse_wmode(ctx, cmap, file, &buf);
 				}
 				else
 					fz_strlcpy(key, buf.scratch, sizeof key);
@@ -392,37 +357,41 @@ pdf_load_cmap(fz_context *ctx, fz_stream *file)
 			else if (tok == TOK_BEGIN_CODESPACE_RANGE)
 			{
 				where = " codespacerange";
-				pdf_parse_codespace_range(ctx, cmap, file);
+				pdf_parse_codespace_range(ctx, cmap, file, &buf);
 			}
 
 			else if (tok == TOK_BEGIN_BF_CHAR)
 			{
 				where = " bfchar";
-				pdf_parse_bf_char(ctx, cmap, file);
+				pdf_parse_bf_char(ctx, cmap, file, &buf);
 			}
 
 			else if (tok == TOK_BEGIN_CID_CHAR)
 			{
 				where = " cidchar";
-				pdf_parse_cid_char(ctx, cmap, file);
+				pdf_parse_cid_char(ctx, cmap, file, &buf);
 			}
 
 			else if (tok == TOK_BEGIN_BF_RANGE)
 			{
 				where = " bfrange";
-				pdf_parse_bf_range(ctx, cmap, file);
+				pdf_parse_bf_range(ctx, cmap, file, &buf);
 			}
 
 			else if (tok == TOK_BEGIN_CID_RANGE)
 			{
 				where = "cidrange";
-				pdf_parse_cid_range(ctx, cmap, file);
+				pdf_parse_cid_range(ctx, cmap, file, &buf);
 			}
 
 			/* ignore everything else */
 		}
 
 		pdf_sort_cmap(ctx, cmap);
+	}
+	fz_always(ctx)
+	{
+		pdf_lexbuf_fin(&buf);
 	}
 	fz_catch(ctx)
 	{
