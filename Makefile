@@ -149,6 +149,19 @@ $(MUPDF) : $(addprefix $(OUT)/, x11_main.o x11_image.o pdfapp.o)
 	$(LINK_CMD) $(X11_LIBS)
 endif
 
+ifeq "$(MOZDLL)" "yes"
+MU_PLUG := $(OUT)/npmupdf-1.0.dll
+WINDRES ?= windres
+W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
+$(OUT)/%.o : apps/mozilla/%.c fitz/fitz.h pdf/mupdf.h xps/muxps.h cbz/mucbz.h | $(OUT)
+	$(CC_CMD)
+$(OUT)/%.o : apps/mozilla/%.rc
+	$(WINDRES) -i $< -o $@ --include-dir=apps/mozilla
+$(MU_PLUG) : $(FITZ_LIB) $(THIRD_LIBS)
+$(MU_PLUG) : $(addprefix $(OUT)/, moz_main.o npwin.o moz_winres.o)
+	$(LINK_CMD) -shared apps/mozilla/moz_export.def -Wl,--kill-at $(W32_LIBS)
+endif
+
 # --- Format man pages ---
 
 %.txt: %.1
@@ -176,7 +189,7 @@ install: $(FITZ_LIB) $(MU_APPS) $(MUPDF)
 
 # --- Clean and Default ---
 
-all: $(THIRD_LIBS) $(FITZ_LIB) $(MU_APPS) $(MUPDF) $(BUSY_APP)
+all: $(THIRD_LIBS) $(FITZ_LIB) $(MU_APPS) $(MUPDF) $(BUSY_APP) $(MU_PLUG)
 
 clean:
 	rm -rf $(OUT)
