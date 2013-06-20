@@ -421,6 +421,7 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	          if (moz->pages[i].page)
 	          {
 	            fz_drop_link(moz->ctx, moz->pages[i].page_links);
+	            fz_free_display_list( moz->ctx, moz->pages[i].page_list);
 	            fz_free_page(moz->doc, moz->pages[i].page);
 	            moz->pages[i].page = NULL;
 	          }
@@ -682,7 +683,11 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
     for (i = 0; i < moz->pagecount; i++)
     {
       if (moz->pages[i].page)
+      {
+        fz_drop_link(moz->ctx, moz->pages[i].page_links);
+        fz_free_display_list( moz->ctx, moz->pages[i].page_list);
         fz_free_page(moz->doc, moz->pages[i].page);
+      }
       if (moz->pages[i].image)
         fz_drop_pixmap(moz->ctx, moz->pages[i].image);
     }
