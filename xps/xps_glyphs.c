@@ -252,7 +252,7 @@ xps_parse_glyph_metrics(char *s, float *advance, float *uofs, float *vofs)
  * Calculate metrics for positioning.
  */
 static fz_text *
-xps_parse_glyphs_imp(xps_document *doc, fz_matrix ctm,
+xps_parse_glyphs_imp(xps_document *doc, const fz_matrix *ctm,
 	fz_font *font, float size, float originx, float originy,
 	int is_sideways, int bidi_level,
 	char *indices, char *unicode)
@@ -278,11 +278,13 @@ xps_parse_glyphs_imp(xps_document *doc, fz_matrix ctm,
 	}
 
 	if (is_sideways)
-		tm = fz_concat(fz_scale(-size, size), fz_rotate(90));
+	{
+		fz_pre_scale(fz_rotate(&tm, 90), -size, size);
+	}
 	else
-		tm = fz_scale(size, -size);
+		fz_scale(&tm, size, -size);
 
-	text = fz_new_text(doc->ctx, font, tm, is_sideways);
+	text = fz_new_text(doc->ctx, font, &tm, is_sideways);
 
 	while ((us && un > 0) || (is && *is))
 	{
@@ -369,10 +371,10 @@ xps_parse_glyphs_imp(xps_document *doc, fz_matrix ctm,
 }
 
 void
-xps_parse_glyphs(xps_document *doc, fz_matrix ctm,
-		char *base_uri, xps_resource *dict, xml_element *root)
+xps_parse_glyphs(xps_document *doc, const fz_matrix *ctm,
+		char *base_uri, xps_resource *dict, fz_xml *root)
 {
-	xml_element *node;
+	fz_xml *node;
 
 	char *fill_uri;
 	char *opacity_mask_uri;
@@ -394,10 +396,10 @@ xps_parse_glyphs(xps_document *doc, fz_matrix ctm,
 	char *opacity_mask_att;
 	char *navigate_uri_att;
 
-	xml_element *transform_tag = NULL;
-	xml_element *clip_tag = NULL;
-	xml_element *fill_tag = NULL;
-	xml_element *opacity_mask_tag = NULL;
+	fz_xml *transform_tag = NULL;
+	fz_xml *clip_tag = NULL;
+	fz_xml *fill_tag = NULL;
+	fz_xml *opacity_mask_tag = NULL;
 
 	char *fill_opacity_att = NULL;
 
@@ -416,37 +418,39 @@ xps_parse_glyphs(xps_document *doc, fz_matrix ctm,
 	fz_text *text;
 	fz_rect area;
 
+	fz_matrix local_ctm = *ctm;
+
 	/*
 	 * Extract attributes and extended attributes.
 	 */
 
-	bidi_level_att = xml_att(root, "BidiLevel");
-	caret_stops_att = xml_att(root, "CaretStops");
-	fill_att = xml_att(root, "Fill");
-	font_size_att = xml_att(root, "FontRenderingEmSize");
-	font_uri_att = xml_att(root, "FontUri");
-	origin_x_att = xml_att(root, "OriginX");
-	origin_y_att = xml_att(root, "OriginY");
-	is_sideways_att = xml_att(root, "IsSideways");
-	indices_att = xml_att(root, "Indices");
-	unicode_att = xml_att(root, "UnicodeString");
-	style_att = xml_att(root, "StyleSimulations");
-	transform_att = xml_att(root, "RenderTransform");
-	clip_att = xml_att(root, "Clip");
-	opacity_att = xml_att(root, "Opacity");
-	opacity_mask_att = xml_att(root, "OpacityMask");
-	navigate_uri_att = xml_att(root, "FixedPage.NavigateUri");
+	bidi_level_att = fz_xml_att(root, "BidiLevel");
+	caret_stops_att = fz_xml_att(root, "CaretStops");
+	fill_att = fz_xml_att(root, "Fill");
+	font_size_att = fz_xml_att(root, "FontRenderingEmSize");
+	font_uri_att = fz_xml_att(root, "FontUri");
+	origin_x_att = fz_xml_att(root, "OriginX");
+	origin_y_att = fz_xml_att(root, "OriginY");
+	is_sideways_att = fz_xml_att(root, "IsSideways");
+	indices_att = fz_xml_att(root, "Indices");
+	unicode_att = fz_xml_att(root, "UnicodeString");
+	style_att = fz_xml_att(root, "StyleSimulations");
+	transform_att = fz_xml_att(root, "RenderTransform");
+	clip_att = fz_xml_att(root, "Clip");
+	opacity_att = fz_xml_att(root, "Opacity");
+	opacity_mask_att = fz_xml_att(root, "OpacityMask");
+	navigate_uri_att = fz_xml_att(root, "FixedPage.NavigateUri");
 
-	for (node = xml_down(root); node; node = xml_next(node))
+	for (node = fz_xml_down(root); node; node = fz_xml_next(node))
 	{
-		if (!strcmp(xml_tag(node), "Glyphs.RenderTransform"))
-			transform_tag = xml_down(node);
-		if (!strcmp(xml_tag(node), "Glyphs.OpacityMask"))
-			opacity_mask_tag = xml_down(node);
-		if (!strcmp(xml_tag(node), "Glyphs.Clip"))
-			clip_tag = xml_down(node);
-		if (!strcmp(xml_tag(node), "Glyphs.Fill"))
-			fill_tag = xml_down(node);
+		if (!strcmp(fz_xml_tag(node), "Glyphs.RenderTransform"))
+			transform_tag = fz_xml_down(node);
+		if (!strcmp(fz_xml_tag(node), "Glyphs.OpacityMask"))
+			opacity_mask_tag = fz_xml_down(node);
+		if (!strcmp(fz_xml_tag(node), "Glyphs.Clip"))
+			clip_tag = fz_xml_down(node);
+		if (!strcmp(fz_xml_tag(node), "Glyphs.Fill"))
+			fill_tag = fz_xml_down(node);
 	}
 
 	fill_uri = base_uri;
@@ -557,31 +561,31 @@ xps_parse_glyphs(xps_document *doc, fz_matrix ctm,
 			xps_parse_render_transform(doc, transform_att, &transform);
 		if (transform_tag)
 			xps_parse_matrix_transform(doc, transform_tag, &transform);
-		ctm = fz_concat(transform, ctm);
+		fz_concat(&local_ctm, &transform, &local_ctm);
 	}
 
 	if (clip_att || clip_tag)
-		xps_clip(doc, ctm, dict, clip_att, clip_tag);
+		xps_clip(doc, &local_ctm, dict, clip_att, clip_tag);
 
 	font_size = fz_atof(font_size_att);
 
-	text = xps_parse_glyphs_imp(doc, ctm, font, font_size,
+	text = xps_parse_glyphs_imp(doc, &local_ctm, font, font_size,
 			fz_atof(origin_x_att), fz_atof(origin_y_att),
 			is_sideways, bidi_level, indices_att, unicode_att);
 
-	area = fz_bound_text(doc->ctx, text, ctm);
+	fz_bound_text(doc->ctx, text, &local_ctm, &area);
 
 	if (navigate_uri_att)
-		xps_add_link(doc, area, base_uri, navigate_uri_att);
+		xps_add_link(doc, &area, base_uri, navigate_uri_att);
 
-	xps_begin_opacity(doc, ctm, area, opacity_mask_uri, dict, opacity_att, opacity_mask_tag);
+	xps_begin_opacity(doc, &local_ctm, &area, opacity_mask_uri, dict, opacity_att, opacity_mask_tag);
 
 	/* If it's a solid color brush fill/stroke do a simple fill */
 
-	if (fill_tag && !strcmp(xml_tag(fill_tag), "SolidColorBrush"))
+	if (fill_tag && !strcmp(fz_xml_tag(fill_tag), "SolidColorBrush"))
 	{
-		fill_opacity_att = xml_att(fill_tag, "Opacity");
-		fill_att = xml_att(fill_tag, "Color");
+		fill_opacity_att = fz_xml_att(fill_tag, "Opacity");
+		fill_att = fz_xml_att(fill_tag, "Color");
 		fill_tag = NULL;
 	}
 
@@ -595,7 +599,7 @@ xps_parse_glyphs(xps_document *doc, fz_matrix ctm,
 			samples[0] *= fz_atof(fill_opacity_att);
 		xps_set_color(doc, colorspace, samples);
 
-		fz_fill_text(doc->dev, text, ctm,
+		fz_fill_text(doc->dev, text, &local_ctm,
 			doc->colorspace, doc->color, doc->alpha);
 	}
 
@@ -603,8 +607,8 @@ xps_parse_glyphs(xps_document *doc, fz_matrix ctm,
 
 	if (fill_tag)
 	{
-		fz_clip_text(doc->dev, text, ctm, 0);
-		xps_parse_brush(doc, ctm, area, fill_uri, dict, fill_tag);
+		fz_clip_text(doc->dev, text, &local_ctm, 0);
+		xps_parse_brush(doc, &local_ctm, &area, fill_uri, dict, fill_tag);
 		fz_pop_clip(doc->dev);
 	}
 

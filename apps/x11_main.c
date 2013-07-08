@@ -4,6 +4,7 @@
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/cursorfont.h>
+#include <X11/keysym.h>
 
 #include <sys/select.h>
 #include <sys/time.h>
@@ -272,6 +273,11 @@ int wingetsavepath(pdfapp_t *app, char *buf, int len)
 	return 0;
 }
 
+void winreplacefile(char *source, char *target)
+{
+	rename(source, target);
+}
+
 void cleanup(pdfapp_t *app)
 {
 	fz_context *ctx = app->ctx;
@@ -438,7 +444,7 @@ static void winblit(pdfapp_t *app)
 
 	if (gapp.iscopying || justcopied)
 	{
-		pdfapp_invert(&gapp, gapp.selr);
+		pdfapp_invert(&gapp, &gapp.selr);
 		justcopied = 1;
 	}
 
@@ -481,7 +487,7 @@ static void winblit(pdfapp_t *app)
 
 	if (gapp.iscopying || justcopied)
 	{
-		pdfapp_invert(&gapp, gapp.selr);
+		pdfapp_invert(&gapp, &gapp.selr);
 		justcopied = 1;
 	}
 
@@ -745,9 +751,10 @@ int main(int argc, char **argv)
 	if (argc - fz_optind == 1)
 		pageno = atoi(argv[fz_optind++]);
 
+	pdfapp_init(ctx, &gapp);
+
 	winopen();
 
-	pdfapp_init(ctx, &gapp);
 	if (resolution == -1)
 		resolution = winresolution();
 	if (resolution < MINRES)

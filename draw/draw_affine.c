@@ -475,7 +475,7 @@ fz_gridfit_matrix(fz_matrix *m)
 			f = (float)(int)(m->e);
 			if (f - m->e > MY_EPSILON)
 				f -= 1.0; /* Ensure it moves left */
-			m->a += m->e - f; /* width gets wider as f <= m->e */
+			m->a += m->e - f; /* width gets wider as f <= m.e */
 			m->e = f;
 			/* Adjust right hand side onto pixel boundary */
 			f = (float)(int)(m->a);
@@ -505,7 +505,7 @@ fz_gridfit_matrix(fz_matrix *m)
 			f = (float)(int)(m->f);
 			if (f - m->f > MY_EPSILON)
 				f -= 1.0; /* Ensure it moves upwards */
-			m->d += m->f - f; /* width gets wider as f <= m->f */
+			m->d += m->f - f; /* width gets wider as f <= m.f */
 			m->f = f;
 			/* Adjust bottom onto pixel boundary */
 			f = (float)(int)(m->d);
@@ -538,7 +538,7 @@ fz_gridfit_matrix(fz_matrix *m)
 			f = (float)(int)(m->f);
 			if (f - m->f > MY_EPSILON)
 				f -= 1.0; /* Ensure it moves left */
-			m->b += m->f - f; /* width gets wider as f <= m->f */
+			m->b += m->f - f; /* width gets wider as f <= m.f */
 			m->f = f;
 			/* Adjust right hand side onto pixel boundary */
 			f = (float)(int)(m->b);
@@ -568,7 +568,7 @@ fz_gridfit_matrix(fz_matrix *m)
 			f = (float)(int)(m->e);
 			if (f - m->e > MY_EPSILON)
 				f -= 1.0; /* Ensure it moves upwards */
-			m->c += m->e - f; /* width gets wider as f <= m->e */
+			m->c += m->e - f; /* width gets wider as f <= m.e */
 			m->e = f;
 			/* Adjust bottom onto pixel boundary */
 			f = (float)(int)(m->c);
@@ -597,40 +597,43 @@ fz_gridfit_matrix(fz_matrix *m)
 /* Draw an image with an affine transform on destination */
 
 static void
-fz_paint_image_imp(fz_pixmap *dst, fz_bbox scissor, fz_pixmap *shape, fz_pixmap *img, fz_matrix ctm, byte *color, int alpha)
+fz_paint_image_imp(fz_pixmap *dst, const fz_irect *scissor, fz_pixmap *shape, fz_pixmap *img, const fz_matrix *ctm, byte *color, int alpha)
 {
 	byte *dp, *sp, *hp;
 	int u, v, fa, fb, fc, fd;
 	int x, y, w, h;
 	int sw, sh, n, hw;
-	fz_matrix inv;
-	fz_bbox bbox;
+	fz_irect bbox;
 	int dolerp;
 	void (*paintfn)(byte *dp, byte *sp, int sw, int sh, int u, int v, int fa, int fb, int w, int n, int alpha, byte *color, byte *hp);
+	fz_matrix local_ctm = *ctm;
+	fz_rect rect;
 
 	/* grid fit the image */
-	fz_gridfit_matrix(&ctm);
+	fz_gridfit_matrix(&local_ctm);
 
 	/* turn on interpolation for upscaled and non-rectilinear transforms */
 	dolerp = 0;
-	if (!fz_is_rectilinear(ctm))
+	if (!fz_is_rectilinear(&local_ctm))
 		dolerp = 1;
-	if (sqrtf(ctm.a * ctm.a + ctm.b * ctm.b) > img->w)
+	if (sqrtf(local_ctm.a * local_ctm.a + local_ctm.b * local_ctm.b) > img->w)
 		dolerp = 1;
-	if (sqrtf(ctm.c * ctm.c + ctm.d * ctm.d) > img->h)
+	if (sqrtf(local_ctm.c * local_ctm.c + local_ctm.d * local_ctm.d) > img->h)
 		dolerp = 1;
 
 	/* except when we shouldn't, at large magnifications */
 	if (!img->interpolate)
 	{
-		if (sqrtf(ctm.a * ctm.a + ctm.b * ctm.b) > img->w * 2)
+		if (sqrtf(local_ctm.a * local_ctm.a + local_ctm.b * local_ctm.b) > img->w * 2)
 			dolerp = 0;
-		if (sqrtf(ctm.c * ctm.c + ctm.d * ctm.d) > img->h * 2)
+		if (sqrtf(local_ctm.c * local_ctm.c + local_ctm.d * local_ctm.d) > img->h * 2)
 			dolerp = 0;
 	}
 
-	bbox = fz_bbox_covering_rect(fz_transform_rect(ctm, fz_unit_rect));
-	bbox = fz_intersect_bbox(bbox, scissor);
+	rect = fz_unit_rect;
+	fz_irect_from_rect(&bbox, fz_transform_rect(&rect, &local_ctm));
+	fz_intersect_irect(&bbox, scissor);
+
 	x = bbox.x0;
 	if (shape && shape->x > x)
 		x = shape->x;
@@ -649,22 +652,21 @@ fz_paint_image_imp(fz_pixmap *dst, fz_bbox scissor, fz_pixmap *shape, fz_pixmap 
 		return;
 
 	/* map from screen space (x,y) to image space (u,v) */
-	inv = fz_scale(1.0f / img->w, 1.0f / img->h);
-	inv = fz_concat(inv, ctm);
-	inv = fz_invert_matrix(inv);
+	fz_pre_scale(&local_ctm, 1.0f / img->w, 1.0f / img->h);
+	fz_invert_matrix(&local_ctm, &local_ctm);
 
-	fa = (int)(inv.a *= 65536.0f);
-	fb = (int)(inv.b *= 65536.0f);
-	fc = (int)(inv.c *= 65536.0f);
-	fd = (int)(inv.d *= 65536.0f);
-	inv.e *= 65536.0f;
-	inv.f *= 65536.0f;
+	fa = (int)(local_ctm.a *= 65536.0f);
+	fb = (int)(local_ctm.b *= 65536.0f);
+	fc = (int)(local_ctm.c *= 65536.0f);
+	fd = (int)(local_ctm.d *= 65536.0f);
+	local_ctm.e *= 65536.0f;
+	local_ctm.f *= 65536.0f;
 
 	/* Calculate initial texture positions. Do a half step to start. */
 	/* Bug 693021: Keep calculation in float for as long as possible to
 	 * avoid overflow. */
-	u = (int)((inv.a * x) + (inv.c * y) + inv.e + ((inv.a + inv.c) * .5f));
-	v = (int)((inv.b * x) + (inv.d * y) + inv.f + ((inv.b + inv.d) * .5f));
+	u = (int)((local_ctm.a * x) + (local_ctm.c * y) + local_ctm.e + ((local_ctm.a + local_ctm.c) * .5f));
+	v = (int)((local_ctm.b * x) + (local_ctm.d * y) + local_ctm.f + ((local_ctm.b + local_ctm.d) * .5f));
 
 	/* RJW: The following is voodoo. No idea why it works, but it gives
 	 * the best match between scaled/unscaled/interpolated/non-interpolated
@@ -729,14 +731,14 @@ fz_paint_image_imp(fz_pixmap *dst, fz_bbox scissor, fz_pixmap *shape, fz_pixmap 
 }
 
 void
-fz_paint_image_with_color(fz_pixmap *dst, fz_bbox scissor, fz_pixmap *shape, fz_pixmap *img, fz_matrix ctm, byte *color)
+fz_paint_image_with_color(fz_pixmap *dst, const fz_irect *scissor, fz_pixmap *shape, fz_pixmap *img, const fz_matrix *ctm, byte *color)
 {
 	assert(img->n == 1);
 	fz_paint_image_imp(dst, scissor, shape, img, ctm, color, 255);
 }
 
 void
-fz_paint_image(fz_pixmap *dst, fz_bbox scissor, fz_pixmap *shape, fz_pixmap *img, fz_matrix ctm, int alpha)
+fz_paint_image(fz_pixmap *dst, const fz_irect *scissor, fz_pixmap *shape, fz_pixmap *img, const fz_matrix *ctm, int alpha)
 {
 	assert(dst->n == img->n || (dst->n == 4 && img->n == 2));
 	fz_paint_image_imp(dst, scissor, shape, img, ctm, NULL, alpha);

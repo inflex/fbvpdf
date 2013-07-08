@@ -58,7 +58,7 @@ struct data {
 
 	// The area of the page to render as obtained by the main
 	// thread and sent from main to rendering thread.
-	fz_bbox bbox;
+	fz_rect bbox;
 
 	// This is the result, a pixmap containing the rendered page.
 	// It is passed first from main thread to the rendering
@@ -67,7 +67,6 @@ struct data {
 	// thread.
 	fz_pixmap *pix;
 };
-
 
 // This is the function run by each rendering function. It takes
 // pointer to an instance of the data structure described above and
@@ -79,7 +78,7 @@ renderer(void *data)
 	int pagenumber = ((struct data *) data)->pagenumber;
 	fz_context *ctx = ((struct data *) data)->ctx;
 	fz_display_list *list = ((struct data *) data)->list;
-	fz_bbox bbox = ((struct data *) data)->bbox;
+	fz_rect bbox = ((struct data *) data)->bbox;
 	fz_pixmap *pix = ((struct data *) data)->pix;
 
 	fprintf(stderr, "thread at page %d loading!\n", pagenumber);
@@ -95,7 +94,7 @@ renderer(void *data)
 
 	fprintf(stderr, "thread at page %d rendering!\n", pagenumber);
 	fz_device *dev = fz_new_draw_device(ctx, pix);
-	fz_run_display_list(list, dev, fz_identity, bbox, NULL);
+	fz_run_display_list(list, dev, &fz_identity, &bbox, NULL);
 	fz_free_device(dev);
 
 	// This threads context is freed.
@@ -116,7 +115,7 @@ void lock_mutex(void *user, int lock)
 {
 	pthread_mutex_t *mutex = (pthread_mutex_t *) user;
 
-	if (pthread_mutex_lock(&mutex[lock]) < 0)
+	if (pthread_mutex_lock(&mutex[lock]) != 0)
 		fail("pthread_mutex_lock()");
 }
 
@@ -124,7 +123,7 @@ void unlock_mutex(void *user, int lock)
 {
 	pthread_mutex_t *mutex = (pthread_mutex_t *) user;
 
-	if (pthread_mutex_unlock(&mutex[lock]) < 0)
+	if (pthread_mutex_unlock(&mutex[lock]) != 0)
 		fail("pthread_mutex_unlock()");
 }
 
@@ -140,7 +139,7 @@ int main(int argc, char **argv)
 
 	for (i = 0; i < FZ_LOCK_MAX; i++)
 	{
-		if (pthread_mutex_init(&mutex[i], NULL) < 0)
+		if (pthread_mutex_init(&mutex[i], NULL) != 0)
 			fail("pthread_mutex_init()");
 	}
 
@@ -180,8 +179,9 @@ int main(int argc, char **argv)
 
 		// Compute the bounding box for each page.
 
-		fz_rect rect = fz_bound_page(doc, page);
-		fz_bbox bbox = fz_round_rect(rect);
+		fz_rect bbox;
+		fz_irect rbox;
+		fz_bound_page(doc, page, &bbox);
 
 		// Create a display list that will hold the drawing
 		// commands for the page.
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 		// to populate the page's display list.
 
 		fz_device *dev = fz_new_list_device(ctx, list);
-		fz_run_page(doc, page, dev, fz_identity, NULL);
+		fz_run_page(doc, page, dev, &fz_identity, NULL);
 		fz_free_device(dev);
 
 		// The page is no longer needed, all drawing commands
@@ -202,8 +202,7 @@ int main(int argc, char **argv)
 
 		// Create a white pixmap using the correct dimensions.
 
-		fz_pixmap *pix = fz_new_pixmap_with_bbox(ctx,
-			fz_device_rgb, bbox);
+		fz_pixmap *pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb, fz_round_rect(&rbox, &bbox));
 		fz_clear_pixmap_with_value(ctx, pix, 0xff);
 
 		// Populate the data structure to be sent to the
@@ -219,7 +218,7 @@ int main(int argc, char **argv)
 
 		// Create the thread and pass it the data structure.
 
-		if (pthread_create(&thread[i], NULL, renderer, data) < 0)
+		if (pthread_create(&thread[i], NULL, renderer, data) != 0)
 			fail("pthread_create()");
 	}
 
@@ -232,7 +231,7 @@ int main(int argc, char **argv)
 		char filename[42];
 		struct data *data;
 
-		if (pthread_join(thread[i], (void **) &data) < 0)
+		if (pthread_join(thread[i], (void **) &data) != 0)
 			fail("pthread_join");
 
 		sprintf(filename, "out%04d.png", i);

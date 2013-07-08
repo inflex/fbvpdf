@@ -31,7 +31,7 @@ struct pdf_image_s
  * tokenizer and low-level object parser
  */
 
-enum
+typedef enum
 {
 	PDF_TOK_ERROR, PDF_TOK_EOF,
 	PDF_TOK_OPEN_ARRAY, PDF_TOK_CLOSE_ARRAY,
@@ -43,7 +43,7 @@ enum
 	PDF_TOK_STREAM, PDF_TOK_ENDSTREAM,
 	PDF_TOK_XREF, PDF_TOK_TRAILER, PDF_TOK_STARTXREF,
 	PDF_NUM_TOKENS
-};
+} pdf_token;
 
 enum
 {
@@ -188,7 +188,7 @@ fz_stream *pdf_open_stream_with_offset(pdf_document *doc, int num, int gen, pdf_
 fz_stream *pdf_open_compressed_stream(fz_context *ctx, fz_compressed_buffer *);
 fz_stream *pdf_open_contents_stream(pdf_document *xref, pdf_obj *obj);
 fz_buffer *pdf_load_raw_renumbered_stream(pdf_document *doc, int num, int gen, int orig_num, int orig_gen);
-fz_buffer *pdf_load_renumbered_stream(pdf_document *doc, int num, int gen, int orig_num, int orig_gen);
+fz_buffer *pdf_load_renumbered_stream(pdf_document *doc, int num, int gen, int orig_num, int orig_gen, int *truncated);
 fz_stream *pdf_open_raw_renumbered_stream(pdf_document *doc, int num, int gen, int orig_num, int orig_gen);
 
 void pdf_repair_xref(pdf_document *doc, pdf_lexbuf *buf);
@@ -284,7 +284,7 @@ struct pdf_xobject_s
 };
 
 pdf_xobject *pdf_load_xobject(pdf_document *doc, pdf_obj *obj);
-pdf_obj *pdf_new_xobject(pdf_document *doc, fz_rect *bbox, fz_matrix *mat);
+pdf_obj *pdf_new_xobject(pdf_document *doc, const fz_rect *bbox, const fz_matrix *mat);
 pdf_xobject *pdf_keep_xobject(fz_context *ctx, pdf_xobject *xobj);
 void pdf_drop_xobject(fz_context *ctx, pdf_xobject *xobj);
 void pdf_update_xobject_contents(pdf_document *xref, pdf_xobject *form, fz_buffer *buffer);
@@ -474,7 +474,8 @@ unsigned char *pdf_lookup_substitute_font(int mono, int serif, int bold, int ita
 unsigned char *pdf_lookup_substitute_cjk_font(int ros, int serif, unsigned int *len);
 
 pdf_font_desc *pdf_load_type3_font(pdf_document *doc, pdf_obj *rdb, pdf_obj *obj);
-pdf_font_desc *pdf_load_font(pdf_document *doc, pdf_obj *rdb, pdf_obj *obj);
+void pdf_load_type3_glyphs(pdf_document *doc, pdf_font_desc *fontdesc, int nestedDepth);
+pdf_font_desc *pdf_load_font(pdf_document *doc, pdf_obj *rdb, pdf_obj *obj, int nestedDepth);
 
 pdf_font_desc *pdf_new_font_desc(fz_context *ctx);
 pdf_font_desc *pdf_keep_font(fz_context *ctx, pdf_font_desc *fontdesc);
@@ -484,7 +485,7 @@ void pdf_drop_font(fz_context *ctx, pdf_font_desc *font);
 void pdf_print_font(fz_context *ctx, pdf_font_desc *fontdesc);
 #endif
 
-fz_rect pdf_measure_text(fz_context *ctx, pdf_font_desc *fontdesc, unsigned char *buf, int len);
+fz_rect *pdf_measure_text(fz_context *ctx, pdf_font_desc *fontdesc, unsigned char *buf, int len, fz_rect *rect);
 float pdf_text_stride(fz_context *ctx, pdf_font_desc *fontdesc, float fontsize, unsigned char *buf, int len, float room, int *count);
 
 /*
@@ -493,6 +494,7 @@ float pdf_text_stride(fz_context *ctx, pdf_font_desc *fontdesc, float fontsize, 
 
 struct pdf_annot_s
 {
+	pdf_page *page;
 	pdf_obj *obj;
 	fz_rect rect;
 	fz_rect pagerect;
@@ -510,9 +512,9 @@ pdf_obj *pdf_lookup_dest(pdf_document *doc, pdf_obj *needle);
 pdf_obj *pdf_lookup_name(pdf_document *doc, char *which, pdf_obj *needle);
 pdf_obj *pdf_load_name_tree(pdf_document *doc, char *which);
 
-fz_link *pdf_load_link_annots(pdf_document *, pdf_obj *annots, fz_matrix page_ctm);
+fz_link *pdf_load_link_annots(pdf_document *, pdf_obj *annots, const fz_matrix *page_ctm);
 
-pdf_annot *pdf_load_annots(pdf_document *, pdf_obj *annots, fz_matrix page_ctm);
+pdf_annot *pdf_load_annots(pdf_document *, pdf_obj *annots, pdf_page *page);
 void pdf_update_annot(pdf_document *, pdf_annot *annot);
 void pdf_free_annot(fz_context *ctx, pdf_annot *link);
 
@@ -545,6 +547,7 @@ struct pdf_page_s
 	fz_link *links;
 	pdf_annot *annots;
 	pdf_annot *changed_annots;
+	pdf_obj *me;
 	float duration;
 	int transition_present;
 	fz_transition transition;
@@ -554,7 +557,7 @@ struct pdf_page_s
  * Content stream parsing
  */
 
-void pdf_run_glyph(pdf_document *doc, pdf_obj *resources, fz_buffer *contents, fz_device *dev, fz_matrix ctm, void *gstate);
+void pdf_run_glyph(pdf_document *doc, pdf_obj *resources, fz_buffer *contents, fz_device *dev, const fz_matrix *ctm, void *gstate, int nestedDepth);
 
 /*
  * PDF interface to store
@@ -581,6 +584,8 @@ int pdf_choice_widget_options(pdf_document *doc, fz_widget *tw, char *opts[]);
 int pdf_choice_widget_is_multiselect(pdf_document *doc, fz_widget *tw);
 int pdf_choice_widget_value(pdf_document *doc, fz_widget *tw, char *opts[]);
 void pdf_choice_widget_set_value(pdf_document *doc, fz_widget *tw, int n, char *opts[]);
+pdf_annot *pdf_create_annot(pdf_document *doc, pdf_page *page, fz_annot_type type);
+void pdf_set_annot_appearance(pdf_document *doc, pdf_annot *annot, fz_display_list *disp_list);
 void pdf_set_doc_event_callback(pdf_document *doc, fz_doc_event_cb *event_cb, void *data);
 
 void pdf_event_issue_alert(pdf_document *doc, fz_alert_event *event);
@@ -600,7 +605,7 @@ typedef struct pdf_js_event_s
 	int rc;
 } pdf_js_event;
 
-int pdf_js_suported();
+int pdf_js_supported();
 pdf_js *pdf_new_js(pdf_document *doc);
 void pdf_drop_js(pdf_js *js);
 void pdf_js_load_document_level(pdf_js *js);

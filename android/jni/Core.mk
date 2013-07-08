@@ -10,7 +10,10 @@ ZLIB := zlib
 FREETYPE := freetype
 V8 := v8-3.9
 
-LOCAL_CFLAGS += -DARCH_ARM -DARCH_THUMB -DARCH_ARM_CAN_LOAD_UNALIGNED
+LOCAL_CFLAGS += -DARCH_ARM -DARCH_THUMB -DARCH_ARM_CAN_LOAD_UNALIGNED -DAA_BITS=8
+ifdef NDK_PROFILER
+LOCAL_CFLAGS += -pg -DNDK_PROFILER -O2
+endif
 
 LOCAL_C_INCLUDES := \
 	../thirdparty/jbig2dec \
@@ -39,6 +42,7 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/fitz/base_memory.c \
 	$(MY_ROOT)/fitz/base_string.c \
 	$(MY_ROOT)/fitz/base_time.c \
+	$(MY_ROOT)/fitz/base_xml.c \
 	$(MY_ROOT)/fitz/crypt_aes.c \
 	$(MY_ROOT)/fitz/crypt_arc4.c \
 	$(MY_ROOT)/fitz/crypt_md5.c \
@@ -49,9 +53,10 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/fitz/dev_text.c \
 	$(MY_ROOT)/fitz/dev_trace.c \
 	$(MY_ROOT)/fitz/doc_document.c \
+	$(MY_ROOT)/fitz/doc_interactive.c \
 	$(MY_ROOT)/fitz/doc_link.c \
 	$(MY_ROOT)/fitz/doc_outline.c \
-	$(MY_ROOT)/fitz/doc_interactive.c \
+	$(MY_ROOT)/fitz/doc_search.c \
 	$(MY_ROOT)/fitz/filt_basic.c \
 	$(MY_ROOT)/fitz/filt_dctd.c \
 	$(MY_ROOT)/fitz/filt_faxd.c \
@@ -67,12 +72,12 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/fitz/res_font.c \
 	$(MY_ROOT)/fitz/res_path.c \
 	$(MY_ROOT)/fitz/res_pixmap.c \
-	$(MY_ROOT)/fitz/res_shade.c \
 	$(MY_ROOT)/fitz/res_store.c \
 	$(MY_ROOT)/fitz/res_text.c \
 	$(MY_ROOT)/fitz/stm_buffer.c \
 	$(MY_ROOT)/fitz/stm_comp_buf.c \
 	$(MY_ROOT)/fitz/stm_open.c \
+	$(MY_ROOT)/fitz/stm_output.c \
 	$(MY_ROOT)/fitz/stm_read.c \
 	$(MY_ROOT)/draw/draw_affine.c \
 	$(MY_ROOT)/draw/draw_blend.c \
@@ -91,6 +96,7 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/pdf/pdf_cmap_table.c \
 	$(MY_ROOT)/pdf/pdf_colorspace.c \
 	$(MY_ROOT)/pdf/pdf_crypt.c \
+	$(MY_ROOT)/pdf/pdf_device.c \
 	$(MY_ROOT)/pdf/pdf_encoding.c \
 	$(MY_ROOT)/pdf/pdf_event.c \
 	$(MY_ROOT)/pdf/pdf_font.c \
@@ -127,7 +133,6 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/xps/xps_resource.c \
 	$(MY_ROOT)/xps/xps_tile.c \
 	$(MY_ROOT)/xps/xps_util.c \
-	$(MY_ROOT)/xps/xps_xml.c \
 	$(MY_ROOT)/xps/xps_zip.c \
 	$(MY_ROOT)/cbz/mucbz.c
 ifdef V8_BUILD

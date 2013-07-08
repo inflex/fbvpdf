@@ -74,23 +74,25 @@ xps_load_image(fz_context *ctx, byte *buf, int len)
 	return &image->base;
 }
 
+/* FIXME: area unused! */
 static void
-xps_paint_image_brush(xps_document *doc, fz_matrix ctm, fz_rect area, char *base_uri, xps_resource *dict,
-	xml_element *root, void *vimage)
+xps_paint_image_brush(xps_document *doc, const fz_matrix *ctm, const fz_rect *area, char *base_uri, xps_resource *dict,
+	fz_xml *root, void *vimage)
 {
 	xps_image *image = vimage;
 	float xs, ys;
+	fz_matrix local_ctm = *ctm;
 
 	if (image->xres == 0 || image->yres == 0)
 		return;
 	xs = image->base.w * 96 / image->xres;
 	ys = image->base.h * 96 / image->yres;
-	ctm = fz_concat(fz_scale(xs, ys), ctm);
-	fz_fill_image(doc->dev, &image->base, ctm, doc->opacity[doc->opacity_top]);
+	fz_pre_scale(&local_ctm, xs, ys);
+	fz_fill_image(doc->dev, &image->base, &local_ctm, doc->opacity[doc->opacity_top]);
 }
 
 static xps_part *
-xps_find_image_brush_source_part(xps_document *doc, char *base_uri, xml_element *root)
+xps_find_image_brush_source_part(xps_document *doc, char *base_uri, fz_xml *root)
 {
 	char *image_source_att;
 	char buf[1024];
@@ -99,7 +101,7 @@ xps_find_image_brush_source_part(xps_document *doc, char *base_uri, xml_element 
 	char *profile_name;
 	char *p;
 
-	image_source_att = xml_att(root, "ImageSource");
+	image_source_att = fz_xml_att(root, "ImageSource");
 	if (!image_source_att)
 		fz_throw(doc->ctx, "cannot find image source attribute");
 
@@ -140,8 +142,8 @@ xps_find_image_brush_source_part(xps_document *doc, char *base_uri, xml_element 
 }
 
 void
-xps_parse_image_brush(xps_document *doc, fz_matrix ctm, fz_rect area,
-	char *base_uri, xps_resource *dict, xml_element *root)
+xps_parse_image_brush(xps_document *doc, const fz_matrix *ctm, const fz_rect *area,
+	char *base_uri, xps_resource *dict, fz_xml *root)
 {
 	xps_part *part;
 	fz_image *image;

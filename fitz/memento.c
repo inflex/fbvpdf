@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2012 Artifex Software, Inc.
+/* Copyright (C) 2001-2013 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -474,6 +474,11 @@ static void showBlock(Memento_BlkHeader *b, int space)
 static void blockDisplay(Memento_BlkHeader *b, int n)
 {
     n++;
+    while (n > 40)
+    {
+	    fprintf(stderr, "*");
+	    n -= 40;
+    }
     while(n > 0)
     {
         int i = n;
@@ -499,9 +504,18 @@ static int Memento_listBlock(Memento_BlkHeader *b,
 static void doNestedDisplay(Memento_BlkHeader *b,
                             int depth)
 {
-    blockDisplay(b, depth);
-    for (b = b->child; b; b = b->sibling)
-        doNestedDisplay(b, depth+1);
+    /* Try and avoid recursion if we can help it */
+    do {
+        blockDisplay(b, depth);
+	if (b->sibling) {
+            if (b->child)
+                doNestedDisplay(b->child, depth+1);
+            b = b->sibling;
+	} else {
+            b = b->child;
+            depth++;
+	}
+    } while (b);
 }
 
 static int ptrcmp(const void *a_, const void *b_)

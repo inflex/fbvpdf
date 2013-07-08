@@ -124,6 +124,17 @@ void fz_write_buffer_byte(fz_context *ctx, fz_buffer *buf, int val)
 	buf->unused_bits = 0;
 }
 
+void fz_write_buffer_rune(fz_context *ctx, fz_buffer *buf, int c)
+{
+	char data[10];
+	int len = fz_runetochar(data, c);
+	if (buf->len + len > buf->cap)
+		fz_ensure_buffer(ctx, buf, buf->len + len);
+	memcpy(buf->data + buf->len, data, len);
+	buf->len += len;
+	buf->unused_bits = 0;
+}
+
 void fz_write_buffer_bits(fz_context *ctx, fz_buffer *buf, int val, int bits)
 {
 	int shift;
@@ -190,19 +201,55 @@ void fz_write_buffer_pad(fz_context *ctx, fz_buffer *buf)
 	buf->unused_bits = 0;
 }
 
-void
+int
 fz_buffer_printf(fz_context *ctx, fz_buffer *buffer, const char *fmt, ...)
 {
+	int ret;
 	va_list args;
 	va_start(args, fmt);
 
-	/* Caller guarantees not to generate more than 256 bytes per call */
-	while(buffer->cap - buffer->len < 256)
-		fz_grow_buffer(ctx, buffer);
-
-	buffer->len += vsprintf((char *)buffer->data + buffer->len, fmt, args);
+	ret = fz_buffer_vprintf(ctx, buffer, fmt, args);
 
 	va_end(args);
+
+	return ret;
+}
+
+int
+fz_buffer_vprintf(fz_context *ctx, fz_buffer *buffer, const char *fmt, va_list old_args)
+{
+	int len;
+
+	do
+	{
+		int slack = buffer->cap - buffer->len;
+
+		if (slack > 0)
+		{
+			va_list args;
+#ifdef _MSC_VER /* Microsoft Visual C */
+			args = old_args;
+#else
+			va_copy(args, old_args);
+#endif
+			len = vsnprintf((char *)buffer->data + buffer->len, slack, fmt, args);
+#ifndef _MSC_VER
+			va_end(args);
+#endif
+			/* len = number of chars written, not including the terminating
+			 * NULL, so len+1 > slack means "truncated". MSVC differs here
+			 * and returns -1 for truncated. */
+			if (len >= 0 && len+1 <= slack)
+				break;
+		}
+		/* Grow the buffer and retry */
+		fz_grow_buffer(ctx, buffer);
+	}
+	while (1);
+
+	buffer->len += len;
+
+	return len;
 }
 
 void

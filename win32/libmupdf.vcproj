@@ -23,8 +23,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				Description="Generate CMap and Font source files"
-				CommandLine="generate.bat"
+				CommandLine=""
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -254,6 +253,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\pdf\pdf_device.c"
+				>
+			</File>
+			<File
 				RelativePath="..\pdf\pdf_encoding.c"
 				>
 			</File>
@@ -283,10 +286,6 @@
 			</File>
 			<File
 				RelativePath="..\pdf\pdf_interpret.c"
-				>
-			</File>
-			<File
-				RelativePath="..\pdf\pdf_js_none.c"
 				>
 			</File>
 			<File
@@ -402,6 +401,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\fitz\base_xml.c"
+				>
+			</File>
+			<File
 				RelativePath="..\fitz\crypt_aes.c"
 				>
 			</File>
@@ -451,6 +454,10 @@
 			</File>
 			<File
 				RelativePath="..\fitz\doc_outline.c"
+				>
+			</File>
+			<File
+				RelativePath="..\fitz\doc_search.c"
 				>
 			</File>
 			<File
@@ -570,6 +577,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\fitz\stm_output.c"
+				>
+			</File>
+			<File
 				RelativePath="..\fitz\stm_read.c"
 				>
 			</File>
@@ -622,6 +633,10 @@
 			Name="xps"
 			>
 			<File
+				RelativePath="..\xps\muxps-internal.h"
+				>
+			</File>
+			<File
 				RelativePath="..\xps\muxps.h"
 				>
 			</File>
@@ -663,10 +678,6 @@
 			</File>
 			<File
 				RelativePath="..\xps\xps_util.c"
-				>
-			</File>
-			<File
-				RelativePath="..\xps\xps_xml.c"
 				>
 			</File>
 			<File

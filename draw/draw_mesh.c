@@ -213,14 +213,14 @@ static inline void step_edge(int *ael, int *del, int n)
 }
 
 static void
-fz_paint_triangle(fz_pixmap *pix, float *av, float *bv, float *cv, int n, fz_bbox bbox)
+fz_paint_triangle(fz_pixmap *pix, float *av, float *bv, float *cv, int n, const fz_irect *bbox)
 {
 	float poly[MAXV][MAXN];
 	float temp[MAXV][MAXN];
-	float cx0 = bbox.x0;
-	float cy0 = bbox.y0;
-	float cx1 = bbox.x1;
-	float cy1 = bbox.y1;
+	float cx0 = bbox->x0;
+	float cy0 = bbox->y0;
+	float cx1 = bbox->x1;
+	float cy1 = bbox->y1;
 
 	int gel[MAXV][MAXN];
 	int ael[2][MAXN];
@@ -245,9 +245,9 @@ fz_paint_triangle(fz_pixmap *pix, float *av, float *bv, float *cv, int n, fz_bbo
 	for (i = 0; i < len; i++)
 	{
 		gel[i][0] = floorf(poly[i][0] + 0.5f) * 65536; /* trunc and fix */
-		gel[i][1] = floorf(poly[i][1] + 0.5f);	/* y is not fixpoint */
+		gel[i][1] = floorf(poly[i][1] + 0.5f); /* y is not fixpoint */
 		for (k = 2; k < n; k++)
-			gel[i][k] = poly[i][k] * 65536;	/* fix with precision */
+			gel[i][k] = poly[i][k] * 65536; /* fix with precision */
 	}
 
 	top = bot = 0;
@@ -307,7 +307,7 @@ struct paint_tri_data
 	fz_context *ctx;
 	fz_shade *shade;
 	fz_pixmap *dest;
-	fz_bbox bbox;
+	const fz_irect *bbox;
 };
 
 static void
@@ -349,7 +349,7 @@ do_paint_tri(void *arg, fz_vertex *av, fz_vertex *bv, fz_vertex *cv)
 }
 
 void
-fz_paint_shade(fz_context *ctx, fz_shade *shade, fz_matrix ctm, fz_pixmap *dest, fz_bbox bbox)
+fz_paint_shade(fz_context *ctx, fz_shade *shade, const fz_matrix *ctm, fz_pixmap *dest, const fz_irect *bbox)
 {
 	unsigned char clut[256][FZ_MAX_COLORS];
 	fz_pixmap *temp = NULL;
@@ -357,19 +357,22 @@ fz_paint_shade(fz_context *ctx, fz_shade *shade, fz_matrix ctm, fz_pixmap *dest,
 	float color[FZ_MAX_COLORS];
 	struct paint_tri_data ptd;
 	int i, k;
+	fz_matrix local_ctm;
 
 	fz_var(temp);
 	fz_var(conv);
 
 	fz_try(ctx)
 	{
-		ctm = fz_concat(shade->matrix, ctm);
+		fz_concat(&local_ctm, &shade->matrix, ctm);
 
 		if (shade->use_function)
 		{
+			fz_color_converter cc;
+			fz_find_color_converter(&cc, ctx, dest->colorspace, shade->colorspace);
 			for (i = 0; i < 256; i++)
 			{
-				fz_convert_color(ctx, dest->colorspace, color, shade->colorspace, shade->function[i]);
+				cc.convert(&cc, color, shade->function[i]);
 				for (k = 0; k < dest->colorspace->n; k++)
 					clut[i][k] = color[k] * 255;
 				clut[i][k] = shade->function[i][shade->colorspace->n] * 255;
@@ -388,7 +391,7 @@ fz_paint_shade(fz_context *ctx, fz_shade *shade, fz_matrix ctm, fz_pixmap *dest,
 		ptd.shade = shade;
 		ptd.bbox = bbox;
 
-		fz_process_mesh(ctx, shade, ctm, &do_paint_tri, &ptd);
+		fz_process_mesh(ctx, shade, &local_ctm, &do_paint_tri, &ptd);
 
 		if (shade->use_function)
 		{

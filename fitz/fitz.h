@@ -166,7 +166,7 @@ static inline float fz_clamp(float f, float min, float max)
 	return (f > min ? (f < max ? f : max) : min);
 }
 
-static inline int fz_clampi(int i, float min, float max)
+static inline int fz_clampi(int i, int min, int max)
 {
 	return (i > min ? (i < max ? i : max) : min);
 }
@@ -236,7 +236,6 @@ struct fz_error_context_s
 void fz_var_imp(void *);
 #define fz_var(var) fz_var_imp((void *)&(var))
 
-
 /*
 	Exception macro definitions. Just treat these as a black box - pay no
 	attention to the man behind the curtain.
@@ -250,17 +249,21 @@ void fz_var_imp(void *);
 #define fz_always(ctx) \
 		} while (0); \
 	} \
-	{ do { \
+	if (ctx->error->stack[ctx->error->top].code < 3) \
+	{ \
+		ctx->error->stack[ctx->error->top].code++; \
+		do { \
 
 #define fz_catch(ctx) \
 		} while(0); \
 	} \
-	if (ctx->error->stack[ctx->error->top--].code)
+	if (ctx->error->stack[ctx->error->top--].code > 1)
 
 int fz_push_try(fz_error_context *ex);
-void fz_throw(fz_context *, char *, ...) __printflike(2, 3);
+void fz_throw(fz_context *, const char *, ...) __printflike(2, 3);
 void fz_rethrow(fz_context *);
-void fz_warn(fz_context *ctx, char *fmt, ...) __printflike(2, 3);
+void fz_warn(fz_context *ctx, const char *fmt, ...) __printflike(2, 3);
+const char *fz_caught(fz_context *ctx);
 
 /*
 	fz_flush_warnings: Flush any repeated warnings.
@@ -498,7 +501,7 @@ void *fz_resize_array(fz_context *ctx, void *p, unsigned int count, unsigned int
 	Returns a pointer to a duplicated string. Throws exception on failure
 	to allocate.
 */
-char *fz_strdup(fz_context *ctx, char *s);
+char *fz_strdup(fz_context *ctx, const char *s);
 
 /*
 	fz_free: Frees an allocation.
@@ -566,7 +569,7 @@ void *fz_resize_array_no_throw(fz_context *ctx, void *p, unsigned int count, uns
 	Returns a pointer to a duplicated string. Returns NULL on failure
 	to allocate.
 */
-char *fz_strdup_no_throw(fz_context *ctx, char *s);
+char *fz_strdup_no_throw(fz_context *ctx, const char *s);
 
 /*
 	Safe string functions
@@ -656,6 +659,59 @@ extern int fz_optind;
 extern char *fz_optarg;
 
 /*
+	XML document model
+*/
+
+typedef struct fz_xml_s fz_xml;
+
+/*
+	fz_parse_xml: Parse a zero-terminated string into a tree of xml nodes.
+*/
+fz_xml *fz_parse_xml(fz_context *ctx, unsigned char *buf, int len);
+
+/*
+	fz_xml_next: Return next sibling of XML node.
+*/
+fz_xml *fz_xml_next(fz_xml *item);
+
+/*
+	fz_xml_down: Return first child of XML node.
+*/
+fz_xml *fz_xml_down(fz_xml *item);
+
+/*
+	fz_xml_tag: Return tag of XML node. Return the empty string for text nodes.
+*/
+char *fz_xml_tag(fz_xml *item);
+
+/*
+	fz_xml_att: Return the value of an attribute of an XML node.
+	NULL if the attribute doesn't exist.
+*/
+char *fz_xml_att(fz_xml *item, const char *att);
+
+/*
+	fz_xml_text: Return the text content of an XML node.
+	NULL if the node is a tag.
+*/
+char *fz_xml_text(fz_xml *item);
+
+/*
+	fz_free_xml: Free the XML node and all its children and siblings.
+*/
+void fz_free_xml(fz_context *doc, fz_xml *item);
+
+/*
+	fz_detach_xml: Detach a node from the tree, unlinking it from its parent.
+*/
+void fz_detach_xml(fz_xml *node);
+
+/*
+	fz_debug_xml: Pretty-print an XML tree to stdout.
+*/
+void fz_debug_xml(fz_xml *item, int level);
+
+/*
 	fz_point is a point in a two-dimensional space.
 */
 typedef struct fz_point_s fz_point;
@@ -676,8 +732,7 @@ struct fz_point_s
 	defined to be infinite.
 
 	To check for empty or infinite rectangles use fz_is_empty_rect
-	and fz_is_infinite_rect. Compare to fz_bbox which has corners
-	at integer coordinates.
+	and fz_is_infinite_rect.
 
 	x0, y0: The top left corner.
 
@@ -691,17 +746,28 @@ struct fz_rect_s
 };
 
 /*
-	fz_bbox is a bounding box similar to a fz_rect, except that
-	all corner coordinates are rounded to integer coordinates.
-	To check for empty or infinite bounding boxes use
-	fz_is_empty_bbox and fz_is_infinite_bbox.
-
-	x0, y0: The top left corner.
-
-	x1, y1: The bottom right corner.
+	fz_rect_min: get the minimum point from a rectangle as an fz_point.
 */
-typedef struct fz_bbox_s fz_bbox;
-struct fz_bbox_s
+static inline fz_point *fz_rect_min(fz_rect *f)
+{
+	return (fz_point *)(void *)&f->x0;
+}
+
+/*
+	fz_rect_max: get the maximum point from a rectangle as an fz_point.
+*/
+static inline fz_point *fz_rect_max(fz_rect *f)
+{
+	return (fz_point *)(void *)&f->x1;
+}
+
+/*
+	fz_irect is a rectangle using integers instead of floats.
+
+	It's used in the draw device and for pixmap dimensions.
+*/
+typedef struct fz_irect_s fz_irect;
+struct fz_irect_s
 {
 	int x0, y0;
 	int x1, y1;
@@ -716,21 +782,12 @@ struct fz_bbox_s
 extern const fz_rect fz_unit_rect;
 
 /*
-	A bounding box with sides of length one. See fz_unit_rect.
-*/
-extern const fz_bbox fz_unit_bbox;
-
-/*
 	An empty rectangle with an area equal to zero.
 
 	Both the top left and bottom right corner are at (0, 0).
 */
 extern const fz_rect fz_empty_rect;
-
-/*
-	An empty bounding box. See fz_empty_rect.
-*/
-extern const fz_bbox fz_empty_bbox;
+extern const fz_irect fz_empty_irect;
 
 /*
 	An infinite rectangle with negative area.
@@ -739,26 +796,24 @@ extern const fz_bbox fz_empty_bbox;
 	at (-1, -1).
 */
 extern const fz_rect fz_infinite_rect;
-
-/*
-	An infinite bounding box. See fz_infinite_rect.
-*/
-extern const fz_bbox fz_infinite_bbox;
+extern const fz_irect fz_infinite_irect;
 
 /*
 	fz_is_empty_rect: Check if rectangle is empty.
 
 	An empty rectangle is defined as one whose area is zero.
 */
-#define fz_is_empty_rect(r) ((r).x0 == (r).x1 || (r).y0 == (r).y1)
+static inline int
+fz_is_empty_rect(const fz_rect *r)
+{
+	return ((r)->x0 == (r)->x1 || (r)->y0 == (r)->y1);
+}
 
-/*
-	fz_is_empty_bbox: Check if bounding box is empty.
-
-	Same definition of empty bounding boxes as for empty
-	rectangles. See fz_is_empty_rect.
-*/
-#define fz_is_empty_bbox(b) ((b).x0 == (b).x1 || (b).y0 == (b).y1)
+static inline int
+fz_is_empty_irect(const fz_irect *r)
+{
+	return ((r)->x0 == (r)->x1 || (r)->y0 == (r)->y1);
+}
 
 /*
 	fz_is_infinite: Check if rectangle is infinite.
@@ -766,15 +821,17 @@ extern const fz_bbox fz_infinite_bbox;
 	An infinite rectangle is defined as one where either of the
 	two relationships between corner coordinates are not true.
 */
-#define fz_is_infinite_rect(r) ((r).x0 > (r).x1 || (r).y0 > (r).y1)
+static inline int
+fz_is_infinite_rect(const fz_rect *r)
+{
+	return ((r)->x0 > (r)->x1 || (r)->y0 > (r)->y1);
+}
 
-/*
-	fz_is_infinite_bbox: Check if bounding box is infinite.
-
-	Same definition of infinite bounding boxes as for infinite
-	rectangles. See fz_is_infinite_rect.
-*/
-#define fz_is_infinite_bbox(b) ((b).x0 > (b).x1 || (b).y0 > (b).y1)
+static inline int
+fz_is_infinite_irect(const fz_irect *r)
+{
+	return ((r)->x0 > (r)->x1 || (r)->y0 > (r)->y1);
+}
 
 /*
 	fz_matrix is a a row-major 3x3 matrix used for representing
@@ -795,11 +852,16 @@ struct fz_matrix_s
 	float a, b, c, d, e, f;
 };
 
-
 /*
 	fz_identity: Identity transform matrix.
 */
 extern const fz_matrix fz_identity;
+
+static inline fz_matrix *fz_copy_matrix(fz_matrix *restrict m, const fz_matrix *restrict s)
+{
+	*m = *s;
+	return m;
+}
 
 /*
 	fz_concat: Multiply two matrices.
@@ -807,34 +869,75 @@ extern const fz_matrix fz_identity;
 	The order of the two matrices are important since matrix
 	multiplication is not commutative.
 
+	Returns result.
+
 	Does not throw exceptions.
 */
-fz_matrix fz_concat(fz_matrix left, fz_matrix right);
+fz_matrix *fz_concat(fz_matrix *result, const fz_matrix *left, const fz_matrix *right);
 
 /*
 	fz_scale: Create a scaling matrix.
 
 	The returned matrix is of the form [ sx 0 0 sy 0 0 ].
 
+	m: Pointer to the matrix to populate
+
 	sx, sy: Scaling factors along the X- and Y-axes. A scaling
 	factor of 1.0 will not cause any scaling along the relevant
 	axis.
 
+	Returns m.
+
 	Does not throw exceptions.
 */
-fz_matrix fz_scale(float sx, float sy);
+fz_matrix *fz_scale(fz_matrix *m, float sx, float sy);
+
+/*
+	fz_pre_scale: Scale a matrix by premultiplication.
+
+	m: Pointer to the matrix to scale
+
+	sx, sy: Scaling factors along the X- and Y-axes. A scaling
+	factor of 1.0 will not cause any scaling along the relevant
+	axis.
+
+	Returns m (updated).
+
+	Does not throw exceptions.
+*/
+fz_matrix *fz_pre_scale(fz_matrix *m, float sx, float sy);
 
 /*
 	fz_shear: Create a shearing matrix.
 
 	The returned matrix is of the form [ 1 sy sx 1 0 0 ].
 
+	m: pointer to place to store returned matrix
+
 	sx, sy: Shearing factors. A shearing factor of 0.0 will not
 	cause any shearing along the relevant axis.
 
+	Returns m.
+
 	Does not throw exceptions.
 */
-fz_matrix fz_shear(float sx, float sy);
+fz_matrix *fz_shear(fz_matrix *m, float sx, float sy);
+
+/*
+	fz_pre_shear: Premultiply a matrix with a shearing matrix.
+
+	The shearing matrix is of the form [ 1 sy sx 1 0 0 ].
+
+	m: pointer to matrix to premultiply
+
+	sx, sy: Shearing factors. A shearing factor of 0.0 will not
+	cause any shearing along the relevant axis.
+
+	Returns m (updated).
+
+	Does not throw exceptions.
+*/
+fz_matrix *fz_pre_shear(fz_matrix *m, float sx, float sy);
 
 /*
 	fz_rotate: Create a rotation matrix.
@@ -842,36 +945,80 @@ fz_matrix fz_shear(float sx, float sy);
 	The returned matrix is of the form
 	[ cos(deg) sin(deg) -sin(deg) cos(deg) 0 0 ].
 
+	m: Pointer to place to store matrix
+
 	degrees: Degrees of counter clockwise rotation. Values less
 	than zero and greater than 360 are handled as expected.
 
+	Returns m.
+
 	Does not throw exceptions.
 */
-fz_matrix fz_rotate(float degrees);
+fz_matrix *fz_rotate(fz_matrix *m, float degrees);
+
+/*
+	fz_pre_rotate: Rotate a transformation by premultiplying.
+
+	The premultiplied matrix is of the form
+	[ cos(deg) sin(deg) -sin(deg) cos(deg) 0 0 ].
+
+	m: Pointer to matrix to premultiply.
+
+	degrees: Degrees of counter clockwise rotation. Values less
+	than zero and greater than 360 are handled as expected.
+
+	Returns m (updated).
+
+	Does not throw exceptions.
+*/
+fz_matrix *fz_pre_rotate(fz_matrix *m, float degrees);
 
 /*
 	fz_translate: Create a translation matrix.
 
 	The returned matrix is of the form [ 1 0 0 1 tx ty ].
 
+	m: A place to store the created matrix.
+
 	tx, ty: Translation distances along the X- and Y-axes. A
 	translation of 0 will not cause any translation along the
 	relevant axis.
 
+	Returns m.
+
 	Does not throw exceptions.
 */
-fz_matrix fz_translate(float tx, float ty);
+fz_matrix *fz_translate(fz_matrix *m, float tx, float ty);
+
+/*
+	fz_pre_translate: Translate a matrix by premultiplication.
+
+	m: The matrix to translate
+
+	tx, ty: Translation distances along the X- and Y-axes. A
+	translation of 0 will not cause any translation along the
+	relevant axis.
+
+	Returns m.
+
+	Does not throw exceptions.
+*/
+fz_matrix *fz_pre_translate(fz_matrix *m, float tx, float ty);
 
 /*
 	fz_invert_matrix: Create an inverse matrix.
+
+	inverse: Place to store inverse matrix.
 
 	matrix: Matrix to invert. A degenerate matrix, where the
 	determinant is equal to zero, can not be inverted and the
 	original matrix is returned instead.
 
+	Returns inverse.
+
 	Does not throw exceptions.
 */
-fz_matrix fz_invert_matrix(fz_matrix matrix);
+fz_matrix *fz_invert_matrix(fz_matrix *inverse, const fz_matrix *matrix);
 
 /*
 	fz_is_rectilinear: Check if a transformation is rectilinear.
@@ -883,37 +1030,81 @@ fz_matrix fz_invert_matrix(fz_matrix matrix);
 
 	Does not throw exceptions.
 */
-int fz_is_rectilinear(fz_matrix m);
+int fz_is_rectilinear(const fz_matrix *m);
 
 /*
 	fz_matrix_expansion: Calculate average scaling factor of matrix.
 */
-float fz_matrix_expansion(fz_matrix m); /* sumatrapdf */
+float fz_matrix_expansion(const fz_matrix *m); /* sumatrapdf */
 
 /*
-	fz_bbox_covering_rect: Convert a rect into the minimal bounding box
-	that covers the rectangle.
+	fz_intersect_rect: Compute intersection of two rectangles.
 
-	Coordinates in a bounding box are integers, so rounding of the
-	rects coordinates takes place. The top left corner is rounded
-	upwards and left while the bottom right corner is rounded
-	downwards and to the right. Overflows or underflowing
-	coordinates are clamped to INT_MIN/INT_MAX.
+	Given two rectangles, update the first to be the smallest
+	axis-aligned rectangle that covers the area covered by both
+	given rectangles. If either rectangle is empty then the
+	intersection is also empty. If either rectangle is infinite
+	then the intersection is simply the non-infinite rectangle.
+	Should both rectangles be infinite, then the intersection is
+	also infinite.
 
 	Does not throw exceptions.
 */
-fz_bbox fz_bbox_covering_rect(fz_rect rect);
+fz_rect *fz_intersect_rect(fz_rect *restrict a, const fz_rect *restrict b);
 
 /*
-	fz_round_rect: Convert a rect into a bounding box.
+	fz_intersect_irect: Compute intersection of two bounding boxes.
+
+	Similar to fz_intersect_rect but operates on two bounding
+	boxes instead of two rectangles.
+
+	Does not throw exceptions.
+*/
+fz_irect *fz_intersect_irect(fz_irect *restrict a, const fz_irect *restrict b);
+
+/*
+	fz_union_rect: Compute union of two rectangles.
+
+	Given two rectangles, update the first to be the smallest
+	axis-aligned rectangle that encompasses both given rectangles.
+	If either rectangle is infinite then the union is also infinite.
+	If either rectangle is empty then the union is simply the
+	non-empty rectangle. Should both rectangles be empty, then the
+	union is also empty.
+
+	Does not throw exceptions.
+*/
+fz_rect *fz_union_rect(fz_rect *restrict a, const fz_rect *restrict b);
+
+/*
+	fz_irect_from_rect: Convert a rect into the minimal bounding box
+	that covers the rectangle.
+
+	bbox: Place to store the returned bbox.
+
+	rect: The rectangle to convert to a bbox.
 
 	Coordinates in a bounding box are integers, so rounding of the
 	rects coordinates takes place. The top left corner is rounded
 	upwards and left while the bottom right corner is rounded
-	downwards and to the right. Overflows or underflowing
-	coordinates are clamped to INT_MIN/INT_MAX.
+	downwards and to the right.
 
-	This differs from fz_bbox_covering_rect, in that fz_bbox_covering_rect
+	Returns bbox (updated).
+
+	Does not throw exceptions.
+*/
+
+fz_irect *fz_irect_from_rect(fz_irect *restrict bbox, const fz_rect *restrict rect);
+
+/*
+	fz_round_rect: Round rectangle coordinates.
+
+	Coordinates in a bounding box are integers, so rounding of the
+	rects coordinates takes place. The top left corner is rounded
+	upwards and left while the bottom right corner is rounded
+	downwards and to the right.
+
+	This differs from fz_irect_from_rect, in that fz_irect_from_rect
 	slavishly follows the numbers (i.e any slight over/under calculations
 	can cause whole extra pixels to be added). fz_round_rect
 	allows for a small amount of rounding error when calculating
@@ -921,54 +1112,39 @@ fz_bbox fz_bbox_covering_rect(fz_rect rect);
 
 	Does not throw exceptions.
 */
-fz_bbox fz_round_rect(fz_rect rect);
+fz_irect *fz_round_rect(fz_irect *restrict bbox, const fz_rect *restrict rect);
 
 /*
-	fz_intersect_rect: Compute intersection of two rectangles.
+	fz_rect_from_irect: Convert a bbox into a rect.
 
-	Compute the largest axis-aligned rectangle that covers the
-	area covered by both given rectangles. If either rectangle is
-	empty then the intersection is also empty. If either rectangle
-	is infinite then the intersection is simply the non-infinite
-	rectangle. Should both rectangles be infinite, then the
-	intersection is also infinite.
+	For our purposes, a rect can represent all the values we meet in
+	a bbox, so nothing can go wrong.
+
+	rect: A place to store the generated rectangle.
+
+	bbox: The bbox to convert.
+
+	Returns rect (updated).
 
 	Does not throw exceptions.
 */
-fz_rect fz_intersect_rect(fz_rect a, fz_rect b);
+fz_rect *fz_rect_from_irect(fz_rect *restrict rect, const fz_irect *restrict bbox);
 
 /*
-	fz_intersect_bbox: Compute intersection of two bounding boxes.
-
-	Similar to fz_intersect_rect but operates on two bounding
-	boxes instead of two rectangles.
+	fz_expand_rect: Expand a bbox by a given amount in all directions.
 
 	Does not throw exceptions.
 */
-fz_bbox fz_intersect_bbox(fz_bbox a, fz_bbox b);
+fz_rect *fz_expand_rect(fz_rect *b, float expand);
 
 /*
-	fz_union_rect: Compute union of two rectangles.
+	fz_translate_irect: Translate bounding box.
 
-	Compute the smallest axis-aligned rectangle that encompasses
-	both given rectangles. If either rectangle is infinite then
-	the union is also infinite. If either rectangle is empty then
-	the union is simply the non-empty rectangle. Should both
-	rectangles be empty, then the union is also empty.
+	Translate a bbox by a given x and y offset. Allows for overflow.
 
 	Does not throw exceptions.
 */
-fz_rect fz_union_rect(fz_rect a, fz_rect b);
-
-/*
-	fz_union_bbox: Compute union of two bounding boxes.
-
-	Similar to fz_union_rect but operates on two bounding boxes
-	instead of two rectangles.
-
-	Does not throw exceptions.
-*/
-fz_bbox fz_union_bbox(fz_bbox a, fz_bbox b);
+fz_irect *fz_translate_irect(fz_irect *a, int xoff, int yoff);
 
 /*
 	fz_transform_point: Apply a transformation to a point.
@@ -977,9 +1153,13 @@ fz_bbox fz_union_bbox(fz_bbox a, fz_bbox b);
 	fz_scale, fz_rotate and fz_translate for how to create a
 	matrix.
 
+	point: Pointer to point to update.
+
+	Returns transform (unchanged).
+
 	Does not throw exceptions.
 */
-fz_point fz_transform_point(fz_matrix transform, fz_point point);
+fz_point *fz_transform_point(fz_point *restrict point, const fz_matrix *restrict transform);
 
 /*
 	fz_transform_vector: Apply a transformation to a vector.
@@ -988,9 +1168,11 @@ fz_point fz_transform_point(fz_matrix transform, fz_point point);
 	fz_scale and fz_rotate for how to create a matrix. Any
 	translation will be ignored.
 
+	vector: Pointer to vector to update.
+
 	Does not throw exceptions.
 */
-fz_point fz_transform_vector(fz_matrix transform, fz_point vector);
+fz_point *fz_transform_vector(fz_point *restrict vector, const fz_matrix *restrict transform);
 
 /*
 	fz_transform_rect: Apply a transform to a rectangle.
@@ -1009,17 +1191,7 @@ fz_point fz_transform_vector(fz_matrix transform, fz_point vector);
 
 	Does not throw exceptions.
 */
-fz_rect fz_transform_rect(fz_matrix transform, fz_rect rect);
-
-/*
-	fz_transform_bbox: Transform a given bounding box.
-
-	Similar to fz_transform_rect, but operates on a bounding box
-	instead of a rectangle.
-
-	Does not throw exceptions.
-*/
-fz_bbox fz_transform_bbox(fz_matrix matrix, fz_bbox bbox);
+fz_rect *fz_transform_rect(fz_rect *restrict rect, const fz_matrix *restrict transform);
 
 /*
 	fz_buffer is a wrapper around a dynamically allocated array of bytes.
@@ -1249,11 +1421,9 @@ extern fz_colorspace *fz_device_cmyk;
 typedef struct fz_pixmap_s fz_pixmap;
 
 /*
-	fz_pixmap_bbox: Return a bounding box for a pixmap.
-
-	Returns an exact bounding box for the supplied pixmap.
+	fz_pixmap_bbox: Return the bounding box for a pixmap.
 */
-fz_bbox fz_pixmap_bbox(fz_context *ctx, fz_pixmap *pix);
+fz_irect *fz_pixmap_bbox(fz_context *ctx, fz_pixmap *pix, fz_irect *bbox);
 
 /*
 	fz_pixmap_width: Return the width of the pixmap in pixels.
@@ -1297,7 +1467,7 @@ fz_pixmap *fz_new_pixmap(fz_context *ctx, fz_colorspace *cs, int w, int h);
 	Returns a pointer to the new pixmap. Throws exception on failure to
 	allocate.
 */
-fz_pixmap *fz_new_pixmap_with_bbox(fz_context *ctx, fz_colorspace *colorspace, fz_bbox bbox);
+fz_pixmap *fz_new_pixmap_with_bbox(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *bbox);
 
 /*
 	fz_new_pixmap_with_data: Create a new pixmap, with it's origin at
@@ -1336,7 +1506,7 @@ fz_pixmap *fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, i
 	Returns a pointer to the new pixmap. Throws exception on failure to
 	allocate.
 */
-fz_pixmap *fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, fz_bbox bbox, unsigned char *samples);
+fz_pixmap *fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *rect, unsigned char *samples);
 
 /*
 	fz_keep_pixmap: Take a reference to a pixmap.
@@ -1404,7 +1574,7 @@ void fz_clear_pixmap_with_value(fz_context *ctx, fz_pixmap *pix, int value);
 
 	Does not throw exceptions.
 */
-void fz_clear_pixmap_rect_with_value(fz_context *ctx, fz_pixmap *pix, int value, fz_bbox r);
+void fz_clear_pixmap_rect_with_value(fz_context *ctx, fz_pixmap *pix, int value, const fz_irect *r);
 
 /*
 	fz_clear_pixmap_with_value: Sets all components (including alpha) of
@@ -1431,7 +1601,7 @@ void fz_invert_pixmap(fz_context *ctx, fz_pixmap *pix);
 
 	Does not throw exceptions.
 */
-void fz_invert_pixmap_rect(fz_pixmap *image, fz_bbox rect);
+void fz_invert_pixmap_rect(fz_pixmap *image, const fz_irect *rect);
 
 /*
 	fz_gamma_pixmap: Apply gamma correction to a pixmap. All components
@@ -1607,7 +1777,7 @@ fz_device *fz_new_trace_device(fz_context *ctx);
 	The returned bounding box will be the union of all bounding
 	boxes of all objects on a page.
 */
-fz_device *fz_new_bbox_device(fz_context *ctx, fz_bbox *bboxp);
+fz_device *fz_new_bbox_device(fz_context *ctx, fz_rect *rectp);
 
 /*
 	fz_new_draw_device: Create a device to draw on a pixmap.
@@ -1632,7 +1802,7 @@ fz_device *fz_new_draw_device(fz_context *ctx, fz_pixmap *dest);
 	clip: Bounding box to restrict any marking operations of the
 	draw device.
 */
-fz_device *fz_new_draw_device_with_bbox(fz_context *ctx, fz_pixmap *dest, fz_bbox clip);
+fz_device *fz_new_draw_device_with_bbox(fz_context *ctx, fz_pixmap *dest, const fz_irect *clip);
 
 /*
 	Text extraction device: Used for searching, format conversion etc.
@@ -1771,28 +1941,76 @@ void fz_free_text_sheet(fz_context *ctx, fz_text_sheet *sheet);
 	The text page is filled out by the text device to contain the blocks,
 	lines and spans of text on the page.
 */
-fz_text_page *fz_new_text_page(fz_context *ctx, fz_rect mediabox);
+fz_text_page *fz_new_text_page(fz_context *ctx, const fz_rect *mediabox);
 void fz_free_text_page(fz_context *ctx, fz_text_page *page);
+
+typedef struct fz_output_s fz_output;
+
+struct fz_output_s
+{
+	fz_context *ctx;
+	void *opaque;
+	int (*printf)(fz_output *, const char *, va_list ap);
+	void (*close)(fz_output *);
+};
+
+fz_output *fz_new_output_file(fz_context *, FILE *);
+
+fz_output *fz_new_output_buffer(fz_context *, fz_buffer *);
+
+int fz_printf(fz_output *, const char *, ...);
+
+/*
+	fz_close_output: Close a previously opened fz_output stream.
+
+	Note: whether or not this closes the underlying output method is
+	method dependent. FILE * streams created by fz_new_output_file are
+	NOT closed.
+*/
+void fz_close_output(fz_output *);
 
 /*
 	fz_print_text_sheet: Output a text sheet to a file as CSS.
 */
-void fz_print_text_sheet(fz_context *ctx, FILE *out, fz_text_sheet *sheet);
+void fz_print_text_sheet(fz_context *ctx, fz_output *out, fz_text_sheet *sheet);
 
 /*
 	fz_print_text_page_html: Output a page to a file in HTML format.
 */
-void fz_print_text_page_html(fz_context *ctx, FILE *out, fz_text_page *page);
+void fz_print_text_page_html(fz_context *ctx, fz_output *out, fz_text_page *page);
 
 /*
 	fz_print_text_page_xml: Output a page to a file in XML format.
 */
-void fz_print_text_page_xml(fz_context *ctx, FILE *out, fz_text_page *page);
+void fz_print_text_page_xml(fz_context *ctx, fz_output *out, fz_text_page *page);
 
 /*
 	fz_print_text_page: Output a page to a file in UTF-8 format.
 */
-void fz_print_text_page(fz_context *ctx, FILE *out, fz_text_page *page);
+void fz_print_text_page(fz_context *ctx, fz_output *out, fz_text_page *page);
+
+/*
+	fz_search_text_page: Search for occurrence of 'needle' in text page.
+
+	Return the number of hits and store hit bboxes in the passed in array.
+
+	NOTE: This is an experimental interface and subject to change without notice.
+*/
+int fz_search_text_page(fz_context *ctx, fz_text_page *text, char *needle, fz_rect *hit_bbox, int hit_max);
+
+/*
+	fz_highlight_selection: Return a list of rectangles to highlight given a selection rectangle.
+
+	NOTE: This is an experimental interface and subject to change without notice.
+*/
+int fz_highlight_selection(fz_context *ctx, fz_text_page *page, fz_rect rect, fz_rect *hit_bbox, int hit_max);
+
+/*
+	fz_copy_selection: Return a newly allocated UTF-8 string with the text for a given selection rectangle.
+
+	NOTE: This is an experimental interface and subject to change without notice.
+*/
+char *fz_copy_selection(fz_context *ctx, fz_text_page *page, fz_rect rect);
 
 /*
 	Cookie support - simple communication channel between app/library.
@@ -1909,7 +2127,7 @@ fz_device *fz_new_list_device(fz_context *ctx, fz_display_list *list);
 	progress information back to the caller. The fields inside
 	cookie are continually updated while the page is being run.
 */
-void fz_run_display_list(fz_display_list *list, fz_device *dev, fz_matrix ctm, fz_bbox area, fz_cookie *cookie);
+void fz_run_display_list(fz_display_list *list, fz_device *dev, const fz_matrix *ctm, const fz_rect *area, fz_cookie *cookie);
 
 /*
 	fz_free_display_list: Frees a display list.
@@ -2068,7 +2286,7 @@ struct fz_link_s
 	fz_link *next;
 };
 
-fz_link *fz_new_link(fz_context *ctx, fz_rect bbox, fz_link_dest dest);
+fz_link *fz_new_link(fz_context *ctx, const fz_rect *bbox, fz_link_dest dest);
 fz_link *fz_keep_link(fz_context *ctx, fz_link *link);
 
 /*
@@ -2116,7 +2334,7 @@ struct fz_outline_s
 
 	outline: The outlines to output.
 */
-void fz_print_outline_xml(fz_context *ctx, FILE *out, fz_outline *outline);
+void fz_print_outline_xml(fz_context *ctx, fz_output *out, fz_outline *outline);
 
 /*
 	fz_print_outline: Dump the given outlines to as text.
@@ -2125,7 +2343,7 @@ void fz_print_outline_xml(fz_context *ctx, FILE *out, fz_outline *outline);
 
 	outline: The outlines to output.
 */
-void fz_print_outline(fz_context *ctx, FILE *out, fz_outline *outline);
+void fz_print_outline(fz_context *ctx, fz_output *out, fz_outline *outline);
 
 /*
 	fz_free_outline: Free hierarchical outline.
@@ -2203,7 +2421,7 @@ typedef struct fz_page_s fz_page;
 
 	filename: a path to a file as it would be given to open(2).
 */
-fz_document *fz_open_document(fz_context *ctx, char *filename);
+fz_document *fz_open_document(fz_context *ctx, const char *filename);
 
 /*
 	fz_open_document_with_stream: Open a PDF, XPS or CBZ document.
@@ -2213,7 +2431,7 @@ fz_document *fz_open_document(fz_context *ctx, char *filename);
 
 	magic: a string used to detect document type; either a file name or mime-type.
 */
-fz_document *fz_open_document_with_stream(fz_context *ctx, char *magic, fz_stream *stream);
+fz_document *fz_open_document_with_stream(fz_context *ctx, const char *magic, fz_stream *stream);
 
 /*
 	fz_close_document: Close and free an open document.
@@ -2287,7 +2505,7 @@ fz_link *fz_load_links(fz_document *doc, fz_page *page);
 
 	Does not throw exceptions.
 */
-fz_rect fz_bound_page(fz_document *doc, fz_page *page);
+fz_rect *fz_bound_page(fz_document *doc, fz_page *page, fz_rect *rect);
 
 /*
 	fz_annot: opaque pointer to annotation details.
@@ -2313,7 +2531,7 @@ fz_annot *fz_next_annot(fz_document *doc, fz_annot *annot);
 
 	Does not throw exceptions.
 */
-fz_rect fz_bound_annot(fz_document *doc, fz_annot *annot);
+fz_rect *fz_bound_annot(fz_document *doc, fz_annot *annot, fz_rect *rect);
 
 /*
 	fz_run_page: Run a page through a device.
@@ -2334,7 +2552,7 @@ fz_rect fz_bound_annot(fz_document *doc, fz_annot *annot);
 	fields inside cookie are continually updated while the page is
 	rendering.
 */
-void fz_run_page(fz_document *doc, fz_page *page, fz_device *dev, fz_matrix transform, fz_cookie *cookie);
+void fz_run_page(fz_document *doc, fz_page *page, fz_device *dev, const fz_matrix *transform, fz_cookie *cookie);
 
 /*
 	fz_run_page_contents: Run a page through a device. Just the main
@@ -2356,7 +2574,7 @@ void fz_run_page(fz_document *doc, fz_page *page, fz_device *dev, fz_matrix tran
 	fields inside cookie are continually updated while the page is
 	rendering.
 */
-void fz_run_page_contents(fz_document *doc, fz_page *page, fz_device *dev, fz_matrix transform, fz_cookie *cookie);
+void fz_run_page_contents(fz_document *doc, fz_page *page, fz_device *dev, const fz_matrix *transform, fz_cookie *cookie);
 
 /*
 	fz_run_annot: Run an annotation through a device.
@@ -2379,7 +2597,7 @@ void fz_run_page_contents(fz_document *doc, fz_page *page, fz_device *dev, fz_ma
 	fields inside cookie are continually updated while the page is
 	rendering.
 */
-void fz_run_annot(fz_document *doc, fz_page *page, fz_annot *annot, fz_device *dev, fz_matrix transform, fz_cookie *cookie);
+void fz_run_annot(fz_document *doc, fz_page *page, fz_annot *annot, fz_device *dev, const fz_matrix *transform, fz_cookie *cookie);
 
 /*
 	fz_free_page: Free a loaded page.
@@ -2478,6 +2696,7 @@ fz_transition *fz_page_presentation(fz_document *doc, fz_page *page, float *dura
 /* Types of widget */
 enum
 {
+	FZ_WIDGET_TYPE_NOT_WIDGET = -1,
 	FZ_WIDGET_TYPE_PUSHBUTTON,
 	FZ_WIDGET_TYPE_CHECKBOX,
 	FZ_WIDGET_TYPE_RADIOBUTTON,
@@ -2526,7 +2745,7 @@ typedef struct fz_ui_event_s
 	{
 		struct
 		{
-			int   ptype;
+			int ptype;
 			fz_point pt;
 		} pointer;
 	} event;
@@ -2618,9 +2837,9 @@ fz_widget *fz_next_widget(fz_interactive *idoc, fz_widget *previous);
 int fz_widget_get_type(fz_widget *widget);
 
 /*
-	fz_widget_bbox: get the bounding box of a widget.
+	fz_bound_widget: get the bounding box of a widget.
 */
-fz_rect *fz_widget_bbox(fz_widget *widget);
+fz_rect *fz_bound_widget(fz_widget *widget, fz_rect *);
 
 /*
 	fz_text_widget_text: Get the text currently displayed in
@@ -2676,7 +2895,6 @@ int fz_choice_widget_value(fz_interactive *idoc, fz_widget *tw, char *opts[]);
 	array of their names
 */
 void fz_choice_widget_set_value(fz_interactive *idoc, fz_widget *tw, int n, char *opts[]);
-
 
 /*
 	Document events: the objects via which MuPDF informs the calling app
@@ -2858,14 +3076,17 @@ typedef struct fz_write_options_s fz_write_options;
 */
 struct fz_write_options_s
 {
-	int do_ascii;    /*	If non-zero then attempt (where possible) to
-				make the output ascii. */
-	int do_expand;	/*	Bitflags; each non zero bit indicates an aspect
+	int do_ascii; /* If non-zero then attempt (where possible) to make
+				the output ascii. */
+	int do_expand; /* Bitflags; each non zero bit indicates an aspect
 				of the file that should be 'expanded' on
 				writing. */
-	int do_garbage;	/*	If non-zero then attempt (where possible) to
+	int do_garbage; /* If non-zero then attempt (where possible) to
 				garbage collect the file before writing. */
-	int do_linear;   /*	If non-zero then write linearised. */
+	int do_linear; /* If non-zero then write linearised. */
+	int continue_on_error; /* If non-zero, errors are (optionally)
+					counted and writing continues. */
+	int *errors; /* Pointer to a place to store a count of errors */
 };
 
 /*	An enumeration of bitflags to use in the above 'do_expand' field of

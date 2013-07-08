@@ -69,7 +69,7 @@ pdf_read_old_trailer(pdf_document *xref, pdf_lexbuf *buf)
 	int len;
 	char *s;
 	int t;
-	int tok;
+	pdf_token tok;
 	int c;
 
 	fz_read_line(xref->file, buf->scratch, buf->size);
@@ -87,7 +87,7 @@ pdf_read_old_trailer(pdf_document *xref, pdf_lexbuf *buf)
 		fz_strsep(&s, " "); /* ignore ofs */
 		if (!s)
 			fz_throw(xref->ctx, "invalid range marker in xref");
-		len = atoi(fz_strsep(&s, " "));
+		len = fz_atoi(fz_strsep(&s, " "));
 
 		/* broken pdfs where the section is not on a separate line */
 		if (s && *s != '\0')
@@ -193,7 +193,7 @@ pdf_read_old_xref(pdf_document *xref, pdf_lexbuf *buf)
 	int ofs, len;
 	char *s;
 	int n;
-	int tok;
+	pdf_token tok;
 	int i;
 	int c;
 	pdf_obj *trailer;
@@ -210,8 +210,8 @@ pdf_read_old_xref(pdf_document *xref, pdf_lexbuf *buf)
 
 		fz_read_line(xref->file, buf->scratch, buf->size);
 		s = buf->scratch;
-		ofs = atoi(fz_strsep(&s, " "));
-		len = atoi(fz_strsep(&s, " "));
+		ofs = fz_atoi(fz_strsep(&s, " "));
+		len = fz_atoi(fz_strsep(&s, " "));
 
 		/* broken pdfs where the section is not on a separate line */
 		if (s && *s != '\0')
@@ -422,8 +422,17 @@ pdf_read_xref(pdf_document *xref, int ofs, pdf_lexbuf *buf)
 	return trailer;
 }
 
+typedef struct ofs_list_s ofs_list;
+
+struct ofs_list_s
+{
+	int max;
+	int len;
+	int *list;
+};
+
 static void
-pdf_read_xref_sections(pdf_document *xref, int ofs, pdf_lexbuf *buf)
+do_read_xref_sections(pdf_document *xref, int ofs, pdf_lexbuf *buf, ofs_list *offsets)
 {
 	pdf_obj *trailer = NULL;
 	fz_context *ctx = xref->ctx;
@@ -438,6 +447,25 @@ pdf_read_xref_sections(pdf_document *xref, int ofs, pdf_lexbuf *buf)
 	{
 		do
 		{
+			int i;
+			/* Avoid potential infinite recursion */
+			for (i = 0; i < offsets->len; i ++)
+			{
+				if (offsets->list[i] == ofs)
+					break;
+			}
+			if (i < offsets->len)
+			{
+				fz_warn(ctx, "ignoring xref recursion with offset %d", ofs);
+				break;
+			}
+			if (offsets->len == offsets->max)
+			{
+				offsets->list = fz_resize_array(ctx, offsets->list, offsets->max*2, sizeof(int));
+				offsets->max *= 2;
+			}
+			offsets->list[offsets->len++] = ofs;
+
 			trailer = pdf_read_xref(xref, ofs, buf);
 
 			/* FIXME: do we overwrite free entries properly? */
@@ -452,7 +480,7 @@ pdf_read_xref_sections(pdf_document *xref, int ofs, pdf_lexbuf *buf)
 			/* We only recurse if we have both xrefstm and prev.
 			 * Hopefully this happens infrequently. */
 			if (xrefstmofs && prevofs)
-				pdf_read_xref_sections(xref, xrefstmofs, buf);
+				do_read_xref_sections(xref, xrefstmofs, buf, offsets);
 			if (prevofs)
 				ofs = prevofs;
 			else if (xrefstmofs)
@@ -466,6 +494,29 @@ pdf_read_xref_sections(pdf_document *xref, int ofs, pdf_lexbuf *buf)
 	{
 		pdf_drop_obj(trailer);
 		fz_throw(ctx, "cannot read xref at offset %d", ofs);
+	}
+}
+
+static void
+pdf_read_xref_sections(pdf_document *xref, int ofs, pdf_lexbuf *buf)
+{
+	fz_context *ctx = xref->ctx;
+	ofs_list list;
+
+	list.len = 0;
+	list.max = 10;
+	list.list = fz_malloc_array(ctx, 10, sizeof(int));
+	fz_try(ctx)
+	{
+		do_read_xref_sections(xref, ofs, buf, &list);
+	}
+	fz_always(ctx)
+	{
+		fz_free(ctx, list.list);
+	}
+	fz_catch(ctx)
+	{
+		fz_rethrow(ctx);
 	}
 }
 
@@ -891,7 +942,7 @@ pdf_load_obj_stm(pdf_document *xref, int num, int gen, pdf_lexbuf *buf)
 	int first;
 	int count;
 	int i;
-	int tok;
+	pdf_token tok;
 	fz_context *ctx = xref->ctx;
 
 	fz_var(numbuf);
@@ -944,9 +995,18 @@ pdf_load_obj_stm(pdf_document *xref, int num, int gen, pdf_lexbuf *buf)
 
 			if (xref->table[numbuf[i]].type == 'o' && xref->table[numbuf[i]].ofs == num)
 			{
-				if (xref->table[numbuf[i]].obj)
-					pdf_drop_obj(xref->table[numbuf[i]].obj);
-				xref->table[numbuf[i]].obj = obj;
+				/* If we already have an entry for this object,
+				 * we'd like to drop it and use the new one -
+				 * but this means that anyone currently holding
+				 * a pointer to the old one will be left with a
+				 * stale pointer. Instead, we drop the new one
+				 * and trust that the old one is correct. */
+				if (xref->table[numbuf[i]].obj) {
+					if (pdf_objcmp(xref->table[numbuf[i]].obj, obj))
+						fz_warn(ctx, "Encountered new definition for object %d - keeping the original one", numbuf[i]);
+					pdf_drop_obj(obj);
+				} else
+					xref->table[numbuf[i]].obj = obj;
 			}
 			else
 			{
@@ -1241,8 +1301,7 @@ pdf_meta(pdf_document *doc, int key, void *ptr, int size)
 		if (info && ptr && size)
 		{
 			char *utf8 = pdf_to_utf8(doc, info);
-			strncpy(ptr, utf8, size);
-			((char *)ptr)[size-1] = 0;
+			fz_strlcpy(ptr, utf8, size);
 			fz_free(doc->ctx, utf8);
 		}
 		return 1;
@@ -1260,7 +1319,6 @@ pdf_page_presentation(pdf_document *doc, pdf_page *page, float *duration)
 		return NULL;
 	return &page->transition;
 }
-
 
 static fz_interactive *
 pdf_interact(pdf_document *doc)

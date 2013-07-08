@@ -2,9 +2,9 @@
 #include "mupdf-internal.h"
 
 static void
-pdf_run_glyph_func(void *doc, void *rdb, fz_buffer *contents, fz_device *dev, fz_matrix ctm, void *gstate)
+pdf_run_glyph_func(void *doc, void *rdb, fz_buffer *contents, fz_device *dev, const fz_matrix *ctm, void *gstate, int nested_depth)
 {
-	pdf_run_glyph(doc, (pdf_obj *)rdb, contents, dev, ctm, gstate);
+	pdf_run_glyph(doc, (pdf_obj *)rdb, contents, dev, ctm, gstate, nested_depth);
 }
 
 static void
@@ -13,7 +13,6 @@ pdf_t3_free_resources(void *doc, void *rdb_)
 	pdf_obj *rdb = (pdf_obj *)rdb_;
 	pdf_drop_obj(rdb);
 }
-
 
 pdf_font_desc *
 pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
@@ -44,13 +43,12 @@ pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 		fontdesc = pdf_new_font_desc(ctx);
 
 		obj = pdf_dict_gets(dict, "FontMatrix");
-		matrix = pdf_to_matrix(ctx, obj);
+		pdf_to_matrix(ctx, obj, &matrix);
 
 		obj = pdf_dict_gets(dict, "FontBBox");
-		bbox = pdf_to_rect(ctx, obj);
-		bbox = fz_transform_rect(matrix, bbox);
+		fz_transform_rect(pdf_to_rect(ctx, obj, &bbox), &matrix);
 
-		fontdesc->font = fz_new_type3_font(ctx, buf, matrix);
+		fontdesc->font = fz_new_type3_font(ctx, buf, &matrix);
 		fontdesc->size += sizeof(fz_font) + 256 * (sizeof(fz_buffer*) + sizeof(float));
 
 		fz_set_font_bbox(ctx, fontdesc->font, bbox.x0, bbox.y0, bbox.x1, bbox.y1);
@@ -155,6 +153,7 @@ pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 				{
 					fontdesc->font->t3procs[i] = pdf_load_stream(xref, pdf_to_num(obj), pdf_to_gen(obj));
 					fontdesc->size += fontdesc->font->t3procs[i]->cap;
+					fontdesc->size += 0; // TODO: display list size calculation
 				}
 			}
 		}
@@ -166,4 +165,26 @@ pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 		fz_throw(ctx, "cannot load type3 font (%d %d R)", pdf_to_num(dict), pdf_to_gen(dict));
 	}
 	return fontdesc;
+}
+
+void pdf_load_type3_glyphs(pdf_document *xref, pdf_font_desc *fontdesc, int nested_depth)
+{
+	int i;
+	fz_context *ctx = xref->ctx;
+
+	fz_try(ctx)
+	{
+		for (i = 0; i < 256; i++)
+		{
+			if (fontdesc->font->t3procs[i])
+			{
+				fz_prepare_t3_glyph(ctx, fontdesc->font, i, nested_depth);
+				fontdesc->size += 0; // TODO: display list size calculation
+			}
+		}
+	}
+	fz_catch(ctx)
+	{
+		fz_warn(ctx, "Type3 glyph load failed: %s", fz_caught(ctx));
+	}
 }

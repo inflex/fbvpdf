@@ -3,8 +3,6 @@
 
 #define MATRIX_COEFS (6)
 
-#define FZ_WIDGET_TYPE_NOT_WIDGET (-1)
-
 enum
 {
 	Ff_Multiline = 1 << (13-1),
@@ -53,11 +51,10 @@ enum
 	Display_NoView
 };
 
-
 enum
 {
-	Q_Left  = 0,
-	Q_Cent  = 1,
+	Q_Left = 0,
+	Q_Cent = 1,
 	Q_Right = 2
 };
 
@@ -116,15 +113,15 @@ static void account_for_rot(fz_rect *rect, fz_matrix *mat, int rot)
 		*mat = fz_identity;
 		break;
 	case 90:
-		*mat = fz_concat(fz_rotate(rot), fz_translate(width, 0));
+		fz_pre_rotate(fz_translate(mat, width, 0), rot);
 		rect->x1 = height;
 		rect->y1 = width;
 		break;
 	case 180:
-		*mat = fz_concat(fz_rotate(rot), fz_translate(width, height));
+		fz_pre_rotate(fz_translate(mat, width, height), rot);
 		break;
 	case 270:
-		*mat = fz_concat(fz_rotate(rot), fz_translate(0, height));
+		fz_pre_rotate(fz_translate(mat, 0, height), rot);
 		rect->x1 = height;
 		rect->y1 = width;
 		break;
@@ -203,7 +200,7 @@ static int get_field_flags(pdf_document *doc, pdf_obj *obj)
 int pdf_field_type(pdf_document *doc, pdf_obj *obj)
 {
 	char *type = get_field_type_name(doc, obj);
-	int   flags = get_field_flags(doc, obj);
+	int flags = get_field_flags(doc, obj);
 
 	if (!strcmp(type, "Btn"))
 	{
@@ -239,7 +236,15 @@ static pdf_obj *find_head_of_field_group(pdf_obj *obj)
 
 static void pdf_field_mark_dirty(fz_context *ctx, pdf_obj *field)
 {
-	if (!pdf_dict_gets(field, "Dirty"))
+	pdf_obj *kids = pdf_dict_gets(field, "Kids");
+	if (kids)
+	{
+		int i, n = pdf_array_len(kids);
+
+		for (i = 0; i < n; i++)
+			pdf_field_mark_dirty(ctx, pdf_array_get(kids, i));
+	}
+	else if (!pdf_dict_gets(field, "Dirty"))
 	{
 		pdf_obj *nullobj = pdf_new_null(ctx);
 		fz_try(ctx)
@@ -290,7 +295,7 @@ static void parse_da(fz_context *ctx, char *da, da_info *di)
 {
 	float stack[32];
 	int top = 0;
-	int tok;
+	pdf_token tok;
 	char *name = NULL;
 	pdf_lexbuf lbuf;
 	fz_stream *str = fz_open_memory(ctx, (unsigned char *)da, strlen(da));
@@ -341,6 +346,9 @@ static void parse_da(fz_context *ctx, char *da, da_info *di)
 				name = NULL;
 				top = 0;
 				break;
+
+			default:
+				break;
 			}
 		}
 	}
@@ -363,7 +371,7 @@ static void get_font_info(pdf_document *doc, pdf_obj *dr, char *da, font_info *f
 	parse_da(ctx, da, &font_rec->da_rec);
 	if (font_rec->da_rec.font_name == NULL)
 		fz_throw(ctx, "No font name in default appearance");
-	font_rec->font = pdf_load_font(doc, dr, pdf_dict_gets(pdf_dict_gets(dr, "Font"), font_rec->da_rec.font_name));
+	font_rec->font = pdf_load_font(doc, dr, pdf_dict_gets(pdf_dict_gets(dr, "Font"), font_rec->da_rec.font_name), 0);
 }
 
 static void font_info_fin(fz_context *ctx, font_info *font_rec)
@@ -418,14 +426,14 @@ static void fzbuf_print_da(fz_context *ctx, fz_buffer *fzbuf, da_info *di)
 	}
 }
 
-static fz_rect measure_text(pdf_document *doc, font_info *font_rec, const fz_matrix *tm, char *text)
+static fz_rect *measure_text(pdf_document *doc, font_info *font_rec, const fz_matrix *tm, char *text, fz_rect *bbox)
 {
-	fz_rect bbox = pdf_measure_text(doc->ctx, font_rec->font, (unsigned char *)text, strlen(text));
+	pdf_measure_text(doc->ctx, font_rec->font, (unsigned char *)text, strlen(text), bbox);
 
-	bbox.x0 *= font_rec->da_rec.font_size * tm->a;
-	bbox.y0 *= font_rec->da_rec.font_size * tm->d;
-	bbox.x1 *= font_rec->da_rec.font_size * tm->a;
-	bbox.y1 *= font_rec->da_rec.font_size * tm->d;
+	bbox->x0 *= font_rec->da_rec.font_size * tm->a;
+	bbox->y0 *= font_rec->da_rec.font_size * tm->d;
+	bbox->x1 *= font_rec->da_rec.font_size * tm->a;
+	bbox->y1 *= font_rec->da_rec.font_size * tm->d;
 
 	return bbox;
 }
@@ -454,7 +462,7 @@ static void fzbuf_print_color(fz_context *ctx, fz_buffer *fzbuf, pdf_obj *arr, i
 	}
 }
 
-static void fzbuf_print_text(fz_context *ctx, fz_buffer *fzbuf, fz_rect *clip, pdf_obj *col, font_info *font_rec, fz_matrix *tm, char *text)
+static void fzbuf_print_text(fz_context *ctx, fz_buffer *fzbuf, const fz_rect *clip, pdf_obj *col, font_info *font_rec, const fz_matrix *tm, char *text)
 {
 	fz_buffer_printf(ctx, fzbuf, fmt_q);
 	if (clip)
@@ -486,7 +494,7 @@ static void fzbuf_print_text(fz_context *ctx, fz_buffer *fzbuf, fz_rect *clip, p
 	fz_buffer_printf(ctx, fzbuf, fmt_Q);
 }
 
-static fz_buffer *create_text_buffer(fz_context *ctx, fz_rect *clip, text_widget_info *info, fz_matrix *tm, char *text)
+static fz_buffer *create_text_buffer(fz_context *ctx, const fz_rect *clip, text_widget_info *info, const fz_matrix *tm, char *text)
 {
 	fz_buffer *fzbuf = fz_new_buffer(ctx, 0);
 
@@ -505,17 +513,17 @@ static fz_buffer *create_text_buffer(fz_context *ctx, fz_rect *clip, text_widget
 	return fzbuf;
 }
 
-static fz_buffer *create_aligned_text_buffer(pdf_document *doc, fz_rect *clip, text_widget_info *info, fz_matrix *tm, char *text)
+static fz_buffer *create_aligned_text_buffer(pdf_document *doc, const fz_rect *clip, text_widget_info *info, const fz_matrix *tm, char *text)
 {
 	fz_context *ctx = doc->ctx;
 	fz_matrix atm = *tm;
 
 	if (info->q != Q_Left)
 	{
-		fz_rect rect = measure_text(doc, &info->font_rec, tm, text);
+		fz_rect rect;
 
-		atm.e -= info->q == Q_Right ? rect.x1
-							  : (rect.x1 - rect.x0) / 2;
+		measure_text(doc, &info->font_rec, tm, text, &rect);
+		atm.e -= info->q == Q_Right ? rect.x1 : (rect.x1 - rect.x0) / 2;
 	}
 
 	return create_text_buffer(ctx, clip, info, &atm, text);
@@ -537,7 +545,7 @@ static void measure_ascent_descent(pdf_document *doc, font_info *finf, char *tex
 		strcpy(testtext, "My");
 		strcat(testtext, text);
 		tinf.da_rec.font_size = 1;
-		bbox = measure_text(doc, &tinf, &fz_identity, testtext);
+		measure_text(doc, &tinf, &fz_identity, testtext, &bbox);
 		*descent = -bbox.y0;
 		*ascent = bbox.y1;
 	}
@@ -717,7 +725,7 @@ static void text_splitter_retry(text_splitter *splitter)
 	}
 }
 
-static void fzbuf_print_text_start(fz_context *ctx, fz_buffer *fzbuf, fz_rect *clip, pdf_obj *col, font_info *font, fz_matrix *tm)
+static void fzbuf_print_text_start(fz_context *ctx, fz_buffer *fzbuf, const fz_rect *clip, pdf_obj *col, font_info *font, const fz_matrix *tm)
 {
 	fz_buffer_printf(ctx, fzbuf, fmt_Tx_BMC);
 	fz_buffer_printf(ctx, fzbuf, fmt_q);
@@ -765,7 +773,7 @@ static void fzbuf_print_text_word(fz_context *ctx, fz_buffer *fzbuf, float x, fl
 	fz_buffer_printf(ctx, fzbuf, ") Tj\n");
 }
 
-static fz_buffer *create_text_appearance(pdf_document *doc, fz_rect *bbox, fz_matrix *oldtm, text_widget_info *info, char *text)
+static fz_buffer *create_text_appearance(pdf_document *doc, const fz_rect *bbox, const fz_matrix *oldtm, text_widget_info *info, char *text)
 {
 	fz_context *ctx = doc->ctx;
 	int fontsize;
@@ -793,7 +801,7 @@ static fz_buffer *create_text_appearance(pdf_document *doc, fz_rect *bbox, fz_ma
 	fz_var(fztmp);
 	fz_try(ctx)
 	{
-	    float ascent, descent;
+		float ascent, descent;
 		fz_matrix tm;
 
 		variable = (info->font_rec.da_rec.font_size == 0);
@@ -872,9 +880,7 @@ static fz_buffer *create_text_appearance(pdf_document *doc, fz_rect *bbox, fz_ma
 			float char_width = pdf_text_stride(ctx, info->font_rec.font, fontsize, (unsigned char *)"M", 1, FLT_MAX, NULL);
 			float init_skip = (comb_width - char_width)/2.0;
 
-			tm = fz_identity;
-			tm.e = rect.x0;
-			tm.f = rect.y1 - (height+(ascent-descent)*fontsize)/2.0;
+			fz_translate(&tm, rect.x0, rect.y1 - (height+(ascent-descent)*fontsize)/2.0);
 
 			fzbuf = fz_new_buffer(ctx, 0);
 
@@ -893,9 +899,7 @@ static fz_buffer *create_text_appearance(pdf_document *doc, fz_rect *bbox, fz_ma
 			}
 			else
 			{
-				tm = fz_identity;
-				tm.e = rect.x0;
-				tm.f = rect.y1 - (height+(ascent-descent)*fontsize)/2.0;
+				fz_translate(&tm, rect.x0, rect.y1 - (height+(ascent-descent)*fontsize)/2.0);
 
 				switch(info->q)
 				{
@@ -906,7 +910,7 @@ static fz_buffer *create_text_appearance(pdf_document *doc, fz_rect *bbox, fz_ma
 
 			if (variable)
 			{
-				tbox = measure_text(doc, &info->font_rec, &tm, text);
+				measure_text(doc, &info->font_rec, &tm, text, &tbox);
 
 				if (tbox.x1 - tbox.x0 > width)
 				{
@@ -936,12 +940,12 @@ static fz_buffer *create_text_appearance(pdf_document *doc, fz_rect *bbox, fz_ma
 static void update_marked_content(pdf_document *doc, pdf_xobject *form, fz_buffer *fzbuf)
 {
 	fz_context *ctx = doc->ctx;
-	int tok;
+	pdf_token tok;
 	pdf_lexbuf lbuf;
 	fz_stream *str_outer = NULL;
 	fz_stream *str_inner = NULL;
 	unsigned char *buf;
-	int            len;
+	int len;
 	fz_buffer *newbuf = NULL;
 
 	pdf_lexbuf_init(ctx, &lbuf, PDF_LEXBUF_SMALL);
@@ -1052,8 +1056,7 @@ static int get_matrix(pdf_document *doc, pdf_xobject *form, int q, fz_matrix *mt
 					coef_i = MATRIX_COEFS-1;
 				}
 
-				coefs[coef_i++] = tok == PDF_TOK_INT ? lbuf.i
-													 : lbuf.f;
+				coefs[coef_i++] = tok == PDF_TOK_INT ? lbuf.i : lbuf.f;
 			}
 			else
 			{
@@ -1074,7 +1077,8 @@ static int get_matrix(pdf_document *doc, pdf_xobject *form, int q, fz_matrix *mt
 
 		if (found)
 		{
-			fz_rect bbox = pdf_to_rect(ctx, pdf_dict_gets(form->contents, "BBox"));
+			fz_rect bbox;
+			pdf_to_rect(ctx, pdf_dict_gets(form->contents, "BBox"), &bbox);
 
 			switch (q)
 			{
@@ -1141,7 +1145,6 @@ static pdf_xobject *load_or_create_form(pdf_document *doc, pdf_obj *obj, fz_rect
 {
 	fz_context *ctx = doc->ctx;
 	pdf_obj *ap = NULL;
-	pdf_obj *tobj = NULL;
 	fz_matrix mat;
 	int rot;
 	pdf_obj *formobj = NULL;
@@ -1151,13 +1154,12 @@ static pdf_xobject *load_or_create_form(pdf_document *doc, pdf_obj *obj, fz_rect
 	int create_form = 0;
 
 	fz_var(formobj);
-	fz_var(tobj);
 	fz_var(form);
 	fz_var(fzbuf);
 	fz_try(ctx)
 	{
 		rot = pdf_to_int(pdf_dict_getp(obj, "MK/R"));
-		*rect = pdf_to_rect(ctx, pdf_dict_gets(obj, "Rect"));
+		pdf_to_rect(ctx, pdf_dict_gets(obj, "Rect"), rect);
 		rect->x1 -= rect->x0;
 		rect->y1 -= rect->y0;
 		rect->x0 = rect->y0 = 0;
@@ -1166,19 +1168,15 @@ static pdf_xobject *load_or_create_form(pdf_document *doc, pdf_obj *obj, fz_rect
 		ap = pdf_dict_gets(obj, "AP");
 		if (ap == NULL)
 		{
-			tobj = pdf_new_dict(ctx, 1);
-			pdf_dict_puts(obj, "AP", tobj);
-			ap = tobj;
-			tobj = NULL;
+			ap = pdf_new_dict(ctx, 1);
+			pdf_dict_puts_drop(obj, "AP", ap);
 		}
 
 		formobj = pdf_dict_gets(ap, dn);
 		if (formobj == NULL)
 		{
-			tobj = pdf_new_xobject(doc, rect, &mat);
-			pdf_dict_puts(ap, dn, tobj);
-			formobj = tobj;
-			tobj = NULL;
+			formobj = pdf_new_xobject(doc, rect, &mat);
+			pdf_dict_puts_drop(ap, dn, formobj);
 			create_form = 1;
 		}
 
@@ -1193,7 +1191,6 @@ static pdf_xobject *load_or_create_form(pdf_document *doc, pdf_obj *obj, fz_rect
 	}
 	fz_always(ctx)
 	{
-		pdf_drop_obj(tobj);
 		fz_drop_buffer(ctx, fzbuf);
 	}
 	fz_catch(ctx)
@@ -1475,8 +1472,8 @@ static void update_pushbutton_appearance(pdf_document *doc, pdf_obj *obj)
 			clip.y1 -= btotal;
 
 			get_font_info(doc, form->resources, da, &font_rec);
-			bounds = measure_text(doc, &font_rec, &fz_identity, text);
-			mat = fz_translate((rect.x1 - bounds.x1)/2, (rect.y1 - bounds.y1)/2);
+			measure_text(doc, &font_rec, &fz_identity, text, &bounds);
+			fz_translate(&mat, (rect.x1 - bounds.x1)/2, (rect.y1 - bounds.y1)/2);
 			fzbuf_print_text(ctx, fzbuf, &clip, NULL, &font_rec, &mat, text);
 		}
 
@@ -1538,38 +1535,25 @@ pdf_obj *pdf_lookup_field(pdf_obj *form, char *name)
 	return dict;
 }
 
-void pdf_field_reset(pdf_document *doc, pdf_obj *field)
+static void reset_field(pdf_document *doc, pdf_obj *field)
 {
 	fz_context *ctx = doc->ctx;
-	/* Descend through the hierarchy, setting V to DV where
-	 * ever DV is present, and deleting V where DV is not.
+	/* Set V to DV whereever DV is present, and delete V where DV is not.
 	 * FIXME: we assume for now that V has not been set unequal
 	 * to DV higher in the hierarchy than "field".
 	 *
-	 *  At the bottom of the hierarchy we may find widget annotations
+	 * At the bottom of the hierarchy we may find widget annotations
 	 * that aren't also fields, but DV and V will not be present in their
 	 * dictionaries, and attempts to remove V will be harmless. */
 	pdf_obj *dv = pdf_dict_gets(field, "DV");
 	pdf_obj *kids = pdf_dict_gets(field, "Kids");
-	pdf_obj *noreset = pdf_dict_gets(field, "NoReset");
-
-	/* Don't process fields we have marked not to be reset */
-	if (noreset)
-		return;
 
 	if (dv)
 		pdf_dict_puts(field, "V", dv);
 	else
 		pdf_dict_dels(field, "V");
 
-	if (kids)
-	{
-		int i, n = pdf_array_len(kids);
-
-		for (i = 0; i < n; i++)
-			pdf_field_reset(doc, pdf_array_get(kids, i));
-	}
-	else
+	if (kids == NULL)
 	{
 		/* The leaves of the tree are widget annotations
 		 * In some cases we need to update the appearance state;
@@ -1614,21 +1598,99 @@ void pdf_field_reset(pdf_document *doc, pdf_obj *field)
 	doc->dirty = 1;
 }
 
+void pdf_field_reset(pdf_document *doc, pdf_obj *field)
+{
+	pdf_obj *kids = pdf_dict_gets(field, "Kids");
 
-static void reset_form(pdf_document *doc, pdf_obj *fields, int exclude)
+	reset_field(doc, field);
+
+	if (kids)
+	{
+		int i, n = pdf_array_len(kids);
+
+		for (i = 0; i < n; i++)
+			pdf_field_reset(doc, pdf_array_get(kids, i));
+	}
+}
+
+static void add_field_hierarchy_to_array(pdf_obj *array, pdf_obj *field)
+{
+	pdf_obj *kids = pdf_dict_gets(field, "Kids");
+	pdf_obj *exclude = pdf_dict_gets(field, "Exclude");
+
+	if (exclude)
+		return;
+
+	pdf_array_push(array, field);
+
+	if (kids)
+	{
+		int i, n = pdf_array_len(kids);
+
+		for (i = 0; i < n; i++)
+			add_field_hierarchy_to_array(array, pdf_array_get(kids, i));
+	}
+}
+
+/*
+	When resetting or submitting a form, the fields to act upon are defined
+	by an array of either field references or field names, plus a flag determining
+	whether to act upon the fields in the array, or all fields other than those in
+	the array. specified_fields interprets this information and produces the array
+	of fields to be acted upon.
+*/
+static pdf_obj *specified_fields(pdf_document *doc, pdf_obj *fields, int exclude)
 {
 	fz_context *ctx = doc->ctx;
 	pdf_obj *form = pdf_dict_getp(doc->trailer, "Root/AcroForm/Fields");
 	int i, n;
+	pdf_obj *result = pdf_new_array(ctx, 0);
+	pdf_obj *nil = NULL;
 
-	/* The 'fields' array not being present signals that all fields
-	 * should be reset, so handle it using the exclude case - excluding none */
-	if (exclude || !fields)
+	fz_var(nil);
+	fz_try(ctx)
 	{
-		/* mark the fields we don't want to reset */
-		pdf_obj *nil = pdf_new_null(ctx);
+		/* The 'fields' array not being present signals that all fields
+		* should be acted upon, so handle it using the exclude case - excluding none */
+		if (exclude || !fields)
+		{
+			/* mark the fields we don't want to act upon */
+			nil = pdf_new_null(ctx);
 
-		fz_try(ctx)
+			n = pdf_array_len(fields);
+
+			for (i = 0; i < n; i++)
+			{
+				pdf_obj *field = pdf_array_get(fields, i);
+
+				if (pdf_is_string(field))
+					field = pdf_lookup_field(form, pdf_to_str_buf(field));
+
+				if (field)
+					pdf_dict_puts(field, "Exclude", nil);
+			}
+
+			/* Act upon all unmarked fields */
+			n = pdf_array_len(form);
+
+			for (i = 0; i < n; i++)
+				add_field_hierarchy_to_array(result, pdf_array_get(form, i));
+
+			/* Unmark the marked fields */
+			n = pdf_array_len(fields);
+
+			for (i = 0; i < n; i++)
+			{
+				pdf_obj *field = pdf_array_get(fields, i);
+
+				if (pdf_is_string(field))
+					field = pdf_lookup_field(form, pdf_to_str_buf(field));
+
+				if (field)
+					pdf_dict_dels(field, "Exclude");
+			}
+		}
+		else
 		{
 			n = pdf_array_len(fields);
 
@@ -1640,52 +1702,42 @@ static void reset_form(pdf_document *doc, pdf_obj *fields, int exclude)
 					field = pdf_lookup_field(form, pdf_to_str_buf(field));
 
 				if (field)
-					pdf_dict_puts(field, "NoReset", nil);
+					add_field_hierarchy_to_array(result, field);
 			}
 		}
-		fz_always(ctx)
-		{
-			pdf_drop_obj(nil);
-		}
-		fz_catch(ctx)
-		{
-			fz_rethrow(ctx);
-		}
-
-		/* reset all unmarked fields */
-		n = pdf_array_len(form);
-
-		for (i = 0; i < n; i++)
-			pdf_field_reset(doc, pdf_array_get(form, i));
-
-		/* Unmark the marked fields */
-		n = pdf_array_len(fields);
-
-		for (i = 0; i < n; i++)
-		{
-			pdf_obj *field = pdf_array_get(fields, i);
-
-			if (pdf_is_string(field))
-				field = pdf_lookup_field(form, pdf_to_str_buf(field));
-
-			if (field)
-				pdf_dict_dels(field, "NoReset");
-		}
 	}
-	else
+	fz_always(ctx)
 	{
-		n = pdf_array_len(fields);
+		pdf_drop_obj(nil);
+	}
+	fz_catch(ctx)
+	{
+		pdf_drop_obj(result);
+		fz_rethrow(ctx);
+	}
+
+	return result;
+}
+
+static void reset_form(pdf_document *doc, pdf_obj *fields, int exclude)
+{
+	fz_context *ctx = doc->ctx;
+	pdf_obj *sfields = specified_fields(doc, fields, exclude);
+
+	fz_try(ctx)
+	{
+		int i, n = pdf_array_len(sfields);
 
 		for (i = 0; i < n; i++)
-		{
-			pdf_obj *field = pdf_array_get(fields, i);
-
-			if (pdf_is_string(field))
-				field = pdf_lookup_field(form, pdf_to_str_buf(field));
-
-			if (field)
-				pdf_field_reset(doc, field);
-		}
+			reset_field(doc, pdf_array_get(sfields, i));
+	}
+	fz_always(ctx)
+	{
+		pdf_drop_obj(sfields);
+	}
+	fz_catch(ctx)
+	{
+		fz_rethrow(ctx);
 	}
 }
 
@@ -1943,7 +1995,7 @@ static void toggle_check_box(pdf_document *doc, pdf_obj *obj)
 	}
 	else
 	{
-	    pdf_obj *n, *key = NULL;
+		pdf_obj *n, *key = NULL;
 		int len, i;
 
 		n = pdf_dict_getp(obj, "AP/N");
@@ -2020,7 +2072,7 @@ int pdf_pass_event(pdf_document *doc, pdf_page *page, fz_ui_event *ui_event)
 {
 	pdf_annot *annot;
 	pdf_hotspot *hp = &doc->hotspot;
-	fz_point  *pt = &(ui_event->event.pointer.pt);
+	fz_point *pt = &(ui_event->event.pointer.pt);
 	int changed = 0;
 
 	for (annot = page->annots; annot; annot = annot->next)
@@ -2485,7 +2537,7 @@ void pdf_field_set_fill_color(pdf_document *doc, pdf_obj *field, pdf_obj *col)
 {
 	/* col == NULL mean transparent, but we can simply pass it on as with
 	 * non-NULL values because pdf_dict_putp interprets a NULL value as
-	 " delete */
+	 * delete */
 	pdf_dict_putp(field, "MK/BG", col);
 	pdf_field_mark_dirty(doc->ctx, field);
 }
@@ -2512,7 +2564,8 @@ void pdf_field_set_text_color(pdf_document *doc, pdf_obj *field, pdf_obj *col)
 		parse_da(ctx, da, &di);
 		di.col_size = pdf_array_len(col);
 
-		for (i = 0; i < di.col_size; i++)
+		len = fz_mini(di.col_size, nelem(di.col));
+		for (i = 0; i < len; i++)
 			di.col[i] = pdf_to_real(pdf_array_get(col, i));
 
 		fzbuf = fz_new_buffer(ctx, 0);
@@ -2534,11 +2587,15 @@ void pdf_field_set_text_color(pdf_document *doc, pdf_obj *field, pdf_obj *col)
 	}
 }
 
-fz_rect *fz_widget_bbox(fz_widget *widget)
+fz_rect *fz_bound_widget(fz_widget *widget, fz_rect *rect)
 {
 	pdf_annot *annot = (pdf_annot *)widget;
 
-	return &annot->pagerect;
+	if (rect == NULL)
+		return NULL;
+	*rect = annot->pagerect;
+
+	return rect;
 }
 
 char *pdf_text_widget_text(pdf_document *doc, fz_widget *tw)
