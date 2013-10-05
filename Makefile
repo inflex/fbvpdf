@@ -142,7 +142,11 @@ $(OUT)/%.o : scripts/%.c | $(OUT)
 	$(CC_CMD)
 
 $(OUT)/platform/x11/%.o : platform/x11/%.c | $(ALL_DIR)
-	$(CC_CMD) $(X11_CFLAGS)
+	$(CC_CMD) $(X11_CFLAGS) $(CURL_CFLAGS)
+
+$(OUT)/platform/x11/curl/%.o : platform/x11/%.c | $(ALL_DIR)
+	mkdir -p $(OUT)/platform/x11/curl
+	$(CC_CMD) $(X11_CFLAGS) $(CURL_CFLAGS) -DHAVE_CURL
 
 .PRECIOUS : $(OUT)/%.o # Keep intermediates from chained rules
 
@@ -230,33 +234,45 @@ $(MUJSTEST_V8) : $(addprefix $(OUT)/platform/x11/, jstest_main.o pdfapp.o)
 endif
 
 ifeq "$(NOX11)" ""
-MUVIEW := $(OUT)/mupdf
-$(MUVIEW) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
-$(MUVIEW) : $(addprefix $(OUT)/platform/x11/, x11_main.o x11_image.o pdfapp.o)
+MUVIEW_X11 := $(OUT)/mupdf-x11
+$(MUVIEW_X11) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
+$(MUVIEW_X11) : $(addprefix $(OUT)/platform/x11/, x11_main.o x11_image.o pdfapp.o)
 	$(LINK_CMD) $(X11_LIBS)
+MUVIEW := $(MUVIEW_X11)
+
+ifeq "$(NOCURL)" ""
+MUVIEW_X11_CURL := $(OUT)/mupdf-x11-curl
+$(MUVIEW_X11_CURL) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS) $(CURL_LIB)
+$(MUVIEW_X11_CURL) : $(addprefix $(OUT)/platform/x11/curl/, x11_main.o x11_image.o pdfapp.o curl_stream.o)
+	$(LINK_CMD) $(X11_LIBS) $(CURL_LIBS)
+endif
 endif
 
 ifeq "$(V8_PRESENT)" "yes"
 ifeq "$(NOX11)" ""
-MUVIEW_V8 := $(OUT)/mupdf-v8
-$(MUVIEW_V8) : $(MUPDF_LIB) $(MUPDF_JS_V8_LIB) $(THIRD_LIBS)
-$(MUVIEW_V8) : $(addprefix $(OUT)/platform/x11/, x11_main.o x11_image.o pdfapp.o)
+MUVIEW_X11_V8 := $(OUT)/mupdf-x11-v8
+$(MUVIEW_X11_V8) : $(MUPDF_LIB) $(MUPDF_JS_V8_LIB) $(THIRD_LIBS)
+$(MUVIEW_X11_V8) : $(addprefix $(OUT)/platform/x11/, x11_main.o x11_image.o pdfapp.o)
 	$(LINK_CMD) $(X11_LIBS) $(V8_LIBS)
 endif
 endif
 
 ifeq "$(WIN32GUI)" "yes"
-MUVIEW := $(OUT)/mupdf
+MUVIEW_W32 := $(OUT)/mupdf
 WINDRES ?= windres
 W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
 $(OUT)/platform/x11/%.o : platform/x11/%.rc
 	$(WINDRES) -i $< -o $@
-$(MUVIEW) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
-$(MUVIEW) : $(addprefix $(OUT)/platform/x11/, win_main.o win_res.o pdfapp.o)
+$(MUVIEW_W32) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
+$(MUVIEW_W32) : $(addprefix $(OUT)/platform/x11/, win_main.o win_res.o pdfapp.o)
 	$(LINK_CMD) $(W32_LIBS)
+MUVIEW := $(MUVIEW_W32)
 endif
 
-INSTALL_APPS := $(MUDRAW) $(MUTOOL) $(MUVIEW) $(MUJSTEST_V8) $(MUVIEW_V8)
+MUVIEW_V8 := $(MUVIEW_X11_V8)
+MUVIEW_CURL := $(MUVIEW_X11_CURL)
+
+INSTALL_APPS := $(MUDRAW) $(MUTOOL) $(MUVIEW) $(MUJSTEST_V8) $(MUVIEW_V8) $(MUVIEW_CURL)
 
 # --- Format man pages ---
 
@@ -275,6 +291,7 @@ bindir ?= $(prefix)/bin
 libdir ?= $(prefix)/lib
 incdir ?= $(prefix)/include
 mandir ?= $(prefix)/share/man
+docdir ?= $(prefix)/share/doc/mupdf
 
 third: $(THIRD_LIBS)
 libs: $(INSTALL_LIBS)
@@ -296,6 +313,12 @@ install: libs apps
 
 	install -d $(DESTDIR)$(mandir)/man1
 	install docs/man/*.1 $(DESTDIR)$(mandir)/man1
+
+	install -d $(DESTDIR)$(docdir)
+	install README COPYING CHANGES docs/*.txt $(DESTDIR)$(docdir)
+
+tarball:
+	bash scripts/archive.sh
 
 # --- Clean and Default ---
 

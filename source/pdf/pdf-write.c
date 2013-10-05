@@ -532,7 +532,7 @@ static pdf_obj *sweepref(pdf_document *doc, pdf_write_options *opts, pdf_obj *ob
 	}
 	fz_catch(ctx)
 	{
-		/* FIXME: TryLater */
+		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
 		/* Leave broken */
 	}
 
@@ -1650,7 +1650,7 @@ static void writeobject(pdf_document *doc, pdf_write_options *opts, int num, int
 	}
 	fz_catch(ctx)
 	{
-		/* FIXME: TryLater ? */
+		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
 		if (opts->continue_on_error)
 		{
 			fprintf(opts->out, "%d %d obj\nnull\nendobj\n", num, gen);
@@ -1732,7 +1732,7 @@ static void writeobject(pdf_document *doc, pdf_write_options *opts, int num, int
 		}
 		fz_catch(ctx)
 		{
-			/* FIXME: TryLater ? */
+			fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
 			if (opts->continue_on_error)
 			{
 				fprintf(opts->out, "%d %d obj\nnull\nendobj\n", num, gen);
@@ -2450,6 +2450,10 @@ void pdf_write_document(pdf_document *doc, char *filename, fz_write_options *fz_
 
 #define KIDS_PER_LEVEL 32
 
+#if 0
+
+// TODO: pdf_rebalance_page_tree(doc);
+
 static pdf_obj *
 make_page_tree_node(pdf_document *doc, int l, int r, pdf_obj *parent_ref, int root)
 {
@@ -2516,7 +2520,7 @@ make_page_tree_node(pdf_document *doc, int l, int r, pdf_obj *parent_ref, int ro
 }
 
 static void
-pdf_rebuild_page_tree(pdf_document *doc)
+pdf_rebalance_page_tree(pdf_document *doc)
 {
 	pdf_obj *catalog;
 	pdf_obj *pages;
@@ -2531,10 +2535,16 @@ pdf_rebuild_page_tree(pdf_document *doc)
 	doc->needs_page_tree_rebuild = 0;
 }
 
+#endif
+
+static void
+pdf_rebalance_page_tree(pdf_document *doc)
+{
+}
+
 void pdf_finish_edit(pdf_document *doc)
 {
 	if (!doc)
 		return;
-
-	pdf_rebuild_page_tree(doc);
+	pdf_rebalance_page_tree(doc);
 }

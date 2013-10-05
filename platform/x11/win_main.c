@@ -25,7 +25,7 @@ static HWND hwndview = NULL;
 static HDC hdc;
 static HBRUSH bgbrush;
 static HBRUSH shbrush;
-static BITMAPINFO *dibinf;
+static BITMAPINFO *dibinf = NULL;
 static HCURSOR arrowcurs, handcurs, waitcurs, caretcurs;
 static LRESULT CALLBACK frameproc(HWND, UINT, WPARAM, LPARAM);
 static LRESULT CALLBACK viewproc(HWND, UINT, WPARAM, LPARAM);
@@ -644,11 +644,18 @@ void winopen()
 	SetCursor(arrowcurs);
 }
 
+static void
+do_close(pdfapp_t *app)
+{
+	pdfapp_close(app);
+	free(dibinf);
+}
+
 void winclose(pdfapp_t *app)
 {
 	if (pdfapp_preclose(app))
 	{
-		pdfapp_close(app);
+		do_close(app);
 		exit(0);
 	}
 }
@@ -875,6 +882,11 @@ void winreloadfile(pdfapp_t *app)
 {
 	pdfapp_close(app);
 	pdfapp_open(app, filename, 1);
+}
+
+void winreloadpage(pdfapp_t *app)
+{
+	SendMessage(hwndview, WM_APP, 0, 0);
 }
 
 void winopenuri(pdfapp_t *app, char *buf)
@@ -1126,6 +1138,12 @@ viewproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			handlemouse(oldx, oldy, 0, 0);	/* update cursor */
 		}
 		return 0;
+
+	/* We use WM_APP to trigger a reload and repaint of a page */
+	case WM_APP:
+		pdfapp_reloadpage(&gapp);
+		break;
+
 	}
 
 	fflush(stdout);
@@ -1143,6 +1161,8 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShow
 	MSG msg;
 	int code;
 	fz_context *ctx;
+	int arg;
+	int bps = 0;
 
 	ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
 	if (!ctx)
@@ -1157,9 +1177,24 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShow
 
 	winopen();
 
-	if (argc == 2)
+	arg = 1;
+	while (arg < argc)
 	{
-		wcscpy(wbuf, argv[1]);
+		if (!wcscmp(argv[arg], L"-p"))
+		{
+			if (arg+1 < argc)
+				bps = _wtoi(argv[++arg]);
+			else
+				bps = 4096;
+		}
+		else
+			break;
+		arg++;
+	}
+
+	if (arg < argc)
+	{
+		wcscpy(wbuf, argv[arg]);
 	}
 	else
 	{
@@ -1171,7 +1206,10 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShow
 	if (code == 0)
 		winerror(&gapp, "cannot convert filename to utf-8");
 
-	pdfapp_open(&gapp, filename, 0);
+	if (bps)
+		pdfapp_open_progressive(&gapp, filename, 0, bps);
+	else
+		pdfapp_open(&gapp, filename, 0);
 
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
@@ -1179,7 +1217,7 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShow
 		DispatchMessage(&msg);
 	}
 
-	pdfapp_close(&gapp);
+	do_close(&gapp);
 	fz_free_context(ctx);
 
 	return 0;

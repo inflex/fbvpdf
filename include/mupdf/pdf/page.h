@@ -3,6 +3,7 @@
 
 int pdf_lookup_page_number(pdf_document *doc, pdf_obj *pageobj);
 int pdf_count_pages(pdf_document *doc);
+pdf_obj *pdf_lookup_page_obj(pdf_document *doc, int needle);
 
 /*
 	pdf_load_page: Load a page and its resources.
@@ -90,6 +91,13 @@ struct pdf_page_s
 	float duration;
 	int transition_present;
 	fz_transition transition;
+	int incomplete;
+};
+
+enum
+{
+	PDF_PAGE_INCOMPLETE_CONTENTS = 1,
+	PDF_PAGE_INCOMPLETE_ANNOTS = 2
 };
 
 #endif

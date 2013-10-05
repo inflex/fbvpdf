@@ -12,7 +12,7 @@ static int showcolumn;
 
 static void usage(void)
 {
-	fprintf(stderr, "usage: mutool show [options] file.pdf [grepable] [xref] [trailer] [pagetree] [object numbers]\n");
+	fprintf(stderr, "usage: mutool show [options] file.pdf [grep] [xref] [trailer] [pages] [object numbers]\n");
 	fprintf(stderr, "\t-b\tprint streams as binary data\n");
 	fprintf(stderr, "\t-e\tprint encoded streams (don't decode)\n");
 	fprintf(stderr, "\t-p\tpassword\n");
@@ -62,7 +62,7 @@ static void showpagetree(void)
 	count = pdf_count_pages(doc);
 	for (i = 0; i < count; i++)
 	{
-		ref = doc->page_refs[i];
+		ref = pdf_lookup_page_obj(doc, i);
 		printf("page %d = %d %d R\n", i + 1, pdf_to_num(ref), pdf_to_gen(ref));
 	}
 	printf("\n");
