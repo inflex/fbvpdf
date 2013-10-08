@@ -418,21 +418,21 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	      {
 	        if (i < moz->scrollpage - 2 || i > moz->scrollpage + 6)
 	        {
-	          if (moz->pages[i].page)
-	          {
+	          if (moz->pages[i].page_links)
 	            fz_drop_link(moz->ctx, moz->pages[i].page_links);
+	          moz->pages[i].page_links = NULL;
+	          if (moz->pages[i].page_list)
 	            fz_free_display_list( moz->ctx, moz->pages[i].page_list);
+	          moz->pages[i].page_list =NULL;
+	          if (moz->pages[i].page)
 	            fz_free_page(moz->doc, moz->pages[i].page);
-	            moz->pages[i].page = NULL;
-	          }
+	          moz->pages[i].page = NULL;
   	      }
 	        if (i < moz->scrollpage - 1 || i > moz->scrollpage + 3)
 	        {
 	          if (moz->pages[i].image)
-	          {
 	            fz_drop_pixmap(moz->ctx, moz->pages[i].image);
-	            moz->pages[i].image = NULL;
-  	        }
+	          moz->pages[i].image = NULL;
 	        }
 	      }
 
@@ -519,10 +519,8 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	        }
 
 	        if (moz->pages[i].image)
-	        {
 	          fz_drop_pixmap(moz->ctx, moz->pages[i].image);
-	          moz->pages[i].image = NULL;
-  	      }
+	        moz->pages[i].image = NULL;
 
 	        si.nMax += moz->pages[i].px;
 	      }
@@ -678,27 +676,39 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
     DestroyCursor(moz->hand);
     DestroyCursor(moz->wait);
 
-    fz_free(moz->ctx, moz->dibinf);
+    if (moz->dibinf)
+      fz_free(moz->ctx, moz->dibinf);
+    moz->dibinf = NULL;
 
     for (i = 0; i < moz->pagecount; i++)
     {
-      if (moz->pages[i].page)
-      {
+      if (moz->pages[i].page_links)
         fz_drop_link(moz->ctx, moz->pages[i].page_links);
+      moz->pages[i].page_links = NULL;
+      if (moz->pages[i].page_list)
         fz_free_display_list( moz->ctx, moz->pages[i].page_list);
+      moz->pages[i].page_list = NULL;
+      if (moz->pages[i].page)
         fz_free_page(moz->doc, moz->pages[i].page);
-      }
+      moz->pages[i].page = NULL;
       if (moz->pages[i].image)
         fz_drop_pixmap(moz->ctx, moz->pages[i].image);
+      moz->pages[i].image = NULL;
     }
 
-    fz_free(moz->ctx, moz->pages);
+    if (moz->pages)
+      fz_free(moz->ctx, moz->pages);
+    moz->pages = NULL;
 
-    fz_close_document(moz->doc);
+    if (moz->doc)
+      fz_close_document(moz->doc);
+    moz->doc = NULL;
 
     fz_context *ctx = moz->ctx;
     fz_free(ctx, moz);
+    moz = NULL;
     fz_free_context(ctx);
+    ctx = NULL;
 
     return NPERR_NO_ERROR;
 }
