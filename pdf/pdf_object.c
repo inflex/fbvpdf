@@ -145,8 +145,8 @@ pdf_new_indirect(fz_context *ctx, int num, int gen, void *xref)
 pdf_obj *
 pdf_keep_obj(pdf_obj *obj)
 {
-	assert(obj);
-	obj->refs ++;
+	if (obj)
+		obj->refs ++;
 	return obj;
 }
 
@@ -159,7 +159,6 @@ int pdf_is_indirect(pdf_obj *obj)
 	do { \
 		if (obj && obj->kind == PDF_INDIRECT) \
 		{\
-			fz_assert_lock_not_held(obj->ctx, FZ_LOCK_FILE); \
 			obj = pdf_resolve_indirect(obj); \
 		} \
 	} while (0)
@@ -266,6 +265,13 @@ int pdf_to_str_len(pdf_obj *obj)
 	if (!obj || obj->kind != PDF_STRING)
 		return 0;
 	return obj->u.s.len;
+}
+
+void pdf_set_int(pdf_obj *obj, int i)
+{
+	if (!obj || obj->kind != PDF_INT)
+		return;
+	obj->u.i = i;
 }
 
 /* for use by pdf_crypt_obj_imp to decrypt AES string in place */
@@ -506,8 +512,7 @@ pdf_array_put(pdf_obj *obj, int i, pdf_obj *item)
 		fz_warn(obj->ctx, "assert: index %d > length %d", i, obj->u.a.len);
 	else
 	{
-		if (obj->u.a.items[i])
-			pdf_drop_obj(obj->u.a.items[i]);
+		pdf_drop_obj(obj->u.a.items[i]);
 		obj->u.a.items[i] = pdf_keep_obj(item);
 	}
 }
@@ -552,13 +557,106 @@ pdf_array_insert(pdf_obj *obj, pdf_obj *item)
 int
 pdf_array_contains(pdf_obj *arr, pdf_obj *obj)
 {
-	int i;
+	int i, len;
 
-	for (i = 0; i < pdf_array_len(arr); i++)
+	len = pdf_array_len(arr);
+	for (i = 0; i < len; i++)
 		if (!pdf_objcmp(pdf_array_get(arr, i), obj))
 			return 1;
 
 	return 0;
+}
+
+pdf_obj *pdf_new_rect(fz_context *ctx, fz_rect *rect)
+{
+	pdf_obj *arr = NULL;
+	pdf_obj *item = NULL;
+
+	fz_var(arr);
+	fz_var(item);
+	fz_try(ctx)
+	{
+		arr = pdf_new_array(ctx, 4);
+
+		item = pdf_new_real(ctx, rect->x0);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, rect->y0);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, rect->x1);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, rect->y1);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+	}
+	fz_catch(ctx)
+	{
+		pdf_drop_obj(item);
+		pdf_drop_obj(arr);
+		fz_rethrow(ctx);
+	}
+
+	return arr;
+}
+
+pdf_obj *pdf_new_matrix(fz_context *ctx, fz_matrix *mtx)
+{
+	pdf_obj *arr = NULL;
+	pdf_obj *item = NULL;
+
+	fz_var(arr);
+	fz_var(item);
+	fz_try(ctx)
+	{
+		arr = pdf_new_array(ctx, 6);
+
+		item = pdf_new_real(ctx, mtx->a);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, mtx->b);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, mtx->c);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, mtx->d);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, mtx->e);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+
+		item = pdf_new_real(ctx, mtx->f);
+		pdf_array_push(arr, item);
+		pdf_drop_obj(item);
+		item = NULL;
+	}
+	fz_catch(ctx)
+	{
+		pdf_drop_obj(item);
+		pdf_drop_obj(arr);
+		fz_rethrow(ctx);
+	}
+
+	return arr;
 }
 
 /* dicts may only have names as keys! */
@@ -635,7 +733,7 @@ pdf_copy_dict(fz_context *ctx, pdf_obj *obj)
 	n = pdf_dict_len(obj);
 	dict = pdf_new_dict(ctx, n);
 	for (i = 0; i < n; i++)
-		fz_dict_put(dict, pdf_dict_get_key(obj, i), pdf_dict_get_val(obj, i));
+		pdf_dict_put(dict, pdf_dict_get_key(obj, i), pdf_dict_get_val(obj, i));
 
 	return dict;
 }
@@ -737,6 +835,36 @@ pdf_dict_gets(pdf_obj *obj, char *key)
 }
 
 pdf_obj *
+pdf_dict_getp(pdf_obj *obj, char *keys)
+{
+	char buf[256];
+	char *k, *e;
+
+	if (strlen(keys)+1 > 256)
+		fz_throw(obj->ctx, "buffer overflow in pdf_dict_getp");
+
+	strcpy(buf, keys);
+
+	e = buf;
+	while (*e && obj)
+	{
+		k = e;
+		while (*e != '/' && *e != '\0')
+			e++;
+
+		if (*e == '/')
+		{
+			*e = '\0';
+			e++;
+		}
+
+		obj = pdf_dict_gets(obj, k);
+	}
+
+	return obj;
+}
+
+pdf_obj *
 pdf_dict_get(pdf_obj *obj, pdf_obj *key)
 {
 	if (!key || key->kind != PDF_NAME)
@@ -755,7 +883,7 @@ pdf_dict_getsa(pdf_obj *obj, char *key, char *abbrev)
 }
 
 void
-fz_dict_put(pdf_obj *obj, pdf_obj *key, pdf_obj *val)
+pdf_dict_put(pdf_obj *obj, pdf_obj *key, pdf_obj *val)
 {
 	int location;
 	char *s;
@@ -791,8 +919,11 @@ fz_dict_put(pdf_obj *obj, pdf_obj *key, pdf_obj *val)
 	i = pdf_dict_finds(obj, s, &location);
 	if (i >= 0 && i < obj->u.d.len)
 	{
-		pdf_drop_obj(obj->u.d.items[i].v);
-		obj->u.d.items[i].v = pdf_keep_obj(val);
+		if (obj->u.d.items[i].v != val)
+		{
+			pdf_drop_obj(obj->u.d.items[i].v);
+			obj->u.d.items[i].v = pdf_keep_obj(val);
+		}
 	}
 	else
 	{
@@ -815,8 +946,65 @@ void
 pdf_dict_puts(pdf_obj *obj, char *key, pdf_obj *val)
 {
 	pdf_obj *keyobj = fz_new_name(obj->ctx, key);
-	fz_dict_put(obj, keyobj, val);
+	pdf_dict_put(obj, keyobj, val);
 	pdf_drop_obj(keyobj);
+}
+
+void
+pdf_dict_putp(pdf_obj *obj, char *keys, pdf_obj *val)
+{
+	fz_context *ctx = obj->ctx;
+	char buf[256];
+	char *k, *e;
+	pdf_obj *cobj = NULL;
+
+	if (strlen(keys)+1 > 256)
+		fz_throw(obj->ctx, "buffer overflow in pdf_dict_getp");
+
+	strcpy(buf, keys);
+
+	e = buf;
+	while (*e)
+	{
+		k = e;
+		while (*e != '/' && *e != '\0')
+			e++;
+
+		if (*e == '/')
+		{
+			*e = '\0';
+			e++;
+		}
+
+		if (*e)
+		{
+			/* Not the last key in the key path. Create subdict if not already there. */
+			cobj = pdf_dict_gets(obj, k);
+			if (cobj == NULL)
+			{
+				cobj = pdf_new_dict(ctx, 1);
+				fz_try(ctx)
+				{
+					pdf_dict_puts(obj, k, cobj);
+				}
+				fz_always(ctx)
+				{
+					pdf_drop_obj(cobj);
+				}
+				fz_catch(ctx)
+				{
+					fz_rethrow(ctx);
+				}
+			}
+			/* Move to subdict */
+			obj = cobj;
+		}
+		else
+		{
+			/* Last key. Use it to store the value */
+			pdf_dict_puts(obj, k, val);
+		}
+	}
 }
 
 void
@@ -901,8 +1089,7 @@ pdf_free_array(pdf_obj *obj)
 	int i;
 
 	for (i = 0; i < obj->u.a.len; i++)
-		if (obj->u.a.items[i])
-			pdf_drop_obj(obj->u.a.items[i]);
+		pdf_drop_obj(obj->u.a.items[i]);
 
 	fz_free(obj->ctx, obj->u.a.items);
 	fz_free(obj->ctx, obj);
@@ -914,10 +1101,8 @@ pdf_free_dict(pdf_obj *obj)
 	int i;
 
 	for (i = 0; i < obj->u.d.len; i++) {
-		if (obj->u.d.items[i].k)
-			pdf_drop_obj(obj->u.d.items[i].k);
-		if (obj->u.d.items[i].v)
-			pdf_drop_obj(obj->u.d.items[i].v);
+		pdf_drop_obj(obj->u.d.items[i].k);
+		pdf_drop_obj(obj->u.d.items[i].v);
 	}
 
 	fz_free(obj->ctx, obj->u.d.items);
@@ -1263,6 +1448,7 @@ pdf_fprint_obj(FILE *fp, pdf_obj *obj, int tight)
 	return n;
 }
 
+#ifndef NDEBUG
 void
 pdf_print_obj(pdf_obj *obj)
 {
@@ -1274,3 +1460,4 @@ pdf_print_ref(pdf_obj *ref)
 {
 	pdf_print_obj(pdf_resolve_indirect(ref));
 }
+#endif

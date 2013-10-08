@@ -35,7 +35,7 @@ static void pdfapp_error(pdfapp_t *app, char *msg)
 char *pdfapp_version(pdfapp_t *app)
 {
 	return
-		"MuPDF 1.0\n"
+		"MuPDF 1.1\n"
 		"Copyright 2006-2012 Artifex Software, Inc.\n";
 }
 
@@ -56,7 +56,7 @@ char *pdfapp_usage(pdfapp_t *app)
 		"f\t\t-- fullscreen\n"
 		"r\t\t-- reload file\n"
 		". pgdn right spc\t-- next page\n"
-		", pgup left b\t-- previous page\n"
+		", pgup left b bkspc\t-- previous page\n"
 		">\t\t-- next 10 pages\n"
 		"<\t\t-- back 10 pages\n"
 		"m\t\t-- mark page for snap back\n"
@@ -105,7 +105,7 @@ void pdfapp_open(pdfapp_t *app, char *filename, int reload)
 			{
 				password = winpassword(app, filename);
 				if (!password)
-					pdfapp_error(app, "Needs a password.");
+					fz_throw(ctx, "Needs a password");
 				okay = fz_authenticate_password(app->doc, password);
 				if (!okay)
 					pdfapp_warn(app, "Invalid password.");
@@ -227,7 +227,11 @@ static void pdfapp_panview(pdfapp_t *app, int newx, int newy)
 
 static void pdfapp_loadpage(pdfapp_t *app)
 {
-	fz_device *mdev;
+	fz_device *mdev = NULL;
+	int errored = 0;
+	fz_cookie cookie = { 0 };
+
+	fz_var(mdev);
 
 	if (app->page_list)
 		fz_free_display_list(app->ctx, app->page_list);
@@ -245,24 +249,56 @@ static void pdfapp_loadpage(pdfapp_t *app)
 	app->page_sheet = NULL;
 	app->page_links = NULL;
 	app->page = NULL;
+	app->page_bbox.x0 = 0;
+	app->page_bbox.y0 = 0;
+	app->page_bbox.x1 = 100;
+	app->page_bbox.y1 = 100;
 
 	fz_try(app->ctx)
 	{
 		app->page = fz_load_page(app->doc, app->pageno - 1);
 
+		app->page_bbox = fz_bound_page(app->doc, app->page);
+	}
+	fz_catch(app->ctx)
+	{
+		pdfapp_warn(app, "Cannot load page");
+		return;
+	}
+
+	fz_try(app->ctx)
+	{
 		/* Create display list */
 		app->page_list = fz_new_display_list(app->ctx);
 		mdev = fz_new_list_device(app->ctx, app->page_list);
-		fz_run_page(app->doc, app->page, mdev, fz_identity, NULL);
+		fz_run_page(app->doc, app->page, mdev, fz_identity, &cookie);
+		if (cookie.errors)
+		{
+			pdfapp_warn(app, "Errors found on page");
+			errored = 1;
+		}
+	}
+	fz_always(app->ctx)
+	{
 		fz_free_device(mdev);
+	}
+	fz_catch(app->ctx)
+	{
+		pdfapp_warn(app, "Cannot load page");
+		errored = 1;
+	}
 
-		app->page_bbox = fz_bound_page(app->doc, app->page);
+	fz_try(app->ctx)
+	{
 		app->page_links = fz_load_links(app->doc, app->page);
 	}
 	fz_catch(app->ctx)
 	{
-		pdfapp_error(app, "cannot load page");
+		if (!errored)
+			pdfapp_warn(app, "Cannot load page");
 	}
+
+	app->errored = errored;
 }
 
 #define MAX_TITLE 256
@@ -275,6 +311,7 @@ static void pdfapp_showpage(pdfapp_t *app, int loadpage, int drawpage, int repai
 	fz_colorspace *colorspace;
 	fz_matrix ctm;
 	fz_bbox bbox;
+	fz_cookie cookie = { 0 };
 
 	wincursor(app, WAIT);
 
@@ -289,9 +326,12 @@ static void pdfapp_showpage(pdfapp_t *app, int loadpage, int drawpage, int repai
 		/* Extract text */
 		app->page_sheet = fz_new_text_sheet(app->ctx);
 		app->page_text = fz_new_text_page(app->ctx, app->page_bbox);
-		tdev = fz_new_text_device(app->ctx, app->page_sheet, app->page_text);
-		fz_run_display_list(app->page_list, tdev, fz_identity, fz_infinite_bbox, NULL);
-		fz_free_device(tdev);
+		if (app->page_list)
+		{
+			tdev = fz_new_text_device(app->ctx, app->page_sheet, app->page_text);
+			fz_run_display_list(app->page_list, tdev, fz_identity, fz_infinite_bbox, &cookie);
+			fz_free_device(tdev);
+		}
 	}
 
 	if (drawpage)
@@ -328,9 +368,12 @@ static void pdfapp_showpage(pdfapp_t *app, int loadpage, int drawpage, int repai
 #endif
 		app->image = fz_new_pixmap_with_bbox(app->ctx, colorspace, bbox);
 		fz_clear_pixmap_with_value(app->ctx, app->image, 255);
-		idev = fz_new_draw_device(app->ctx, app->image);
-		fz_run_display_list(app->page_list, idev, ctm, bbox, NULL);
-		fz_free_device(idev);
+		if (app->page_list)
+		{
+			idev = fz_new_draw_device(app->ctx, app->image);
+			fz_run_display_list(app->page_list, idev, ctm, bbox, &cookie);
+			fz_free_device(idev);
+		}
 		if (app->invert)
 			fz_invert_pixmap(app->ctx, app->image);
 	}
@@ -358,6 +401,12 @@ static void pdfapp_showpage(pdfapp_t *app, int loadpage, int drawpage, int repai
 		winrepaint(app);
 
 		wincursor(app, ARROW);
+	}
+
+	if (cookie.errors && app->errored == 0)
+	{
+		app->errored = 1;
+		pdfapp_warn(app, "Errors found on page. Page rendering may be incomplete.");
 	}
 
 	fz_flush_warnings(app->ctx);
@@ -849,6 +898,7 @@ void pdfapp_onkey(pdfapp_t *app, int c)
 			app->pageno++;
 		break;
 
+	case '\b':
 	case 'b':
 		panto = DONT_PAN;
 		if (app->numberlen > 0)
@@ -1041,10 +1091,10 @@ void pdfapp_onmouse(pdfapp_t *app, int x, int y, int btn, int modifiers, int sta
 		if (app->iscopying)
 		{
 			app->iscopying = 0;
-			app->selr.x0 = MIN(app->selx, x) - app->panx + rect.x0;
-			app->selr.x1 = MAX(app->selx, x) - app->panx + rect.x0;
-			app->selr.y0 = MIN(app->sely, y) - app->pany + rect.y0;
-			app->selr.y1 = MAX(app->sely, y) - app->pany + rect.y0;
+			app->selr.x0 = fz_mini(app->selx, x) - app->panx + rect.x0;
+			app->selr.x1 = fz_maxi(app->selx, x) - app->panx + rect.x0;
+			app->selr.y0 = fz_mini(app->sely, y) - app->pany + rect.y0;
+			app->selr.y1 = fz_maxi(app->sely, y) - app->pany + rect.y0;
 			winrepaint(app);
 			if (app->selr.x0 < app->selr.x1 && app->selr.y0 < app->selr.y1)
 				windocopy(app);
@@ -1112,10 +1162,10 @@ void pdfapp_onmouse(pdfapp_t *app, int x, int y, int btn, int modifiers, int sta
 
 	else if (app->iscopying)
 	{
-		app->selr.x0 = MIN(app->selx, x) - app->panx + rect.x0;
-		app->selr.x1 = MAX(app->selx, x) - app->panx + rect.x0;
-		app->selr.y0 = MIN(app->sely, y) - app->pany + rect.y0;
-		app->selr.y1 = MAX(app->sely, y) - app->pany + rect.y0;
+		app->selr.x0 = fz_mini(app->selx, x) - app->panx + rect.x0;
+		app->selr.x1 = fz_maxi(app->selx, x) - app->panx + rect.x0;
+		app->selr.y0 = fz_mini(app->sely, y) - app->pany + rect.y0;
+		app->selr.y1 = fz_maxi(app->sely, y) - app->pany + rect.y0;
 		winrepaint(app);
 	}
 

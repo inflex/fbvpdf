@@ -154,7 +154,7 @@ static void
 infousage(void)
 {
 	fprintf(stderr,
-		"usage: pdfinfo [options] [file.pdf ... ]\n"
+		"usage: mubusy info [options] [file.pdf ... ]\n"
 		"\t-d -\tpassword for decryption\n"
 		"\t-f\tlist fonts\n"
 		"\t-i\tlist images\n"
@@ -176,14 +176,14 @@ showglobalinfo(void)
 	if (obj)
 	{
 		printf("Info object (%d %d R):\n", pdf_to_num(obj), pdf_to_gen(obj));
-		pdf_print_obj(pdf_resolve_indirect(obj));
+		pdf_fprint_obj(stdout, pdf_resolve_indirect(obj), 0);
 	}
 
 	obj = pdf_dict_gets(xref->trailer, "Encrypt");
 	if (obj)
 	{
 		printf("\nEncryption object (%d %d R):\n", pdf_to_num(obj), pdf_to_gen(obj));
-		pdf_print_obj(pdf_resolve_indirect(obj));
+		pdf_fprint_obj(stdout, pdf_resolve_indirect(obj), 0);
 	}
 
 	printf("\nPages: %d\n\n", pagecount);
@@ -201,6 +201,16 @@ gatherdimensions(int page, pdf_obj *pageref, pdf_obj *pageobj)
 		return;
 
 	bbox = pdf_to_rect(ctx, obj);
+
+	obj = pdf_dict_gets(pageobj, "UserUnit");
+	if (pdf_is_real(obj))
+	{
+		float unit = pdf_to_real(obj);
+		bbox.x0 *= unit;
+		bbox.y0 *= unit;
+		bbox.x1 *= unit;
+		bbox.y1 *= unit;
+	}
 
 	for (j = 0; j < dims; j++)
 		if (!memcmp(dim[j].u.dim.bbox, &bbox, sizeof (fz_rect)))
@@ -552,7 +562,7 @@ gatherpatterns(int page, pdf_obj *pageref, pdf_obj *pageobj, pdf_obj *dict)
 }
 
 static void
-gatherresourceinfo(int page, pdf_obj *rsrc)
+gatherresourceinfo(int page, pdf_obj *rsrc, int show)
 {
 	pdf_obj *pageobj;
 	pdf_obj *pageref;
@@ -570,7 +580,7 @@ gatherresourceinfo(int page, pdf_obj *rsrc)
 		fz_throw(ctx, "cannot retrieve info from page %d", page);
 
 	font = pdf_dict_gets(rsrc, "Font");
-	if (font)
+	if (show & FONTS && font)
 	{
 		int n;
 
@@ -582,12 +592,12 @@ gatherresourceinfo(int page, pdf_obj *rsrc)
 
 			subrsrc = pdf_dict_gets(obj, "Resources");
 			if (subrsrc && pdf_objcmp(rsrc, subrsrc))
-				gatherresourceinfo(page, subrsrc);
+				gatherresourceinfo(page, subrsrc, show);
 		}
 	}
 
 	xobj = pdf_dict_gets(rsrc, "XObject");
-	if (xobj)
+	if (show & XOBJS && xobj)
 	{
 		int n;
 
@@ -600,16 +610,16 @@ gatherresourceinfo(int page, pdf_obj *rsrc)
 			pdf_obj *obj = pdf_dict_get_val(xobj, i);
 			subrsrc = pdf_dict_gets(obj, "Resources");
 			if (subrsrc && pdf_objcmp(rsrc, subrsrc))
-				gatherresourceinfo(page, subrsrc);
+				gatherresourceinfo(page, subrsrc, show);
 		}
 	}
 
 	shade = pdf_dict_gets(rsrc, "Shading");
-	if (shade)
+	if (show & SHADINGS && shade)
 		gathershadings(page, pageref, pageobj, shade);
 
 	pattern = pdf_dict_gets(rsrc, "Pattern");
-	if (pattern)
+	if (show & PATTERNS && pattern)
 	{
 		int n;
 		gatherpatterns(page, pageref, pageobj, pattern);
@@ -619,13 +629,13 @@ gatherresourceinfo(int page, pdf_obj *rsrc)
 			pdf_obj *obj = pdf_dict_get_val(pattern, i);
 			subrsrc = pdf_dict_gets(obj, "Resources");
 			if (subrsrc && pdf_objcmp(rsrc, subrsrc))
-				gatherresourceinfo(page, subrsrc);
+				gatherresourceinfo(page, subrsrc, show);
 		}
 	}
 }
 
 static void
-gatherpageinfo(int page)
+gatherpageinfo(int page, int show)
 {
 	pdf_obj *pageobj;
 	pdf_obj *pageref;
@@ -640,7 +650,7 @@ gatherpageinfo(int page)
 	gatherdimensions(page, pageref, pageobj);
 
 	rsrc = pdf_dict_gets(pageobj, "Resources");
-	gatherresourceinfo(page, rsrc);
+	gatherresourceinfo(page, rsrc, show);
 }
 
 static void
@@ -882,12 +892,14 @@ showinfo(char *filename, int show, char *pagelist)
 	int page, spage, epage;
 	char *spec, *dash;
 	int allpages;
+	int pagecount;
 
 	if (!xref)
 		infousage();
 
 	allpages = !strcmp(pagelist, "1-");
 
+	pagecount = pdf_count_pages(xref);
 	spec = fz_strsep(&pagelist, ",");
 	while (spec)
 	{
@@ -909,26 +921,19 @@ showinfo(char *filename, int show, char *pagelist)
 		if (spage > epage)
 			page = spage, spage = epage, epage = page;
 
-		if (spage < 1)
-			spage = 1;
-		if (epage > pagecount)
-			epage = pagecount;
-		if (spage > pagecount)
-			spage = pagecount;
+		spage = fz_clampi(spage, 1, pagecount);
+		epage = fz_clampi(epage, 1, pagecount);
 
 		if (allpages)
 			printf("Retrieving info from pages %d-%d...\n", spage, epage);
-		if (spage >= 1)
+		for (page = spage; page <= epage; page++)
 		{
-			for (page = spage; page <= epage; page++)
+			gatherpageinfo(page, show);
+			if (!allpages)
 			{
-				gatherpageinfo(page);
-				if (!allpages)
-				{
-					printf("Page %d:\n", page);
-					printinfo(filename, show, page);
-					printf("\n");
-				}
+				printf("Page %d:\n", page);
+				printinfo(filename, show, page);
+				printf("\n");
 			}
 		}
 
@@ -951,11 +956,7 @@ static int arg_is_page_range(const char *arg)
 	return 1;
 }
 
-#ifdef MUPDF_COMBINED_EXE
 int pdfinfo_main(int argc, char **argv)
-#else
-int main(int argc, char **argv)
-#endif
 {
 	enum { NO_FILE_OPENED, NO_INFO_GATHERED, INFO_SHOWN } state;
 	char *filename = "";
@@ -1005,7 +1006,7 @@ int main(int argc, char **argv)
 
 			filename = argv[fz_optind];
 			printf("%s:\n", filename);
-			xref = pdf_open_document(ctx, filename);
+			xref = pdf_open_document_no_run(ctx, filename);
 			if (pdf_needs_password(xref))
 				if (!pdf_authenticate_password(xref, password))
 					fz_throw(ctx, "cannot authenticate password: %s", filename);

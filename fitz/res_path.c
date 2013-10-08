@@ -63,6 +63,40 @@ grow_path(fz_context *ctx, fz_path *path, int n)
 	path->last = path->len;
 }
 
+fz_point
+fz_currentpoint(fz_context *ctx, fz_path *path)
+{
+	fz_point c, m;
+	int i;
+
+	c.x = c.y = m.x = m.y = 0;
+	i = 0;
+
+	while (i < path->len)
+	{
+		switch (path->items[i++].k)
+		{
+		case FZ_MOVETO:
+			m.x = c.x = path->items[i++].v;
+			m.y = c.y = path->items[i++].v;
+			break;
+		case FZ_LINETO:
+			c.x = path->items[i++].v;
+			c.y = path->items[i++].v;
+			break;
+		case FZ_CURVETO:
+			i += 4;
+			c.x = path->items[i++].v;
+			c.y = path->items[i++].v;
+			break;
+		case FZ_CLOSE_PATH:
+			c = m;
+		}
+	}
+
+	return c;
+}
+
 void
 fz_moveto(fz_context *ctx, fz_path *path, float x, float y)
 {
@@ -275,19 +309,29 @@ fz_bound_path(fz_context *ctx, fz_path *path, fz_stroke_state *stroke, fz_matrix
 
 	if (stroke)
 	{
-		float expand = stroke->linewidth;
-		if (expand == 0)
-			expand = 1.0f;
-		expand *= fz_matrix_max_expansion(ctm);
-		if ((stroke->linejoin == FZ_LINEJOIN_MITER || stroke->linejoin == FZ_LINEJOIN_MITER_XPS) && stroke->miterlimit > 1)
-			expand *= stroke->miterlimit;
-		r.x0 -= expand;
-		r.y0 -= expand;
-		r.x1 += expand;
-		r.y1 += expand;
+		fz_adjust_rect_for_stroke(&r, stroke, &ctm);
 	}
 
 	return r;
+}
+
+void
+fz_adjust_rect_for_stroke(fz_rect *r, fz_stroke_state *stroke, fz_matrix *ctm)
+{
+	float expand;
+
+	if (!stroke)
+		return;
+	expand = stroke->linewidth;
+	if (expand == 0)
+		expand = 1.0f;
+	expand *= fz_matrix_max_expansion(*ctm);
+	if ((stroke->linejoin == FZ_LINEJOIN_MITER || stroke->linejoin == FZ_LINEJOIN_MITER_XPS) && stroke->miterlimit > 1)
+		expand *= stroke->miterlimit;
+	r->x0 -= expand;
+	r->y0 -= expand;
+	r->x1 += expand;
+	r->y1 += expand;
 }
 
 void
@@ -326,6 +370,7 @@ fz_transform_path(fz_context *ctx, fz_path *path, fz_matrix ctm)
 	}
 }
 
+#ifndef NDEBUG
 void
 fz_print_path(fz_context *ctx, FILE *out, fz_path *path, int indent)
 {
@@ -365,15 +410,15 @@ fz_print_path(fz_context *ctx, FILE *out, fz_path *path, int indent)
 		}
 	}
 }
+#endif
 
 fz_stroke_state *
 fz_keep_stroke_state(fz_context *ctx, fz_stroke_state *stroke)
 {
-	fz_lock(ctx, FZ_LOCK_ALLOC);
-
 	if (!stroke)
 		return NULL;
 
+	fz_lock(ctx, FZ_LOCK_ALLOC);
 	if (stroke->refs > 0)
 		stroke->refs++;
 	fz_unlock(ctx, FZ_LOCK_ALLOC);

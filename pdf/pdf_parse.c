@@ -9,10 +9,10 @@ pdf_to_rect(fz_context *ctx, pdf_obj *array)
 	float b = pdf_to_real(pdf_array_get(array, 1));
 	float c = pdf_to_real(pdf_array_get(array, 2));
 	float d = pdf_to_real(pdf_array_get(array, 3));
-	r.x0 = MIN(a, c);
-	r.y0 = MIN(b, d);
-	r.x1 = MAX(a, c);
-	r.y1 = MAX(b, d);
+	r.x0 = fz_min(a, c);
+	r.y0 = fz_min(b, d);
+	r.x1 = fz_max(a, c);
+	r.y1 = fz_max(b, d);
 	return r;
 }
 
@@ -370,7 +370,7 @@ pdf_parse_dict(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 					(tok == PDF_TOK_KEYWORD && !strcmp(buf->scratch, "ID")))
 				{
 					val = pdf_new_int(ctx, a);
-					fz_dict_put(dict, key, val);
+					pdf_dict_put(dict, key, val);
 					pdf_drop_obj(val);
 					val = NULL;
 					pdf_drop_obj(key);
@@ -393,7 +393,7 @@ pdf_parse_dict(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 				fz_throw(ctx, "unknown token in dict");
 			}
 
-			fz_dict_put(dict, key, val);
+			pdf_dict_put(dict, key, val);
 			pdf_drop_obj(val);
 			val = NULL;
 			pdf_drop_obj(key);
@@ -417,16 +417,13 @@ pdf_parse_stm_obj(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 	fz_context *ctx = file->ctx;
 
 	tok = pdf_lex(file, buf);
-	/* RJW: "cannot parse token in object stream") */
 
 	switch (tok)
 	{
 	case PDF_TOK_OPEN_ARRAY:
 		return pdf_parse_array(xref, file, buf);
-		/* RJW: "cannot parse object stream" */
 	case PDF_TOK_OPEN_DICT:
 		return pdf_parse_dict(xref, file, buf);
-		/* RJW: "cannot parse object stream" */
 	case PDF_TOK_NAME: return fz_new_name(ctx, buf->scratch); break;
 	case PDF_TOK_REAL: return pdf_new_real(ctx, buf->f); break;
 	case PDF_TOK_STRING: return pdf_new_string(ctx, buf->scratch, buf->len); break;
@@ -453,35 +450,29 @@ pdf_parse_ind_obj(pdf_document *xref,
 	fz_var(obj);
 
 	tok = pdf_lex(file, buf);
-	/* RJW: cannot parse indirect object (%d %d R)", num, gen */
 	if (tok != PDF_TOK_INT)
-		fz_throw(ctx, "expected object number (%d %d R)", num, gen);
+		fz_throw(ctx, "expected object number");
 	num = buf->i;
 
 	tok = pdf_lex(file, buf);
-	/* RJW: "cannot parse indirect object (%d %d R)", num, gen */
 	if (tok != PDF_TOK_INT)
-		fz_throw(ctx, "expected generation number (%d %d R)", num, gen);
+		fz_throw(ctx, "expected generation number (%d ? obj)", num);
 	gen = buf->i;
 
 	tok = pdf_lex(file, buf);
-	/* RJW: "cannot parse indirect object (%d %d R)", num, gen */
 	if (tok != PDF_TOK_OBJ)
-		fz_throw(ctx, "expected 'obj' keyword (%d %d R)", num, gen);
+		fz_throw(ctx, "expected 'obj' keyword (%d %d ?)", num, gen);
 
 	tok = pdf_lex(file, buf);
-	/* RJW: "cannot parse indirect object (%d %d R)", num, gen */
 
 	switch (tok)
 	{
 	case PDF_TOK_OPEN_ARRAY:
 		obj = pdf_parse_array(xref, file, buf);
-		/* RJW: "cannot parse indirect object (%d %d R)", num, gen */
 		break;
 
 	case PDF_TOK_OPEN_DICT:
 		obj = pdf_parse_dict(xref, file, buf);
-		/* RJW: "cannot parse indirect object (%d %d R)", num, gen */
 		break;
 
 	case PDF_TOK_NAME: obj = fz_new_name(ctx, buf->scratch); break;
@@ -494,7 +485,7 @@ pdf_parse_ind_obj(pdf_document *xref,
 	case PDF_TOK_INT:
 		a = buf->i;
 		tok = pdf_lex(file, buf);
-		/* "cannot parse indirect object (%d %d R)", num, gen */
+
 		if (tok == PDF_TOK_STREAM || tok == PDF_TOK_ENDOBJ)
 		{
 			obj = pdf_new_int(ctx, a);
@@ -504,7 +495,6 @@ pdf_parse_ind_obj(pdf_document *xref,
 		{
 			b = buf->i;
 			tok = pdf_lex(file, buf);
-			/* RJW: "cannot parse indirect object (%d %d R)", num, gen); */
 			if (tok == PDF_TOK_R)
 			{
 				obj = pdf_new_indirect(ctx, a, b, xref);

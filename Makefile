@@ -33,7 +33,7 @@ QUIET_MKDIR = @ echo ' ' ' ' MKDIR $@ ;
 endif
 
 CC_CMD = $(QUIET_CC) $(CC) $(CFLAGS) -o $@ -c $<
-AR_CMD = $(QUIET_AR) $(AR) cru $@ $^
+AR_CMD = $(QUIET_AR) $(AR) cr $@ $^
 LINK_CMD = $(QUIET_LINK) $(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 MKDIR_CMD = $(QUIET_MKDIR) mkdir -p $@
 
@@ -133,19 +133,16 @@ $(OUT)/cmapdump.o : pdf/pdf_cmap.c pdf/pdf_cmap_parse.c
 
 # --- Tools and Apps ---
 
-MU_APPS := $(addprefix $(OUT)/, mudraw mupdfclean mupdfextract mupdfinfo mupdfshow)
+MUDRAW := $(addprefix $(OUT)/, mudraw)
+$(MUDRAW) : $(FITZ_LIB) $(THIRD_LIBS)
 
-$(MU_APPS) : $(FITZ_LIB) $(THIRD_LIBS)
-
-BUSY_SRC := $(notdir $(wildcard apps/mubusy_*.c))
-BUSY_APP := $(addprefix $(OUT)/, mubusy)
-$(BUSY_APP) : $(addprefix $(OUT)/, $(BUSY_SRC:%.c=%.o))
-$(BUSY_APP) : $(FITZ_LIB) $(THIRD_LIBS)
+MUBUSY := $(addprefix $(OUT)/, mubusy)
+$(MUBUSY) : $(addprefix $(OUT)/, mupdfclean.o mupdfextract.o mupdfinfo.o mupdfposter.o mupdfshow.o) $(FITZ_LIB) $(THIRD_LIBS)
 
 ifeq "$(NOX11)" ""
-MUPDF := $(OUT)/mupdf
-$(MUPDF) : $(FITZ_LIB) $(THIRD_LIBS)
-$(MUPDF) : $(addprefix $(OUT)/, x11_main.o x11_image.o pdfapp.o)
+MUVIEW := $(OUT)/mupdf
+$(MUVIEW) : $(FITZ_LIB) $(THIRD_LIBS)
+$(MUVIEW) : $(addprefix $(OUT)/, x11_main.o x11_image.o pdfapp.o)
 	$(LINK_CMD) $(X11_LIBS)
 endif
 
@@ -180,16 +177,20 @@ libdir ?= $(prefix)/lib
 incdir ?= $(prefix)/include
 mandir ?= $(prefix)/share/man
 
-install: $(FITZ_LIB) $(MU_APPS) $(MUPDF)
+install: $(FITZ_LIB) $(MUVIEW) $(MUDRAW) $(MUBUSY)
 	install -d $(bindir) $(libdir) $(incdir) $(mandir)/man1
 	install $(FITZ_LIB) $(libdir)
 	install fitz/memento.h fitz/fitz.h pdf/mupdf.h xps/muxps.h cbz/mucbz.h $(incdir)
-	install $(MU_APPS) $(MUPDF) $(bindir)
+	install $(MUVIEW) $(MUDRAW) $(MUBUSY) $(bindir)
 	install $(wildcard apps/man/*.1) $(mandir)/man1
 
 # --- Clean and Default ---
 
-all: $(THIRD_LIBS) $(FITZ_LIB) $(MU_APPS) $(MUPDF) $(BUSY_APP) $(MU_PLUG)
+all: all-nojs
+
+all-nojs: $(THIRD_LIBS) $(FITZ_LIB) $(MUVIEW) $(MUDRAW) $(MUBUSY) $(MU_PLUG)
+
+third: $(THIRD_LIBS)
 
 clean:
 	rm -rf $(OUT)

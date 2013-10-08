@@ -4,14 +4,19 @@ include $(CLEAR_VARS)
 
 MY_ROOT := ../..
 
+OPENJPEG := openjpeg-1.5.0-patched
+JPEG := jpeg-9
+ZLIB := zlib-1.2.7
+FREETYPE := freetype-2.4.10
+
 LOCAL_CFLAGS += -DARCH_ARM -DARCH_THUMB -DARCH_ARM_CAN_LOAD_UNALIGNED
 
 LOCAL_C_INCLUDES := \
 	../thirdparty/jbig2dec \
-	../thirdparty/openjpeg-1.5.0/libopenjpeg \
-	../thirdparty/jpeg-8d \
-	../thirdparty/zlib-1.2.5 \
-	../thirdparty/freetype-2.4.9/include \
+	../thirdparty/$(OPENJPEG)/libopenjpeg \
+	../thirdparty/$(JPEG) \
+	../thirdparty/$(ZLIB) \
+	../thirdparty/$(FREETYPE)/include \
 	../draw \
 	../fitz \
 	../pdf \
@@ -73,7 +78,6 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/draw/draw_path.c \
 	$(MY_ROOT)/draw/draw_simple_scale.c \
 	$(MY_ROOT)/draw/draw_unpack.c \
-	$(MY_ROOT)/pdf/base_object.c \
 	$(MY_ROOT)/pdf/pdf_annot.c \
 	$(MY_ROOT)/pdf/pdf_cmap.c \
 	$(MY_ROOT)/pdf/pdf_cmap_load.c \
@@ -90,6 +94,7 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/pdf/pdf_lex.c \
 	$(MY_ROOT)/pdf/pdf_metrics.c \
 	$(MY_ROOT)/pdf/pdf_nametree.c \
+	$(MY_ROOT)/pdf/pdf_object.c \
 	$(MY_ROOT)/pdf/pdf_outline.c \
 	$(MY_ROOT)/pdf/pdf_page.c \
 	$(MY_ROOT)/pdf/pdf_parse.c \
@@ -102,6 +107,7 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/pdf/pdf_unicode.c \
 	$(MY_ROOT)/pdf/pdf_xobject.c \
 	$(MY_ROOT)/pdf/pdf_xref.c \
+	$(MY_ROOT)/pdf/pdf_xref_aux.c \
 	$(MY_ROOT)/xps/xps_common.c \
 	$(MY_ROOT)/xps/xps_doc.c \
 	$(MY_ROOT)/xps/xps_glyphs.c \

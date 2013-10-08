@@ -177,14 +177,14 @@ draw_stripe(fz_context *ctx, pdf_tensor_patch *p, fz_shade *shade, int depth)
 	if (depth == 0)
 	{
 		/* if no more subdividing, draw two new patches... */
-		triangulate_patch(ctx, s0, shade);
 		triangulate_patch(ctx, s1, shade);
+		triangulate_patch(ctx, s0, shade);
 	}
 	else
 	{
 		/* ...otherwise, continue subdividing. */
-		draw_stripe(ctx, &s0, shade, depth);
 		draw_stripe(ctx, &s1, shade, depth);
+		draw_stripe(ctx, &s0, shade, depth);
 	}
 }
 
@@ -984,7 +984,7 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 	pdf_obj *obj;
 	int funcs = 0;
 	int type = 0;
-	int i;
+	int i, in, out;
 	fz_context *ctx = xref->ctx;
 
 	fz_var(shade);
@@ -1019,7 +1019,6 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 		if (!obj)
 			fz_throw(ctx, "shading colorspace is missing");
 		shade->colorspace = pdf_load_colorspace(xref, obj);
-		/* RJW: "cannot load colorspace (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj) */
 
 		obj = pdf_dict_gets(dict, "Background");
 		if (obj)
@@ -1040,7 +1039,13 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 		{
 			funcs = 1;
 
-			func[0] = pdf_load_function(xref, obj);
+			if (type == 1)
+				in = 2;
+			else
+				in = 1;
+			out = shade->colorspace->n;
+
+			func[0] = pdf_load_function(xref, obj, in, out);
 			if (!func[0])
 				fz_throw(ctx, "cannot load shading function (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj));
 		}
@@ -1050,9 +1055,15 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 			if (funcs != 1 && funcs != shade->colorspace->n)
 				fz_throw(ctx, "incorrect number of shading functions");
 
+			if (type == 1)
+				in = 2;
+			else
+				in = 1;
+			out = 1;
+
 			for (i = 0; i < funcs; i++)
 			{
-				func[i] = pdf_load_function(xref, pdf_array_get(obj, i));
+				func[i] = pdf_load_function(xref, pdf_array_get(obj, i), in, out);
 				if (!func[i])
 					fz_throw(ctx, "cannot load shading function (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj));
 			}
@@ -1131,14 +1142,12 @@ pdf_load_shading(pdf_document *xref, pdf_obj *dict)
 			fz_throw(ctx, "syntaxerror: missing shading dictionary");
 
 		shade = pdf_load_shading_dict(xref, obj, mat);
-		/* RJW: "cannot load shading dictionary (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj) */
 	}
 
 	/* Naked shading dictionary */
 	else
 	{
 		shade = pdf_load_shading_dict(xref, dict, fz_identity);
-		/* RJW: "cannot load shading dictionary (%d %d R)", pdf_to_num(dict), pdf_to_gen(dict) */
 	}
 
 	pdf_store_item(ctx, dict, shade, fz_shade_size(shade));

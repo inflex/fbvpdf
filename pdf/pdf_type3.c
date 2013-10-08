@@ -2,10 +2,9 @@
 #include "mupdf-internal.h"
 
 static void
-pdf_run_glyph_func(void *doc, void *rdb_, fz_buffer *contents, fz_device *dev, fz_matrix ctm, void *gstate)
+pdf_run_glyph_func(void *doc, void *rdb, fz_buffer *contents, fz_device *dev, fz_matrix ctm, void *gstate)
 {
-	pdf_obj *rdb = (pdf_obj *)rdb_;
-	pdf_run_glyph(doc, rdb, contents, dev, ctm, gstate);
+	pdf_run_glyph(doc, (pdf_obj *)rdb, contents, dev, ctm, gstate);
 }
 
 static void
@@ -88,10 +87,8 @@ pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 					item = pdf_array_get(diff, i);
 					if (pdf_is_int(item))
 						k = pdf_to_int(item);
-					if (pdf_is_name(item))
+					if (pdf_is_name(item) && k >= 0 && k < nelem(estrings))
 						estrings[k++] = pdf_to_name(item);
-					if (k < 0) k = 0;
-					if (k > 255) k = 255;
 				}
 			}
 		}
@@ -107,6 +104,9 @@ pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 
 		first = pdf_to_int(pdf_dict_gets(dict, "FirstChar"));
 		last = pdf_to_int(pdf_dict_gets(dict, "LastChar"));
+
+		if (first < 0 || last > 255 || first > last)
+			first = last = 0;
 
 		widths = pdf_dict_gets(dict, "Widths");
 		if (!widths)
@@ -162,8 +162,7 @@ pdf_load_type3_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 	fz_catch(ctx)
 	{
 		if (fontdesc)
-			fz_drop_font(ctx, fontdesc->font);
-		fz_free(ctx, fontdesc);
+			pdf_drop_font(ctx, fontdesc);
 		fz_throw(ctx, "cannot load type3 font (%d %d R)", pdf_to_num(dict), pdf_to_gen(dict));
 	}
 	return fontdesc;

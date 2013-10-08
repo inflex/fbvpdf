@@ -19,12 +19,14 @@ put_marker_bool(fz_context *ctx, pdf_obj *rdb, char *marker, int val)
 	{
 		pdf_dict_puts(rdb, marker, tmp);
 	}
-	fz_catch(ctx)
+	fz_always(ctx)
 	{
 		pdf_drop_obj(tmp);
+	}
+	fz_catch(ctx)
+	{
 		fz_rethrow(ctx);
 	}
-	pdf_drop_obj(tmp);
 }
 
 typedef struct pdf_page_load_s pdf_page_load;
@@ -114,6 +116,8 @@ pdf_load_page_tree_node(pdf_document *xref, pdf_obj *node, struct info info)
 				}
 			}
 			/* Get the next node */
+			if (stacklen < 0)
+				break;
 			while (++stack[stacklen].pos == stack[stacklen].max)
 			{
 				pdf_dict_unmark(stack[stacklen].node);
@@ -150,7 +154,7 @@ pdf_load_page_tree(pdf_document *xref)
 	pdf_obj *count;
 	struct info info;
 
-	if (xref->page_len)
+	if (xref->page_refs)
 		return;
 
 	catalog = pdf_dict_gets(xref->trailer, "Root");
@@ -159,7 +163,7 @@ pdf_load_page_tree(pdf_document *xref)
 
 	if (!pdf_is_dict(pages))
 		fz_throw(ctx, "missing page tree");
-	if (!pdf_is_int(count))
+	if (!pdf_is_int(count) || pdf_to_int(count) < 0)
 		fz_throw(ctx, "missing page count");
 
 	xref->page_cap = pdf_to_int(count);
@@ -268,81 +272,17 @@ found:
 			useBM = 1;
 		}
 	}
-	fz_catch(ctx)
+	fz_always(ctx)
 	{
 		pdf_dict_unmark(rdb);
+	}
+	fz_catch(ctx)
+	{
 		fz_rethrow(ctx);
 	}
-	pdf_dict_unmark(rdb);
 
 	put_marker_bool(ctx, rdb, ".useBM", useBM);
 	return useBM;
-}
-
-/* we need to combine all sub-streams into one for the content stream interpreter */
-
-static fz_buffer *
-pdf_load_page_contents_array(pdf_document *xref, pdf_obj *list)
-{
-	fz_buffer *big;
-	fz_buffer *one;
-	int i, n;
-	fz_context *ctx = xref->ctx;
-
-	big = fz_new_buffer(ctx, 32 * 1024);
-
-	n = pdf_array_len(list);
-	fz_var(i); /* Workaround Mac compiler bug */
-	for (i = 0; i < n; i++)
-	{
-		pdf_obj *stm = pdf_array_get(list, i);
-		fz_try(ctx)
-		{
-			one = pdf_load_stream(xref, pdf_to_num(stm), pdf_to_gen(stm));
-		}
-		fz_catch(ctx)
-		{
-			fz_warn(ctx, "cannot load content stream part %d/%d", i + 1, n);
-			continue;
-		}
-
-		if (big->len + one->len + 1 > big->cap)
-			fz_resize_buffer(ctx, big, big->len + one->len + 1);
-		memcpy(big->data + big->len, one->data, one->len);
-		big->data[big->len + one->len] = ' ';
-		big->len += one->len + 1;
-
-		fz_drop_buffer(ctx, one);
-	}
-
-	if (n > 0 && big->len == 0)
-	{
-		fz_drop_buffer(ctx, big);
-		fz_throw(ctx, "cannot load content stream");
-	}
-	fz_trim_buffer(ctx, big);
-
-	return big;
-}
-
-static fz_buffer *
-pdf_load_page_contents(pdf_document *xref, pdf_obj *obj)
-{
-	fz_context *ctx = xref->ctx;
-
-	if (pdf_is_array(obj))
-	{
-		return pdf_load_page_contents_array(xref, obj);
-		/* RJW: "cannot load content stream array" */
-	}
-	else if (pdf_is_stream(xref, pdf_to_num(obj), pdf_to_gen(obj)))
-	{
-		return pdf_load_stream(xref, pdf_to_num(obj), pdf_to_gen(obj));
-		/* RJW: "cannot load content stream (%d 0 R)", pdf_to_num(obj) */
-	}
-
-	fz_warn(ctx, "page contents missing, leaving page blank");
-	return fz_new_buffer(ctx, 0);
 }
 
 pdf_page *
@@ -354,6 +294,7 @@ pdf_load_page(pdf_document *xref, int number)
 	pdf_obj *pageobj, *pageref, *obj;
 	fz_rect mediabox, cropbox, realbox;
 	fz_matrix ctm;
+	float userunit;
 
 	pdf_load_page_tree(xref);
 	if (number < 0 || number >= xref->page_len)
@@ -369,6 +310,12 @@ pdf_load_page(pdf_document *xref, int number)
 	page->links = NULL;
 	page->annots = NULL;
 
+	obj = pdf_dict_gets(pageobj, "UserUnit");
+	if (pdf_is_real(obj))
+		userunit = pdf_to_real(obj);
+	else
+		userunit = 1;
+
 	mediabox = pdf_to_rect(ctx, pdf_dict_gets(pageobj, "MediaBox"));
 	if (fz_is_empty_rect(mediabox))
 	{
@@ -383,10 +330,10 @@ pdf_load_page(pdf_document *xref, int number)
 	if (!fz_is_empty_rect(cropbox))
 		mediabox = fz_intersect_rect(mediabox, cropbox);
 
-	page->mediabox.x0 = MIN(mediabox.x0, mediabox.x1);
-	page->mediabox.y0 = MIN(mediabox.y0, mediabox.y1);
-	page->mediabox.x1 = MAX(mediabox.x0, mediabox.x1);
-	page->mediabox.y1 = MAX(mediabox.y0, mediabox.y1);
+	page->mediabox.x0 = fz_min(mediabox.x0, mediabox.x1) * userunit;
+	page->mediabox.y0 = fz_min(mediabox.y0, mediabox.y1) * userunit;
+	page->mediabox.x1 = fz_max(mediabox.x0, mediabox.x1) * userunit;
+	page->mediabox.y1 = fz_max(mediabox.y0, mediabox.y1) * userunit;
 
 	if (page->mediabox.x1 - page->mediabox.x0 < 1 || page->mediabox.y1 - page->mediabox.y0 < 1)
 	{
@@ -406,7 +353,9 @@ pdf_load_page(pdf_document *xref, int number)
 
 	ctm = fz_concat(fz_rotate(-page->rotate), fz_scale(1, -1));
 	realbox = fz_transform_rect(ctm, page->mediabox);
-	page->ctm = fz_concat(ctm, fz_translate(-realbox.x0, -realbox.y0));
+	ctm = fz_concat(ctm, fz_scale(userunit, userunit));
+	ctm = fz_concat(ctm, fz_translate(-realbox.x0, -realbox.y0));
+	page->ctm = ctm;
 
 	obj = pdf_dict_gets(pageobj, "Annots");
 	if (obj)
@@ -422,7 +371,7 @@ pdf_load_page(pdf_document *xref, int number)
 	obj = pdf_dict_gets(pageobj, "Contents");
 	fz_try(ctx)
 	{
-		page->contents = pdf_load_page_contents(xref, obj);
+		page->contents = pdf_keep_obj(obj);
 
 		if (pdf_resources_use_blending(ctx, page->resources))
 			page->transparency = 1;
@@ -459,10 +408,8 @@ pdf_load_links(pdf_document *xref, pdf_page *page)
 void
 pdf_free_page(pdf_document *xref, pdf_page *page)
 {
-	if (page->resources)
-		pdf_drop_obj(page->resources);
-	if (page->contents)
-		fz_drop_buffer(xref->ctx, page->contents);
+	pdf_drop_obj(page->resources);
+	pdf_drop_obj(page->contents);
 	if (page->links)
 		fz_drop_link(xref->ctx, page->links);
 	if (page->annots)
