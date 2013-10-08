@@ -147,7 +147,7 @@ $(MUVIEW) : $(addprefix $(OUT)/, x11_main.o x11_image.o pdfapp.o)
 endif
 
 ifeq "$(MOZDLL)" "yes"
-MU_PLUG := $(OUT)/npmupdf-1.0.dll
+MU_PLUG := $(OUT)/npmupdf-1.1.dll
 WINDRES ?= windres
 W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
 $(OUT)/%.o : apps/mozilla/%.c fitz/fitz.h pdf/mupdf.h xps/muxps.h cbz/mucbz.h | $(OUT)

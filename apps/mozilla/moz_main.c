@@ -23,6 +23,7 @@ struct page_s
     fz_rect page_bbox;
     fz_display_list *page_list;
     fz_link *page_links;
+    int errored;
     int w, h;	/* page size in units */
     int px; /* pixel height */
 };
@@ -115,6 +116,12 @@ void pdfmoz_open(pdfmoz_t *moz, char *filename)
     {
       moz->pages[i].page = NULL;
       moz->pages[i].image = NULL;
+      moz->pages[i].page_bbox.x0 = 0;
+      moz->pages[i].page_bbox.y0 = 0;
+      moz->pages[i].page_bbox.x1 = 100;
+      moz->pages[i].page_bbox.y1 = 100;
+      moz->pages[i].page_list = NULL;
+      moz->pages[i].page_links = NULL;
       
       page = fz_load_page( moz->doc, i);
       bbox = fz_bound_page(moz->doc, page);
@@ -179,28 +186,59 @@ fz_matrix pdfmoz_pagectm(pdfmoz_t *moz, int pagenum)
 void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 {
     page_t *page = moz->pages + pagenum;
-    fz_device *mdev;
+    fz_device *mdev = NULL;
+    int errored = 0;
+    fz_cookie cookie = { 0 };
 
     if (page->page)
-	return;
+      return;
+
+    fz_var(mdev);
 
     fz_try(moz->ctx)
     {
       page->page = fz_load_page(moz->doc, pagenum);
-      
+
+      page->page_bbox = fz_bound_page(moz->doc, page->page);
+    }
+    fz_catch(moz->ctx)
+    {
+      pdfmoz_warn(moz, "Cannot load page");
+      return;
+    }
+
+    fz_try(moz->ctx)
+    {
       /* Create display list */
       page->page_list = fz_new_display_list(moz->ctx);
       mdev = fz_new_list_device(moz->ctx, page->page_list);
-      fz_run_page(moz->doc, page->page, mdev, fz_identity, NULL);
+      fz_run_page(moz->doc, page->page, mdev, fz_identity, &cookie);
+      if (cookie.errors)
+      {
+        pdfmoz_warn(moz, "Errors found on page");
+        errored = 1;
+      }
+    }
+    fz_always(moz->ctx)
+    {
       fz_free_device(mdev);
-      
-      page->page_bbox = fz_bound_page(moz->doc, page->page);
+    }
+    fz_catch(moz->ctx)
+    {
+      pdfmoz_warn(moz, "Cannot load page");
+      errored = 1;
+    }
+    fz_try(moz->ctx)
+    {
       page->page_links = fz_load_links(moz->doc, page->page);
     }
     fz_catch(moz->ctx)
     {
-      pdfmoz_error(moz, "cannot load page");
+      if (!errored)
+        pdfmoz_warn(moz, "cannot load page");
     }
+
+    page->errored = errored;
 }
 
 void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
@@ -210,17 +248,27 @@ void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
     fz_bbox bbox;
     fz_colorspace *colorspace = fz_device_bgr;// we're not imlementing grayscale toggle
     fz_device *idev;
+    fz_cookie cookie = { 0 };
 
     if (page->image)
-	return;
+      return;
 
     ctm = pdfmoz_pagectm(moz, pagenum);
     bbox = fz_round_rect(fz_transform_rect(ctm, page->page_bbox));
     page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, bbox);
     fz_clear_pixmap_with_value(moz->ctx, page->image, 255);
-    idev = fz_new_draw_device(moz->ctx, page->image);
-    fz_run_display_list(page->page_list, idev, ctm, bbox, NULL);
-    fz_free_device(idev);
+    if (page->page_list)
+    {
+      idev = fz_new_draw_device(moz->ctx, page->image);
+      fz_run_display_list(page->page_list, idev, ctm, bbox, &cookie);
+      fz_free_device(idev);
+    }
+
+    if (cookie.errors && page->errored == 0)
+    {
+      page->errored = 1;
+      pdfmoz_warn(moz, "Errors found on page. Page rendering may be incomplete.");
+    }
 }
 
 void pdfmoz_gotouri(pdfmoz_t *moz, char *uri)
@@ -424,6 +472,10 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	          if (moz->pages[i].page_list)
 	            fz_free_display_list( moz->ctx, moz->pages[i].page_list);
 	          moz->pages[i].page_list =NULL;
+	          moz->pages[i].page_bbox.x0 = 0;
+	          moz->pages[i].page_bbox.y0 = 0;
+	          moz->pages[i].page_bbox.x1 = 100;
+	          moz->pages[i].page_bbox.y1 = 100;
 	          if (moz->pages[i].page)
 	            fz_free_page(moz->doc, moz->pages[i].page);
 	          moz->pages[i].page = NULL;
@@ -558,7 +610,7 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
   	    }
 
 	      si.fMask = SIF_POS;
-	      si.nPos = MAX(0, MIN(si.nPos, si.nMax));
+	      si.nPos = fz_maxi(0, fz_mini(si.nPos, si.nMax));
 	      SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
 
   	    InvalidateRect(moz->hwnd, NULL, FALSE);
