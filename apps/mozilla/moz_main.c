@@ -694,6 +694,8 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 
     fz_free(moz->ctx, moz->pages);
 
+    fz_close_document(moz->doc);
+
     fz_context *ctx = moz->ctx;
     fz_free(ctx, moz);
     fz_free_context(ctx);
