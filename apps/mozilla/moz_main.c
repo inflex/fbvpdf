@@ -22,6 +22,7 @@ struct page_s
 	fz_pixmap *image;
 	fz_rect page_bbox;
 	fz_display_list *page_list;
+	fz_display_list *annotations_list;
 	fz_link *page_links;
 	int errored;
 	int w, h;	/* page size in units */
@@ -57,8 +58,9 @@ void pdfmoz_warn(pdfmoz_t *moz, const char *fmt, ...)
 	char buf[1024];
 	va_list ap;
 	va_start(ap, fmt);
-	vsprintf(buf, fmt, ap);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
+	buf[sizeof(buf)-1] = 0;
 	NPN_Status(moz->inst, buf);
 }
 
@@ -121,6 +123,7 @@ void pdfmoz_open(pdfmoz_t *moz, char *filename)
 		moz->pages[i].page_bbox.x1 = 100;
 		moz->pages[i].page_bbox.y1 = 100;
 		moz->pages[i].page_list = NULL;
+		moz->pages[i].annotations_list = NULL;
 		moz->pages[i].page_links = NULL;
 
 		page = fz_load_page( moz->doc, i);
@@ -209,10 +212,17 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 
 	fz_try(moz->ctx)
 	{
+		fz_annot *annot;
 		/* Create display list */
 		page->page_list = fz_new_display_list(moz->ctx);
 		mdev = fz_new_list_device(moz->ctx, page->page_list);
-		fz_run_page(moz->doc, page->page, mdev, fz_identity, &cookie);
+		fz_run_page_contents(moz->doc, page->page, mdev, fz_identity, &cookie);
+		fz_free_device(mdev);
+		mdev = NULL;
+		page->annotations_list = fz_new_display_list(moz->ctx);
+		mdev = fz_new_list_device(moz->ctx, page->annotations_list);
+		for (annot = fz_first_annot(moz->doc, page->page); annot; annot = fz_next_annot(moz->doc, annot))
+			fz_run_annot(moz->doc, page->page, annot, mdev, fz_identity, &cookie);
 		if (cookie.errors)
 		{
 			pdfmoz_warn(moz, "Errors found on page");
@@ -257,10 +267,13 @@ void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	bbox = fz_round_rect(fz_transform_rect(ctm, page->page_bbox));
 	page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, bbox);
 	fz_clear_pixmap_with_value(moz->ctx, page->image, 255);
-	if (page->page_list)
+	if (page->page_list || page->annotations_list)
 	{
 		idev = fz_new_draw_device(moz->ctx, page->image);
-		fz_run_display_list(page->page_list, idev, ctm, bbox, &cookie);
+		if (page->page_list)
+			fz_run_display_list(page->page_list, idev, ctm, bbox, &cookie);
+		if (page->annotations_list)
+			fz_run_display_list(page->annotations_list, idev, ctm, bbox, &cookie);
 		fz_free_device(idev);
 	}
 
@@ -472,6 +485,9 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					if (moz->pages[i].page_list)
 						fz_free_display_list( moz->ctx, moz->pages[i].page_list);
 					moz->pages[i].page_list =NULL;
+					if (moz->pages[i].annotations_list)
+						fz_free_display_list( moz->ctx, moz->pages[i].annotations_list);
+					moz->pages[i].annotations_list = NULL;
 					moz->pages[i].page_bbox.x0 = 0;
 					moz->pages[i].page_bbox.y0 = 0;
 					moz->pages[i].page_bbox.x1 = 100;
@@ -740,6 +756,9 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 		if (moz->pages[i].page_list)
 			fz_free_display_list( moz->ctx, moz->pages[i].page_list);
 		moz->pages[i].page_list = NULL;
+		if (moz->pages[i].annotations_list)
+			fz_free_display_list( moz->ctx, moz->pages[i].annotations_list);
+		moz->pages[i].annotations_list = NULL;
 		if (moz->pages[i].page)
 			fz_free_page(moz->doc, moz->pages[i].page);
 		moz->pages[i].page = NULL;
