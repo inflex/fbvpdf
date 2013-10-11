@@ -140,7 +140,7 @@ public class MuPDFActivity extends Activity
 			Intent intent = getIntent();
 			if (Intent.ACTION_VIEW.equals(intent.getAction())) {
 				Uri uri = intent.getData();
-				if (uri.toString().startsWith("content://media/external/file")) {
+				if (uri.toString().startsWith("content://")) {
 					// Handle view requests from the Transformer Prime's file manager
 					// Hopefully other file managers will use this same scheme, if not
 					// using explicit paths.
@@ -212,26 +212,30 @@ public class MuPDFActivity extends Activity
 			private boolean showButtonsDisabled;
 
 			public boolean onSingleTapUp(MotionEvent e) {
-				if (e.getX() < super.getWidth()/TAP_PAGE_MARGIN) {
-					super.moveToPrevious();
-				} else if (e.getX() > super.getWidth()*(TAP_PAGE_MARGIN-1)/TAP_PAGE_MARGIN) {
-					super.moveToNext();
-				} else if (!showButtonsDisabled) {
-					int linkPage = -1;
-					if (mLinkState != LinkState.INHIBIT) {
-						MuPDFPageView pageView = (MuPDFPageView) mDocView.getDisplayedView();
-						if (pageView != null) {
-// XXX							linkPage = pageView.hitLinkPage(e.getX(), e.getY());
-						}
-					}
-
-					if (linkPage != -1) {
-						mDocView.setDisplayedViewIndex(linkPage);
+				if (!showButtonsDisabled) {
+					MuPDFPageView pageView = (MuPDFPageView) mDocView.getDisplayedView();
+					if (MuPDFCore.javascriptSupported() && pageView.passClickEvent(e.getX(), e.getY())) {
+						// If the page consumes the event do nothing else
+					} else if (e.getX() < super.getWidth()/TAP_PAGE_MARGIN) {
+						super.moveToPrevious();
+					} else if (e.getX() > super.getWidth()*(TAP_PAGE_MARGIN-1)/TAP_PAGE_MARGIN) {
+						super.moveToNext();
 					} else {
-						if (!mButtonsVisible) {
-							showButtons();
+						int linkPage = -1;
+						if (mLinkState != LinkState.INHIBIT) {
+							if (pageView != null) {
+// XXX							linkPage = pageView.hitLinkPage(e.getX(), e.getY());
+							}
+						}
+
+						if (linkPage != -1) {
+							mDocView.setDisplayedViewIndex(linkPage);
 						} else {
-							hideButtons();
+							if (!mButtonsVisible) {
+								showButtons();
+							} else {
+								hideButtons();
+							}
 						}
 					}
 				}
@@ -267,6 +271,17 @@ public class MuPDFActivity extends Activity
 					((PageView)v).setSearchBoxes(null);
 
 				((PageView)v).setLinkHighlighting(mLinkState == LinkState.HIGHLIGHT);
+
+				((MuPDFPageView)v).setChangeReporter(new Runnable() {
+					public void run() {
+						mDocView.applyToChildren(new ReaderView.ViewMapper() {
+							@Override
+							void applyToView(View view) {
+								((MuPDFPageView)view).update();
+							}
+						});
+					}
+				});
 			}
 
 			protected void onMoveToChild(int i) {
@@ -284,7 +299,7 @@ public class MuPDFActivity extends Activity
 			protected void onSettle(View v) {
 				// When the layout has settled ask the page to render
 				// in HQ
-				((PageView)v).addHq();
+				((PageView)v).addHq(false);
 			}
 
 			protected void onUnsettle(View v) {

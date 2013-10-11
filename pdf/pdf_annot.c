@@ -198,6 +198,8 @@ pdf_parse_action(pdf_document *xref, pdf_obj *action)
 	pdf_obj *obj, *dest;
 	fz_context *ctx = xref->ctx;
 
+	UNUSED(ctx);
+
 	ld.kind = FZ_LINK_NONE;
 
 	if (!action)
@@ -213,7 +215,7 @@ pdf_parse_action(pdf_document *xref, pdf_obj *action)
 	{
 		ld.kind = FZ_LINK_URI;
 		ld.ld.uri.is_map = pdf_to_bool(pdf_dict_gets(action, "IsMap"));
-		ld.ld.uri.uri = pdf_to_utf8(ctx, pdf_dict_gets(action, "URI"));
+		ld.ld.uri.uri = pdf_to_utf8(xref, pdf_dict_gets(action, "URI"));
 	}
 	else if (!strcmp(pdf_to_name(obj), "Launch"))
 	{
@@ -221,20 +223,20 @@ pdf_parse_action(pdf_document *xref, pdf_obj *action)
 		ld.kind = FZ_LINK_LAUNCH;
 		if (pdf_is_dict(dest))
 			dest = pdf_dict_gets(dest, "F");
-		ld.ld.launch.file_spec = pdf_to_utf8(ctx, dest);
+		ld.ld.launch.file_spec = pdf_to_utf8(xref, dest);
 		ld.ld.launch.new_window = pdf_to_int(pdf_dict_gets(action, "NewWindow"));
 	}
 	else if (!strcmp(pdf_to_name(obj), "Named"))
 	{
 		ld.kind = FZ_LINK_NAMED;
-		ld.ld.named.named = pdf_to_utf8(ctx, pdf_dict_gets(action, "N"));
+		ld.ld.named.named = pdf_to_utf8(xref, pdf_dict_gets(action, "N"));
 	}
 	else if (!strcmp(pdf_to_name(obj), "GoToR"))
 	{
 		dest = pdf_dict_gets(action, "D");
 		ld = pdf_parse_link_dest(xref, dest);
 		ld.kind = FZ_LINK_GOTOR;
-		ld.ld.gotor.file_spec = pdf_to_utf8(ctx, pdf_dict_gets(action, "F"));
+		ld.ld.gotor.file_spec = pdf_to_utf8(xref, pdf_dict_gets(action, "F"));
 		ld.ld.gotor.new_window = pdf_to_int(pdf_dict_gets(action, "NewWindow"));
 	}
 	return ld;
@@ -351,11 +353,10 @@ pdf_transform_annot(pdf_annot *annot)
 }
 
 pdf_annot *
-pdf_load_annots(pdf_document *xref, pdf_obj *annots)
+pdf_load_annots(pdf_document *xref, pdf_obj *annots, fz_matrix page_ctm)
 {
 	pdf_annot *annot, *head, *tail;
 	pdf_obj *obj, *ap, *as, *n, *rect;
-	pdf_xobject *form;
 	int i, len;
 	fz_context *ctx = xref->ctx;
 
@@ -367,47 +368,140 @@ pdf_load_annots(pdf_document *xref, pdf_obj *annots)
 	{
 		obj = pdf_array_get(annots, i);
 
+		pdf_update_appearance(xref, obj);
+
 		rect = pdf_dict_gets(obj, "Rect");
 		ap = pdf_dict_gets(obj, "AP");
 		as = pdf_dict_gets(obj, "AS");
+
 		if (pdf_is_dict(ap))
 		{
-			n = pdf_dict_gets(ap, "N"); /* normal state */
+			pdf_hotspot *hp = &xref->hotspot;
+
+			n = NULL;
+
+			if (hp->num == pdf_to_num(obj)
+				&& hp->gen == pdf_to_gen(obj)
+				&& (hp->state & HOTSPOT_POINTER_DOWN))
+			{
+				n = pdf_dict_gets(ap, "D"); /* down state */
+			}
+
+			if (n == NULL)
+				n = pdf_dict_gets(ap, "N"); /* normal state */
 
 			/* lookup current state in sub-dictionary */
 			if (!pdf_is_stream(xref, pdf_to_num(n), pdf_to_gen(n)))
 				n = pdf_dict_get(n, as);
 
+
+			annot = fz_malloc_struct(ctx, pdf_annot);
+			annot->obj = pdf_keep_obj(obj);
+			annot->rect = pdf_to_rect(ctx, rect);
+			annot->pagerect = fz_transform_rect(page_ctm, annot->rect);
+			annot->ap = NULL;
+			annot->type = pdf_field_type(xref, obj);
+
 			if (pdf_is_stream(xref, pdf_to_num(n), pdf_to_gen(n)))
 			{
 				fz_try(ctx)
 				{
-					form = pdf_load_xobject(xref, n);
+					annot->ap = pdf_load_xobject(xref, n);
+					pdf_transform_annot(annot);
+					annot->ap_iteration = annot->ap->iteration;
 				}
 				fz_catch(ctx)
 				{
 					fz_warn(ctx, "ignoring broken annotation");
-					continue;
 				}
+			}
 
-				annot = fz_malloc_struct(ctx, pdf_annot);
-				annot->obj = pdf_keep_obj(obj);
-				annot->rect = pdf_to_rect(ctx, rect);
-				annot->ap = form;
-				annot->next = NULL;
+			annot->next = NULL;
 
-				pdf_transform_annot(annot);
+			if (obj == xref->focus_obj)
+				xref->focus = annot;
 
-				if (!head)
-					head = tail = annot;
-				else
-				{
-					tail->next = annot;
-					tail = annot;
-				}
+			if (!head)
+				head = tail = annot;
+			else
+			{
+				tail->next = annot;
+				tail = annot;
 			}
 		}
 	}
 
 	return head;
+}
+
+void
+pdf_update_annot(pdf_document *xref, pdf_annot *annot)
+{
+	pdf_obj *obj, *ap, *as, *n;
+	fz_context *ctx = xref->ctx;
+
+	obj = annot->obj;
+
+	pdf_update_appearance(xref, obj);
+
+	ap = pdf_dict_gets(obj, "AP");
+	as = pdf_dict_gets(obj, "AS");
+
+	if (pdf_is_dict(ap))
+	{
+		pdf_hotspot *hp = &xref->hotspot;
+
+		n = NULL;
+
+		if (hp->num == pdf_to_num(obj)
+			&& hp->gen == pdf_to_gen(obj)
+			&& (hp->state & HOTSPOT_POINTER_DOWN))
+		{
+			n = pdf_dict_gets(ap, "D"); /* down state */
+		}
+
+		if (n == NULL)
+			n = pdf_dict_gets(ap, "N"); /* normal state */
+
+		/* lookup current state in sub-dictionary */
+		if (!pdf_is_stream(xref, pdf_to_num(n), pdf_to_gen(n)))
+			n = pdf_dict_get(n, as);
+
+		pdf_drop_xobject(ctx, annot->ap);
+		annot->ap = NULL;
+
+		if (pdf_is_stream(xref, pdf_to_num(n), pdf_to_gen(n)))
+		{
+			fz_try(ctx)
+			{
+				annot->ap = pdf_load_xobject(xref, n);
+				pdf_transform_annot(annot);
+				annot->ap_iteration = annot->ap->iteration;
+			}
+			fz_catch(ctx)
+			{
+				fz_warn(ctx, "ignoring broken annotation");
+			}
+		}
+	}
+}
+
+pdf_annot *
+pdf_first_annot(pdf_document *doc, pdf_page *page)
+{
+	return page ? page->annots : NULL;
+}
+
+pdf_annot *
+pdf_next_annot(pdf_document *doc, pdf_annot *annot)
+{
+	return annot ? annot->next : NULL;
+}
+
+fz_rect
+pdf_bound_annot(pdf_document *doc, pdf_annot *annot)
+{
+	if (annot)
+		return annot->pagerect;
+	return fz_empty_rect;
 }

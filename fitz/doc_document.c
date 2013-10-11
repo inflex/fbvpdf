@@ -5,6 +5,12 @@ extern struct pdf_document *pdf_open_document(fz_context *ctx, char *filename);
 extern struct xps_document *xps_open_document(fz_context *ctx, char *filename);
 extern struct cbz_document *cbz_open_document(fz_context *ctx, char *filename);
 
+extern struct pdf_document *pdf_open_document_with_stream(fz_context *ctx, fz_stream *file);
+extern struct xps_document *xps_open_document_with_stream(fz_context *ctx, fz_stream *file);
+extern struct cbz_document *cbz_open_document_with_stream(fz_context *ctx, fz_stream *file);
+
+extern int pdf_js_supported(void);
+
 static inline int fz_tolower(int c)
 {
 	if (c >= 'A' && c <= 'Z')
@@ -24,25 +30,48 @@ static inline int fz_strcasecmp(char *a, char *b)
 }
 
 fz_document *
+fz_open_document_with_stream(fz_context *ctx, char *magic, fz_stream *stream)
+{
+	char *ext = strrchr(magic, '.');
+
+	if (ext)
+	{
+		if (!fz_strcasecmp(ext, ".xps") || !fz_strcasecmp(ext, ".rels"))
+			return (fz_document*) xps_open_document_with_stream(ctx, stream);
+		if (!fz_strcasecmp(ext, ".cbz") || !fz_strcasecmp(ext, ".zip"))
+			return (fz_document*) cbz_open_document_with_stream(ctx, stream);
+		if (!fz_strcasecmp(ext, ".pdf"))
+			return (fz_document*) pdf_open_document_with_stream(ctx, stream);
+	}
+
+	if (!strcmp(magic, "cbz") || !strcmp(magic, "application/x-cbz"))
+		return (fz_document*) cbz_open_document_with_stream(ctx, stream);
+	if (!strcmp(magic, "xps") || !strcmp(magic, "application/vnd.ms-xpsdocument"))
+		return (fz_document*) xps_open_document_with_stream(ctx, stream);
+	if (!strcmp(magic, "pdf") || !strcmp(magic, "application/pdf"))
+		return (fz_document*) pdf_open_document_with_stream(ctx, stream);
+
+	/* last guess: pdf */
+	return (fz_document*) pdf_open_document_with_stream(ctx, stream);
+}
+
+fz_document *
 fz_open_document(fz_context *ctx, char *filename)
 {
 	char *ext = strrchr(filename, '.');
-	if (ext && (!fz_strcasecmp(ext, ".xps") || !fz_strcasecmp(ext, ".rels")))
-		return (fz_document*) xps_open_document(ctx, filename);
-	if (ext && !fz_strcasecmp(ext, ".cbz"))
-		return (fz_document*) cbz_open_document(ctx, filename);
-#if 0
-	/* We used to only open pdf files if they ended in .pdf. For now,
-	 * until we move to detecting filetypes by their content, we disable
-	 * this code, and assume that any file that hasn't matched an
-	 * extension already, is a PDF. */
-	if (ext && !fz_strcasecmp(ext, ".pdf"))
-		return (fz_document*) pdf_open_document(ctx, filename);
-	fz_throw(ctx, "unknown document type: '%s'", filename);
-	return NULL;
-#else
+
+	if (ext)
+	{
+		if (!fz_strcasecmp(ext, ".xps") || !fz_strcasecmp(ext, ".rels"))
+			return (fz_document*) xps_open_document(ctx, filename);
+		if (!fz_strcasecmp(ext, ".cbz") || !fz_strcasecmp(ext, ".zip"))
+			return (fz_document*) cbz_open_document(ctx, filename);
+		if (!fz_strcasecmp(ext, ".pdf"))
+			return (fz_document*) pdf_open_document(ctx, filename);
+	}
+
+	/* last guess: pdf */
 	return (fz_document*) pdf_open_document(ctx, filename);
-#endif
 }
 
 void
@@ -108,11 +137,71 @@ fz_bound_page(fz_document *doc, fz_page *page)
 	return fz_empty_rect;
 }
 
+fz_annot *
+fz_first_annot(fz_document *doc, fz_page *page)
+{
+	if (doc && doc->first_annot && page)
+		return doc->first_annot(doc, page);
+	return NULL;
+}
+
+fz_annot *
+fz_next_annot(fz_document *doc, fz_annot *annot)
+{
+	if (doc && doc->next_annot && annot)
+		return doc->next_annot(doc, annot);
+	return NULL;
+}
+
+fz_rect
+fz_bound_annot(fz_document *doc, fz_annot *annot)
+{
+	if (doc && doc->bound_annot && annot)
+		return doc->bound_annot(doc, annot);
+	return fz_empty_rect;
+}
+
+void
+fz_run_page_contents(fz_document *doc, fz_page *page, fz_device *dev, fz_matrix transform, fz_cookie *cookie)
+{
+	if (doc && doc->run_page_contents && page)
+		doc->run_page_contents(doc, page, dev, transform, cookie);
+}
+
+void
+fz_run_annot(fz_document *doc, fz_page *page, fz_annot *annot, fz_device *dev, fz_matrix transform, fz_cookie *cookie)
+{
+	if (doc && doc->run_annot && page && annot)
+		doc->run_annot(doc, page, annot, dev, transform, cookie);
+}
+
 void
 fz_run_page(fz_document *doc, fz_page *page, fz_device *dev, fz_matrix transform, fz_cookie *cookie)
 {
-	if (doc && doc->run_page && page)
-		doc->run_page(doc, page, dev, transform, cookie);
+	fz_annot *annot;
+
+	fz_run_page_contents(doc, page, dev, transform, cookie);
+
+	if (cookie && cookie->progress_max != -1)
+	{
+		int count = 1;
+		for (annot = fz_first_annot(doc, page); annot; annot = fz_next_annot(doc, annot))
+			count++;
+		cookie->progress_max += count;
+	}
+
+	for (annot = fz_first_annot(doc, page); annot; annot = fz_next_annot(doc, annot))
+	{
+		/* Check the cookie for aborting */
+		if (cookie)
+		{
+			if (cookie->abort)
+				break;
+			cookie->progress++;
+		}
+
+		fz_run_annot(doc, page, annot, dev, transform, cookie);
+	}
 }
 
 void
@@ -128,6 +217,31 @@ fz_meta(fz_document *doc, int key, void *ptr, int size)
 	if (doc && doc->meta)
 		return doc->meta(doc, key, ptr, size);
 	return FZ_META_UNKNOWN_KEY;
+}
+
+fz_transition *
+fz_page_presentation(fz_document *doc, fz_page *page, float *duration)
+{
+	float dummy;
+	if (duration)
+		*duration = 0;
+	else
+		duration = &dummy;
+	if (doc && doc->page_presentation && page)
+		return doc->page_presentation(doc, page, duration);
+	return NULL;
+}
+
+fz_interactive *fz_interact(fz_document *doc)
+{
+	if (doc && doc->interact)
+		return doc->interact(doc);
+	return NULL;
+}
+
+int fz_javascript_supported()
+{
+	return pdf_js_supported();
 }
 
 void

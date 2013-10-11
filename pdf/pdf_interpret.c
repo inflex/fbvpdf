@@ -379,7 +379,7 @@ pdf_show_image(pdf_csi *csi, fz_image *image)
 
 	if (image->mask)
 	{
-		/* apply blend group even though we skip the softmask */
+		/* apply blend group even though we skip the soft mask */
 		if (gstate->blendmode)
 			fz_begin_group(csi->dev, bbox, 0, 0, gstate->blendmode, 1);
 		fz_clip_image_mask(csi->dev, image->mask, &bbox, image_ctm);
@@ -1258,7 +1258,7 @@ pdf_show_pattern(pdf_csi *csi, pdf_pattern *pat, fz_rect area, int what)
 		pdf_unset_pattern(csi, what);
 	}
 
-	/* don't apply softmasks to objects in the pattern as well */
+	/* don't apply soft masks to objects in the pattern as well */
 	if (gstate->softmask)
 	{
 		pdf_drop_xobject(ctx, gstate->softmask);
@@ -2788,13 +2788,10 @@ pdf_run_contents_buffer(pdf_csi *csi, pdf_obj *rdb, fz_buffer *contents)
 	}
 }
 
-void
-pdf_run_page_with_usage(pdf_document *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, char *event, fz_cookie *cookie)
+static void pdf_run_page_contents_with_usage(pdf_document *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, char *event, fz_cookie *cookie)
 {
 	fz_context *ctx = dev->ctx;
 	pdf_csi *csi;
-	pdf_annot *annot;
-	int flags;
 
 	ctm = fz_concat(page->ctm, ctm);
 
@@ -2815,6 +2812,60 @@ pdf_run_page_with_usage(pdf_document *xref, pdf_page *page, fz_device *dev, fz_m
 		fz_throw(ctx, "cannot parse page content stream");
 	}
 
+	if (page->transparency)
+		fz_end_group(dev);
+}
+
+void pdf_run_page_contents(pdf_document *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, fz_cookie *cookie)
+{
+	pdf_run_page_contents_with_usage(xref, page, dev, ctm, "View", cookie);
+}
+
+static void pdf_run_annot_with_usage(pdf_document *xref, pdf_page *page, pdf_annot *annot, fz_device *dev, fz_matrix ctm, char *event, fz_cookie *cookie)
+{
+	fz_context *ctx = dev->ctx;
+	pdf_csi *csi;
+	int flags;
+
+	ctm = fz_concat(page->ctm, ctm);
+
+	flags = pdf_to_int(pdf_dict_gets(annot->obj, "F"));
+
+	/* TODO: NoZoom and NoRotate */
+	if (flags & (1 << 0)) /* Invisible */
+		return;
+	if (flags & (1 << 1)) /* Hidden */
+		return;
+	if (!strcmp(event, "Print") && !(flags & (1 << 2))) /* Print */
+		return;
+	if (!strcmp(event, "View") && (flags & (1 << 5))) /* NoView */
+		return;
+
+	csi = pdf_new_csi(xref, dev, ctm, event, cookie, NULL);
+	if (!pdf_is_hidden_ocg(pdf_dict_gets(annot->obj, "OC"), csi, page->resources))
+	{
+		fz_try(ctx)
+		{
+			pdf_run_xobject(csi, page->resources, annot->ap, annot->matrix);
+		}
+		fz_catch(ctx)
+		{
+			pdf_free_csi(csi);
+			fz_throw(ctx, "cannot parse annotation appearance stream");
+		}
+	}
+	pdf_free_csi(csi);
+}
+
+void pdf_run_annot(pdf_document *xref, pdf_page *page, pdf_annot *annot, fz_device *dev, fz_matrix ctm, fz_cookie *cookie)
+{
+	pdf_run_annot_with_usage(xref, page, annot, dev, ctm, "View", cookie);
+}
+
+static void pdf_run_page_annots_with_usage(pdf_document *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, char *event, fz_cookie *cookie)
+{
+	pdf_annot *annot;
+
 	if (cookie && cookie->progress_max != -1)
 	{
 		int count = 1;
@@ -2833,36 +2884,15 @@ pdf_run_page_with_usage(pdf_document *xref, pdf_page *page, fz_device *dev, fz_m
 			cookie->progress++;
 		}
 
-		flags = pdf_to_int(pdf_dict_gets(annot->obj, "F"));
-
-		/* TODO: NoZoom and NoRotate */
-		if (flags & (1 << 0)) /* Invisible */
-			continue;
-		if (flags & (1 << 1)) /* Hidden */
-			continue;
-		if (!strcmp(event, "Print") && !(flags & (1 << 2))) /* Print */
-			continue;
-		if (!strcmp(event, "View") && (flags & (1 << 5))) /* NoView */
-			continue;
-
-		csi = pdf_new_csi(xref, dev, ctm, event, cookie, NULL);
-		if (!pdf_is_hidden_ocg(pdf_dict_gets(annot->obj, "OC"), csi, page->resources))
-		{
-			fz_try(ctx)
-			{
-				pdf_run_xobject(csi, page->resources, annot->ap, annot->matrix);
-			}
-			fz_catch(ctx)
-			{
-				pdf_free_csi(csi);
-				fz_throw(ctx, "cannot parse annotation appearance stream");
-			}
-		}
-		pdf_free_csi(csi);
+		pdf_run_annot_with_usage(xref, page, annot, dev, ctm, event, cookie);
 	}
+}
 
-	if (page->transparency)
-		fz_end_group(dev);
+void
+pdf_run_page_with_usage(pdf_document *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, char *event, fz_cookie *cookie)
+{
+	pdf_run_page_contents_with_usage(xref, page, dev, ctm, event, cookie);
+	pdf_run_page_annots_with_usage(xref, page, dev, ctm, event, cookie);
 }
 
 void

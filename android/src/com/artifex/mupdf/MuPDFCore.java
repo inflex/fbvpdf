@@ -1,5 +1,6 @@
 package com.artifex.mupdf;
 import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
 import android.graphics.PointF;
 import android.graphics.RectF;
 
@@ -11,10 +12,9 @@ public class MuPDFCore
 	}
 
 	/* Readable members */
-	private int pageNum  = -1;;
 	private int numPages = -1;
-	public  float pageWidth;
-	public  float pageHeight;
+	private float pageWidth;
+	private float pageHeight;
 
 	/* The native functions */
 	private static native int openFile(String filename);
@@ -22,18 +22,30 @@ public class MuPDFCore
 	private static native void gotoPageInternal(int localActionPageNum);
 	private static native float getPageWidth();
 	private static native float getPageHeight();
-	public static native void drawPage(Bitmap bitmap,
+	private static native void drawPage(Bitmap bitmap,
 			int pageW, int pageH,
 			int patchX, int patchY,
 			int patchW, int patchH);
-	public static native RectF[] searchPage(String text);
-	public static native int getPageLink(int page, float x, float y);
-	public static native LinkInfo [] getPageLinksInternal(int page);
-	public static native OutlineItem [] getOutlineInternal();
-	public static native boolean hasOutlineInternal();
-	public static native boolean needsPasswordInternal();
-	public static native boolean authenticatePasswordInternal(String password);
-	public static native void destroying();
+	private static native void updatePageInternal(Bitmap bitmap,
+			int page,
+			int pageW, int pageH,
+			int patchX, int patchY,
+			int patchW, int patchH);
+	private static native RectF[] searchPage(String text);
+	private static native int getPageLink(int page, float x, float y);
+	private static native int passClickEventInternal(int page, float x, float y);
+	private static native int setFocusedWidgetTextInternal(String text);
+	private static native String getFocusedWidgetTextInternal();
+	private static native int getFocusedWidgetTypeInternal();
+	private static native LinkInfo [] getPageLinksInternal(int page);
+	private static native RectF[] getWidgetAreasInternal(int page);
+	private static native OutlineItem [] getOutlineInternal();
+	private static native boolean hasOutlineInternal();
+	private static native boolean needsPasswordInternal();
+	private static native boolean authenticatePasswordInternal(String password);
+	private static native void destroying();
+
+	public static native boolean javascriptSupported();
 
 	public MuPDFCore(String filename) throws Exception
 	{
@@ -56,16 +68,13 @@ public class MuPDFCore
 	}
 
 	/* Shim function */
-	public void gotoPage(int page)
+	private void gotoPage(int page)
 	{
 		if (page > numPages-1)
 			page = numPages-1;
 		else if (page < 0)
 			page = 0;
-		if (this.pageNum == page)
-			return;
 		gotoPageInternal(page);
-		this.pageNum = page;
 		this.pageWidth = getPageWidth();
 		this.pageHeight = getPageHeight();
 	}
@@ -79,12 +88,59 @@ public class MuPDFCore
 		destroying();
 	}
 
-	public synchronized void drawPage(int page, Bitmap bitmap,
+	public synchronized void drawPage(BitmapHolder h, int page,
 			int pageW, int pageH,
 			int patchX, int patchY,
 			int patchW, int patchH) {
 		gotoPage(page);
-		drawPage(bitmap, pageW, pageH, patchX, patchY, patchW, patchH);
+		Bitmap bm = Bitmap.createBitmap(patchW, patchH, Config.ARGB_8888);
+		drawPage(bm, pageW, pageH, patchX, patchY, patchW, patchH);
+		h.setBm(bm);
+	}
+
+	public synchronized void updatePage(BitmapHolder h, int page,
+			int pageW, int pageH,
+			int patchX, int patchY,
+			int patchW, int patchH) {
+		Bitmap bm = null;
+		Bitmap old_bm = h.getBm();
+
+		if (old_bm == null)
+			return;
+
+		bm = old_bm.copy(Bitmap.Config.ARGB_8888, false);
+		old_bm = null;
+
+		h.setBm(bm);
+
+		updatePageInternal(bm, page, pageW, pageH, patchX, patchY, patchW, patchH);
+	}
+
+	public synchronized PassClickResult passClickEvent(int page, float x, float y) {
+		boolean changed = passClickEventInternal(page, x, y) != 0;
+		int type = getFocusedWidgetTypeInternal();
+		WidgetType wtype = WidgetType.values()[type];
+		String text;
+
+		switch (wtype)
+		{
+		case TEXT:
+			text = getFocusedWidgetTextInternal();
+			break;
+		default:
+			text = "";
+			break;
+		}
+
+		return new PassClickResult(changed, wtype, text);
+	}
+
+	public synchronized boolean setFocusedWidgetText(int page, String text) {
+		boolean success;
+		gotoPage(page);
+		success = setFocusedWidgetTextInternal(text) != 0 ? true : false;
+
+		return success;
 	}
 
 	public synchronized int hitLinkPage(int page, float x, float y) {
@@ -93,6 +149,10 @@ public class MuPDFCore
 
 	public synchronized LinkInfo [] getPageLinks(int page) {
 		return getPageLinksInternal(page);
+	}
+
+	public synchronized RectF [] getWidgetAreas(int page) {
+		return getWidgetAreasInternal(page);
 	}
 
 	public synchronized RectF [] searchPage(int page, String text) {
