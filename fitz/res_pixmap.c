@@ -29,6 +29,9 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 {
 	fz_pixmap *pix;
 
+	if (w < 0 || h < 0)
+		fz_throw(ctx, "Illegal dimensions for pixmap %d %d", w, h);
+
 	pix = fz_malloc_struct(ctx, fz_pixmap);
 	FZ_INIT_STORABLE(pix, 1, fz_free_pixmap_imp);
 	pix->x = 0;
@@ -80,44 +83,41 @@ fz_new_pixmap(fz_context *ctx, fz_colorspace *colorspace, int w, int h)
 }
 
 fz_pixmap *
-fz_new_pixmap_with_bbox(fz_context *ctx, fz_colorspace *colorspace, fz_bbox r)
+fz_new_pixmap_with_bbox(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r)
 {
 	fz_pixmap *pixmap;
-	pixmap = fz_new_pixmap(ctx, colorspace, r.x1 - r.x0, r.y1 - r.y0);
-	pixmap->x = r.x0;
-	pixmap->y = r.y0;
+	pixmap = fz_new_pixmap(ctx, colorspace, r->x1 - r->x0, r->y1 - r->y0);
+	pixmap->x = r->x0;
+	pixmap->y = r->y0;
 	return pixmap;
 }
 
 fz_pixmap *
-fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, fz_bbox r, unsigned char *samples)
+fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r, unsigned char *samples)
 {
-	fz_pixmap *pixmap;
-	pixmap = fz_new_pixmap_with_data(ctx, colorspace, r.x1 - r.x0, r.y1 - r.y0, samples);
-	pixmap->x = r.x0;
-	pixmap->y = r.y0;
+	fz_pixmap *pixmap = fz_new_pixmap_with_data(ctx, colorspace, r->x1 - r->x0, r->y1 - r->y0, samples);
+	pixmap->x = r->x0;
+	pixmap->y = r->y0;
 	return pixmap;
 }
 
-fz_bbox
-fz_pixmap_bbox(fz_context *ctx, fz_pixmap *pix)
+fz_irect *
+fz_pixmap_bbox(fz_context *ctx, fz_pixmap *pix, fz_irect *bbox)
 {
-	fz_bbox bbox;
-	bbox.x0 = pix->x;
-	bbox.y0 = pix->y;
-	bbox.x1 = pix->x + pix->w;
-	bbox.y1 = pix->y + pix->h;
+	bbox->x0 = pix->x;
+	bbox->y0 = pix->y;
+	bbox->x1 = pix->x + pix->w;
+	bbox->y1 = pix->y + pix->h;
 	return bbox;
 }
 
-fz_bbox
-fz_pixmap_bbox_no_ctx(fz_pixmap *pix)
+fz_irect *
+fz_pixmap_bbox_no_ctx(fz_pixmap *pix, fz_irect *bbox)
 {
-	fz_bbox bbox;
-	bbox.x0 = pix->x;
-	bbox.y0 = pix->y;
-	bbox.x1 = pix->x + pix->w;
-	bbox.y1 = pix->y + pix->h;
+	bbox->x0 = pix->x;
+	bbox->y0 = pix->y;
+	bbox->x1 = pix->x + pix->w;
+	bbox->y1 = pix->y + pix->h;
 	return bbox;
 }
 
@@ -163,23 +163,25 @@ fz_clear_pixmap_with_value(fz_context *ctx, fz_pixmap *pix, int value)
 }
 
 void
-fz_copy_pixmap_rect(fz_context *ctx, fz_pixmap *dest, fz_pixmap *src, fz_bbox r)
+fz_copy_pixmap_rect(fz_context *ctx, fz_pixmap *dest, fz_pixmap *src, const fz_irect *b)
 {
 	const unsigned char *srcp;
 	unsigned char *destp;
 	int x, y, w, destspan, srcspan;
+	fz_irect local_b, bb;
 
-	r = fz_intersect_bbox(r, fz_pixmap_bbox(ctx, dest));
-	r = fz_intersect_bbox(r, fz_pixmap_bbox(ctx, src));
-	w = r.x1 - r.x0;
-	y = r.y1 - r.y0;
+	local_b = *b;
+	fz_intersect_irect(&local_b, fz_pixmap_bbox(ctx, dest, &bb));
+	fz_intersect_irect(&local_b, fz_pixmap_bbox(ctx, src, &bb));
+	w = local_b.x1 - local_b.x0;
+	y = local_b.y1 - local_b.y0;
 	if (w <= 0 || y <= 0)
 		return;
 
 	srcspan = src->w * src->n;
-	srcp = src->samples + (unsigned int)(srcspan * (r.y0 - src->y) + src->n * (r.x0 - src->x));
+	srcp = src->samples + (unsigned int)(srcspan * (local_b.y0 - src->y) + src->n * (local_b.x0 - src->x));
 	destspan = dest->w * dest->n;
-	destp = dest->samples + (unsigned int)(destspan * (r.y0 - dest->y) + dest->n * (r.x0 - dest->x));
+	destp = dest->samples + (unsigned int)(destspan * (local_b.y0 - dest->y) + dest->n * (local_b.x0 - dest->x));
 
 	if (src->n == dest->n)
 	{
@@ -263,19 +265,21 @@ fz_copy_pixmap_rect(fz_context *ctx, fz_pixmap *dest, fz_pixmap *src, fz_bbox r)
 }
 
 void
-fz_clear_pixmap_rect_with_value(fz_context *ctx, fz_pixmap *dest, int value, fz_bbox r)
+fz_clear_pixmap_rect_with_value(fz_context *ctx, fz_pixmap *dest, int value, const fz_irect *b)
 {
 	unsigned char *destp;
 	int x, y, w, k, destspan;
+	fz_irect bb;
+	fz_irect local_b = *b;
 
-	r = fz_intersect_bbox(r, fz_pixmap_bbox(ctx, dest));
-	w = r.x1 - r.x0;
-	y = r.y1 - r.y0;
+	fz_intersect_irect(&local_b, fz_pixmap_bbox(ctx, dest, &bb));
+	w = local_b.x1 - local_b.x0;
+	y = local_b.y1 - local_b.y0;
 	if (w <= 0 || y <= 0)
 		return;
 
 	destspan = dest->w * dest->n;
-	destp = dest->samples + (unsigned int)(destspan * (r.y0 - dest->y) + dest->n * (r.x0 - dest->x));
+	destp = dest->samples + (unsigned int)(destspan * (local_b.y0 - dest->y) + dest->n * (local_b.x0 - dest->x));
 	if (value == 255)
 		do
 		{
@@ -343,10 +347,11 @@ fz_alpha_from_gray(fz_context *ctx, fz_pixmap *gray, int luminosity)
 	fz_pixmap *alpha;
 	unsigned char *sp, *dp;
 	int len;
+	fz_irect bbox;
 
 	assert(gray->n == 2);
 
-	alpha = fz_new_pixmap_with_bbox(ctx, NULL, fz_pixmap_bbox(ctx, gray));
+	alpha = fz_new_pixmap_with_bbox(ctx, NULL, fz_pixmap_bbox(ctx, gray, &bbox));
 	dp = alpha->samples;
 	sp = gray->samples;
 	if (!luminosity)
@@ -379,23 +384,24 @@ fz_invert_pixmap(fz_context *ctx, fz_pixmap *pix)
 	}
 }
 
-void fz_invert_pixmap_rect(fz_pixmap *image, fz_bbox rect)
+void fz_invert_pixmap_rect(fz_pixmap *image, const fz_irect *rect)
 {
 	unsigned char *p;
 	int x, y, n;
 
-	int x0 = fz_clampi(rect.x0 - image->x, 0, image->w - 1);
-	int x1 = fz_clampi(rect.x1 - image->x, 0, image->w - 1);
-	int y0 = fz_clampi(rect.y0 - image->y, 0, image->h - 1);
-	int y1 = fz_clampi(rect.y1 - image->y, 0, image->h - 1);
+	int x0 = fz_clampi(rect->x0 - image->x, 0, image->w - 1);
+	int x1 = fz_clampi(rect->x1 - image->x, 0, image->w - 1);
+	int y0 = fz_clampi(rect->y0 - image->y, 0, image->h - 1);
+	int y1 = fz_clampi(rect->y1 - image->y, 0, image->h - 1);
 
 	for (y = y0; y < y1; y++)
 	{
 		p = image->samples + (unsigned int)((y * image->w + x0) * image->n);
 		for (x = x0; x < x1; x++)
 		{
-			for (n = image->n; n > 0; n--, p++)
+			for (n = image->n; n > 1; n--, p++)
 				*p = 255 - *p;
+			p++;
 		}
 	}
 }
@@ -685,4 +691,321 @@ void
 fz_drop_image(fz_context *ctx, fz_image *image)
 {
 	fz_drop_storable(ctx, &image->storable);
+}
+
+#ifdef ARCH_ARM
+static void
+fz_subsample_pixmap_ARM(unsigned char *ptr, int w, int h, int f, int factor,
+			int n, int fwd, int back, int back2, int fwd2,
+			int divX, int back4, int fwd4, int fwd3,
+			int divY, int back5, int divXY)
+__attribute__((naked));
+
+static void
+fz_subsample_pixmap_ARM(unsigned char *ptr, int w, int h, int f, int factor,
+			int n, int fwd, int back, int back2, int fwd2,
+			int divX, int back4, int fwd4, int fwd3,
+			int divY, int back5, int divXY)
+{
+	asm volatile(
+	ENTER_ARM
+	"stmfd	r13!,{r1,r4-r11,r14}					\n"
+	"@STACK:r1,<9>,factor,n,fwd,back,back2,fwd2,divX,back4,fwd4,fwd3,divY,back5,divXY\n"
+	"@ r0 = src = ptr						\n"
+	"@ r1 = w							\n"
+	"@ r2 = h							\n"
+	"@ r3 = f							\n"
+	"mov	r9, r0			@ r9 = dst = ptr		\n"
+	"ldr	r6, [r13,#4*12]		@ r6 = fwd			\n"
+	"ldr	r7, [r13,#4*13]		@ r7 = back			\n"
+	"subs	r2, r2, r3		@ r2 = h -= f			\n"
+	"blt	11f			@ Skip if less than a full row	\n"
+	"1:				@ for (y = h; y > 0; y--) {	\n"
+	"ldr	r1, [r13]		@ r1 = w			\n"
+	"subs	r1, r1, r3		@ r1 = w -= f			\n"
+	"blt	6f			@ Skip if less than a full col	\n"
+	"ldr	r4, [r13,#4*10]		@ r4 = factor			\n"
+	"ldr	r8, [r13,#4*14]		@ r8 = back2			\n"
+	"ldr	r12,[r13,#4*15]		@ r12= fwd2			\n"
+	"2:				@ for (x = w; x > 0; x--) {	\n"
+	"ldr	r5, [r13,#4*11]		@ for (nn = n; nn > 0; n--) {	\n"
+	"3:				@				\n"
+	"mov	r14,#0			@ r14= v = 0			\n"
+	"sub	r5, r5, r3, LSL #8	@ for (xx = f; xx > 0; x--) {	\n"
+	"4:				@				\n"
+	"add	r5, r5, r3, LSL #16	@ for (yy = f; yy > 0; y--) {	\n"
+	"5:				@				\n"
+	"ldrb	r11,[r0], r6		@ r11= *src	src += fwd	\n"
+	"subs	r5, r5, #1<<16		@ xx--				\n"
+	"add	r14,r14,r11		@ v += r11			\n"
+	"bgt	5b			@ }				\n"
+	"sub	r0, r0, r7		@ src -= back			\n"
+	"adds	r5, r5, #1<<8		@ yy--				\n"
+	"blt	4b			@ }				\n"
+	"mov	r14,r14,LSR r4		@ r14 = v >>= factor		\n"
+	"strb	r14,[r9], #1		@ *d++ = r14			\n"
+	"sub	r0, r0, r8		@ s -= back2			\n"
+	"subs	r5, r5, #1		@ n--				\n"
+	"bgt	3b			@ }				\n"
+	"add	r0, r0, r12		@ s += fwd2			\n"
+	"subs	r1, r1, r3		@ x -= f			\n"
+	"bge	2b			@ }				\n"
+	"6:				@ Less than a full column left	\n"
+	"adds	r1, r1, r3		@ x += f			\n"
+	"beq	11f			@ if (x == 0) next row		\n"
+	"@ r0 = src							\n"
+	"@ r1 = x							\n"
+	"@ r2 = y							\n"
+	"@ r3 = f							\n"
+	"@ r4 = factor							\n"
+	"@ r6 = fwd							\n"
+	"@ r7 = back							\n"
+	"@STACK:r1,<9>,factor,n,fwd,back,back2,fwd2,divX,back4,fwd4,fwd3,divY,back5,divXY\n"
+	"ldr	r5, [r13,#4*11]		@ for (nn = n; nn > 0; n--) {	\n"
+	"ldr	r4, [r13,#4*16]		@ r4 = divX			\n"
+	"ldr	r8, [r13,#4*17]		@ r8 = back4			\n"
+	"ldr	r12,[r13,#4*18]		@ r12= fwd4			\n"
+	"8:				@				\n"
+	"mov	r14,#0			@ r14= v = 0			\n"
+	"sub	r5, r5, r1, LSL #8	@ for (xx = x; xx > 0; x--) {	\n"
+	"9:				@				\n"
+	"add	r5, r5, r3, LSL #16	@ for (yy = f; yy > 0; y--) {	\n"
+	"10:				@				\n"
+	"ldrb	r11,[r0], r6		@ r11= *src	src += fwd	\n"
+	"subs	r5, r5, #1<<16		@ xx--				\n"
+	"add	r14,r14,r11		@ v += r11			\n"
+	"bgt	10b			@ }				\n"
+	"sub	r0, r0, r7		@ src -= back			\n"
+	"adds	r5, r5, #1<<8		@ yy--				\n"
+	"blt	9b			@ }				\n"
+	"mul	r14,r4, r14		@ r14= v *= divX		\n"
+	"mov	r14,r14,LSR #16		@ r14= v >>= 16			\n"
+	"strb	r14,[r9], #1		@ *d++ = r14			\n"
+	"sub	r0, r0, r8		@ s -= back4			\n"
+	"subs	r5, r5, #1		@ n--				\n"
+	"bgt	8b			@ }				\n"
+	"add	r0, r0, r12		@ s += fwd4			\n"
+	"11:				@				\n"
+	"ldr	r14,[r13,#4*19]		@ r14 = fwd3			\n"
+	"subs	r2, r2, r3		@ h -= f			\n"
+	"add	r0, r0, r14		@ s += fwd3			\n"
+	"bge	1b			@ }				\n"
+	"adds	r2, r2, r3		@ h += f			\n"
+	"beq	21f			@ if no stray row, end		\n"
+	"@ So doing one last (partial) row				\n"
+	"@STACK:r1,<9>,factor,n,fwd,back,back2,fwd2,divX,back4,fwd4,fwd3,divY,back5,divXY\n"
+	"@ r0 = src = ptr						\n"
+	"@ r1 = w							\n"
+	"@ r2 = h							\n"
+	"@ r3 = f							\n"
+	"@ r4 = factor							\n"
+	"@ r5 = n							\n"
+	"@ r6 = fwd							\n"
+	"12:				@ for (y = h; y > 0; y--) {	\n"
+	"ldr	r1, [r13]		@ r1 = w			\n"
+	"ldr	r7, [r13,#4*21]		@ r7 = back5			\n"
+	"ldr	r8, [r13,#4*14]		@ r8 = back2			\n"
+	"subs	r1, r1, r3		@ r1 = w -= f			\n"
+	"blt	17f			@ Skip if less than a full col	\n"
+	"ldr	r4, [r13,#4*20]		@ r4 = divY			\n"
+	"ldr	r12,[r13,#4*15]		@ r12= fwd2			\n"
+	"13:				@ for (x = w; x > 0; x--) {	\n"
+	"ldr	r5, [r13,#4*11]		@ for (nn = n; nn > 0; n--) {	\n"
+	"14:				@				\n"
+	"mov	r14,#0			@ r14= v = 0			\n"
+	"sub	r5, r5, r3, LSL #8	@ for (xx = f; xx > 0; x--) {	\n"
+	"15:				@				\n"
+	"add	r5, r5, r2, LSL #16	@ for (yy = y; yy > 0; y--) {	\n"
+	"16:				@				\n"
+	"ldrb	r11,[r0], r6		@ r11= *src	src += fwd	\n"
+	"subs	r5, r5, #1<<16		@ xx--				\n"
+	"add	r14,r14,r11		@ v += r11			\n"
+	"bgt	16b			@ }				\n"
+	"sub	r0, r0, r7		@ src -= back5			\n"
+	"adds	r5, r5, #1<<8		@ yy--				\n"
+	"blt	15b			@ }				\n"
+	"mul	r14,r4, r14		@ r14 = x *= divY		\n"
+	"mov	r14,r14,LSR #16		@ r14 = v >>= 16		\n"
+	"strb	r14,[r9], #1		@ *d++ = r14			\n"
+	"sub	r0, r0, r8		@ s -= back2			\n"
+	"subs	r5, r5, #1		@ n--				\n"
+	"bgt	14b			@ }				\n"
+	"add	r0, r0, r12		@ s += fwd2			\n"
+	"subs	r1, r1, r3		@ x -= f			\n"
+	"bge	13b			@ }				\n"
+	"17:				@ Less than a full column left	\n"
+	"adds	r1, r1, r3		@ x += f			\n"
+	"beq	21f			@ if (x == 0) end		\n"
+	"@ r0 = src							\n"
+	"@ r1 = x							\n"
+	"@ r2 = y							\n"
+	"@ r3 = f							\n"
+	"@ r4 = factor							\n"
+	"@ r6 = fwd							\n"
+	"@ r7 = back5							\n"
+	"@ r8 = back2							\n"
+	"@STACK:r1,<9>,factor,n,fwd,back,back2,fwd2,divX,back4,fwd4,fwd3,divY,back5,divXY\n"
+	"ldr	r4, [r13,#4*22]		@ r4 = divXY			\n"
+	"ldr	r5, [r13,#4*11]		@ for (nn = n; nn > 0; n--) {	\n"
+	"18:				@				\n"
+	"mov	r14,#0			@ r14= v = 0			\n"
+	"sub	r5, r5, r1, LSL #8	@ for (xx = x; xx > 0; x--) {	\n"
+	"19:				@				\n"
+	"add	r5, r5, r2, LSL #16	@ for (yy = y; yy > 0; y--) {	\n"
+	"20:				@				\n"
+	"ldrb	r11,[r0],r6		@ r11= *src	src += fwd	\n"
+	"subs	r5, r5, #1<<16		@ xx--				\n"
+	"add	r14,r14,r11		@ v += r11			\n"
+	"bgt	20b			@ }				\n"
+	"sub	r0, r0, r7		@ src -= back5			\n"
+	"adds	r5, r5, #1<<8		@ yy--				\n"
+	"blt	19b			@ }				\n"
+	"mul	r14,r4, r14		@ r14= v *= divX		\n"
+	"mov	r14,r14,LSR #16		@ r14= v >>= 16			\n"
+	"strb	r14,[r9], #1		@ *d++ = r14			\n"
+	"sub	r0, r0, r8		@ s -= back2			\n"
+	"subs	r5, r5, #1		@ n--				\n"
+	"bgt	18b			@ }				\n"
+	"21:				@				\n"
+	"ldmfd	r13!,{r1,r4-r11,PC}	@ pop, return to thumb		\n"
+	ENTER_THUMB
+	);
+}
+
+#endif
+
+void
+fz_subsample_pixmap(fz_context *ctx, fz_pixmap *tile, int factor)
+{
+	int dst_w, dst_h, w, h, fwd, fwd2, fwd3, back, back2, x, y, n, xx, yy, nn, f;
+	unsigned char *s, *d;
+
+	if (!tile)
+		return;
+	s = d = tile->samples;
+	f = 1<<factor;
+	w = tile->w;
+	h = tile->h;
+	n = tile->n;
+	dst_w = (w + f-1)>>factor;
+	dst_h = (h + f-1)>>factor;
+	fwd = w*n;
+	back = f*fwd-n;
+	back2 = f*n-1;
+	fwd2 = (f-1)*n;
+	fwd3 = (f-1)*fwd;
+	factor *= 2;
+#ifdef ARCH_ARM
+	{
+		int strayX = w%f;
+		int divX = (strayX ? 65536/(strayX*f) : 0);
+		int fwd4 = (strayX-1) * n;
+		int back4 = strayX*n-1;
+		int strayY = h%f;
+		int divY = (strayY ? 65536/(strayY*f) : 0);
+		int back5 = fwd * strayY - n;
+		int divXY = (strayY*strayX ? 65536/(strayX*strayY) : 0);
+		fz_subsample_pixmap_ARM(s, w, h, f, factor, n, fwd, back,
+					back2, fwd2, divX, back4, fwd4, fwd3,
+					divY, back5, divXY);
+	}
+#else
+	for (y = h - f; y >= 0; y -= f)
+	{
+		for (x = w - f; x >= 0; x -= f)
+		{
+			for (nn = n; nn > 0; nn--)
+			{
+				int v = 0;
+				for (xx = f; xx > 0; xx--)
+				{
+					for (yy = f; yy > 0; yy--)
+					{
+						v += *s;
+						s += fwd;
+					}
+					s -= back;
+				}
+				*d++ = v >> factor;
+				s -= back2;
+			}
+			s += fwd2;
+		}
+		/* Do any strays */
+		x += f;
+		if (x > 0)
+		{
+			int div = x * f;
+			int fwd4 = (x-1) * n;
+			int back4 = x*n-1;
+			for (nn = n; nn > 0; nn--)
+			{
+				int v = 0;
+				for (xx = x; xx > 0; xx--)
+				{
+					for (yy = f; yy > 0; yy--)
+					{
+						v += *s;
+						s += fwd;
+					}
+					s -= back;
+				}
+				*d++ = v / div;
+				s -= back4;
+			}
+			s += fwd4;
+		}
+		s += fwd3;
+	}
+	/* Do any stray line */
+	y += f;
+	if (y > 0)
+	{
+		int div = y * f;
+		int back5 = fwd * y - n;
+		for (x = w - f; x >= 0; x -= f)
+		{
+			for (nn = n; nn > 0; nn--)
+			{
+				int v = 0;
+				for (xx = f; xx > 0; xx--)
+				{
+					for (yy = y; yy > 0; yy--)
+					{
+						v += *s;
+						s += fwd;
+					}
+					s -= back5;
+				}
+				*d++ = v / div;
+				s -= back2;
+			}
+			s += fwd2;
+		}
+		/* Do any stray at the end of the stray line */
+		x += f;
+		if (x > 0)
+		{
+			div = x * y;
+			for (nn = n; nn > 0; nn--)
+			{
+				int v = 0;
+				for (xx = x; xx > 0; xx--)
+				{
+					for (yy = y; yy > 0; yy--)
+					{
+						v += *s;
+						s += fwd;
+					}
+					s -= back5;
+				}
+				*d++ = v / div;
+				s -= back2;
+			}
+		}
+	}
+#endif
+	tile->w = dst_w;
+	tile->h = dst_h;
+	tile->samples = fz_resize_array(ctx, tile->samples, dst_w * n, dst_h);
 }

@@ -5,26 +5,27 @@
 /* #define DEBUG_HEAP_SORT */
 /* #define DEBUG_WRITING */
 
-
 typedef struct pdf_write_options_s pdf_write_options;
 
-/* As part of linearization, we need to keep a list of what objects are used
- * by what page. We do this by recording the objects used in a given page
- * in a page_objects structure. We have a list of these structures (one per
- * page) in the page_objects_list structure.
- *
- * The page_objects structure maintains a heap in the object array, so
- * insertion takes log n time, and we can heapsort and dedupe at the end for
- * a total worse case n log n time.
- *
- * The magic heap invariant is that:
- *   entry[n] >= entry[(n+1)*2-1] & entry[n] >= entry[(n+1)*2]
- * or equivalently:
- *   entry[(n-1)>>1] >= entry[n]
- *
- * For a discussion of the heap data structure (and heapsort) see Kingston,
- * "Algorithms and Data Structures".
- */
+/*
+	As part of linearization, we need to keep a list of what objects are used
+	by what page. We do this by recording the objects used in a given page
+	in a page_objects structure. We have a list of these structures (one per
+	page) in the page_objects_list structure.
+
+	The page_objects structure maintains a heap in the object array, so
+	insertion takes log n time, and we can heapsort and dedupe at the end for
+	a total worse case n log n time.
+
+	The magic heap invariant is that:
+		entry[n] >= entry[(n+1)*2-1] & entry[n] >= entry[(n+1)*2]
+	or equivalently:
+		entry[(n-1)>>1] >= entry[n]
+
+	For a discussion of the heap data structure (and heapsort) see Kingston,
+	"Algorithms and Data Structures".
+*/
+
 typedef struct {
 	int num_shared;
 	int page_object_number;
@@ -54,6 +55,8 @@ struct pdf_write_options_s
 	int *ofs_list;
 	int *gen_list;
 	int *renumber_map;
+	int continue_on_error;
+	int *errors;
 	/* The following extras are required for linearization */
 	int *rev_renumber_map;
 	int *rev_gen_list;
@@ -249,23 +252,26 @@ page_objects_sort(fz_context *ctx, page_objects *po)
 static int
 order_ge(int ui, int uj)
 {
-	/* For linearization, we need to order the sections as follows:
-	 *  Remaining pages
-	 *  Shared objects
-	 *  Objects not associated with any page
-	 *  (Linearization params)
-	 *  Catalogue (and other document level objects)
-	 *  First page
-	 *  (Primary Hint stream) (*)
-	 *  Any free objects
-	 * Note, this is NOT the same order they appear in
-	 * the final file!
-	 *
-	 * The PDF reference gives us the option of putting the hint stream
-	 * after the first page, and we take it, for simplicity.
-	 */
-	/* If the 2 objects are in the same section, then page object comes
-	 * first. */
+	/*
+	For linearization, we need to order the sections as follows:
+
+		Remaining pages
+		Shared objects
+		Objects not associated with any page
+		(Linearization params)
+		Catalogue (and other document level objects)
+		First page
+		(Primary Hint stream) (*)
+		Any free objects
+
+	Note, this is NOT the same order they appear in
+	the final file!
+
+	The PDF reference gives us the option of putting the hint stream
+	after the first page, and we take it, for simplicity.
+	*/
+
+	/* If the 2 objects are in the same section, then page object comes first. */
 	if (((ui ^ uj) & ~USE_PAGE_OBJECT) == 0)
 		return ((ui & USE_PAGE_OBJECT) == 0);
 	/* Put unused objects last */
@@ -463,7 +469,7 @@ page_objects_dump(pdf_write_options *opts)
 		for (j = 0; j < p->len; j++)
 		{
 			int o = p->object[j];
-			fprintf(stderr, "  Object %d: use=%x\n", o, opts->use_list[o]);
+			fprintf(stderr, "\tObject %d: use=%x\n", o, opts->use_list[o]);
 		}
 		fprintf(stderr, "Byte range=%d->%d\n", p->min_ofs, p->max_ofs);
 		fprintf(stderr, "Number of objects=%d, Number of shared objects=%d\n", p->num_objects, p->num_shared);
@@ -559,7 +565,7 @@ static void removeduplicateobjs(pdf_document *xref, pdf_write_options *opts)
 		for (other = 1; other < num; other++)
 		{
 			pdf_obj *a, *b;
-			int differ, newnum;
+			int differ, newnum, streama, streamb;
 
 			if (num == other || !opts->use_list[num] || !opts->use_list[other])
 				continue;
@@ -572,7 +578,11 @@ static void removeduplicateobjs(pdf_document *xref, pdf_write_options *opts)
 			 */
 			fz_try(ctx)
 			{
-				differ = (pdf_is_stream(xref, num, 0) || pdf_is_stream(xref, other, 0));
+				streama = pdf_is_stream(xref, num, 0);
+				streamb = pdf_is_stream(xref, other, 0);
+				differ = streama || streamb;
+				if (streama && streamb && opts->do_garbage >= 4)
+					differ = 0;
 			}
 			fz_catch(ctx)
 			{
@@ -590,6 +600,40 @@ static void removeduplicateobjs(pdf_document *xref, pdf_write_options *opts)
 
 			if (pdf_objcmp(a, b))
 				continue;
+
+			if (streama && streamb)
+			{
+				/* Check to see if streams match too. */
+				fz_buffer *sa = NULL;
+				fz_buffer *sb = NULL;
+
+				fz_var(sa);
+				fz_var(sb);
+
+				differ = 1;
+				fz_try(ctx)
+				{
+					unsigned char *dataa, *datab;
+					int lena, lenb;
+					sa = pdf_load_raw_renumbered_stream(xref, num, 0, num, 0);
+					sb = pdf_load_raw_renumbered_stream(xref, other, 0, other, 0);
+					lena = fz_buffer_storage(ctx, sa, &dataa);
+					lenb = fz_buffer_storage(ctx, sb, &datab);
+					if (lena == lenb && memcmp(dataa, datab, lena) == 0)
+						differ = 0;
+				}
+				fz_always(ctx)
+				{
+					fz_drop_buffer(ctx, sa);
+					fz_drop_buffer(ctx, sb);
+				}
+				fz_catch(ctx)
+				{
+					fz_rethrow(ctx);
+				}
+				if (differ)
+					continue;
+			}
 
 			/* Keep the lowest numbered object */
 			newnum = fz_mini(num, other);
@@ -786,7 +830,7 @@ mark_all(pdf_document *xref, pdf_write_options *opts, pdf_obj *val, int flag, in
 {
 	fz_context *ctx = xref->ctx;
 
-	if (pdf_dict_mark(val))
+	if (pdf_obj_mark(val))
 		return;
 
 	fz_try(ctx)
@@ -824,7 +868,7 @@ mark_all(pdf_document *xref, pdf_write_options *opts, pdf_obj *val, int flag, in
 	}
 	fz_always(ctx)
 	{
-		pdf_dict_unmark(val);
+		pdf_obj_unmark(val);
 	}
 	fz_catch(ctx)
 	{
@@ -837,7 +881,7 @@ mark_pages(pdf_document *xref, pdf_write_options *opts, pdf_obj *val, int pagenu
 {
 	fz_context *ctx = xref->ctx;
 
-	if (pdf_dict_mark(val))
+	if (pdf_obj_mark(val))
 		return pagenum;
 
 	fz_try(ctx)
@@ -847,7 +891,7 @@ mark_pages(pdf_document *xref, pdf_write_options *opts, pdf_obj *val, int pagenu
 			if (!strcmp("Page", pdf_to_name(pdf_dict_gets(val, "Type"))))
 			{
 				int num = pdf_to_num(val);
-				pdf_dict_unmark(val);
+				pdf_obj_unmark(val);
 				mark_all(xref, opts, val, pagenum == 0 ? USE_PAGE1 : (pagenum<<USE_PAGE_SHIFT), pagenum);
 				page_objects_list_set_page_object(ctx, opts, pagenum, num);
 				pagenum++;
@@ -892,7 +936,7 @@ mark_pages(pdf_document *xref, pdf_write_options *opts, pdf_obj *val, int pagenu
 	}
 	fz_always(ctx)
 	{
-		pdf_dict_unmark(val);
+		pdf_obj_unmark(val);
 	}
 	fz_catch(ctx)
 	{
@@ -907,7 +951,7 @@ mark_root(pdf_document *xref, pdf_write_options *opts, pdf_obj *dict)
 	fz_context *ctx = xref->ctx;
 	int i, n = pdf_dict_len(dict);
 
-	if (pdf_dict_mark(dict))
+	if (pdf_obj_mark(dict))
 		return;
 
 	fz_try(ctx)
@@ -938,7 +982,7 @@ mark_root(pdf_document *xref, pdf_write_options *opts, pdf_obj *dict)
 	}
 	fz_always(ctx)
 	{
-		pdf_dict_unmark(dict);
+		pdf_obj_unmark(dict);
 	}
 	fz_catch(ctx)
 	{
@@ -952,7 +996,7 @@ mark_trailer(pdf_document *xref, pdf_write_options *opts, pdf_obj *dict)
 	fz_context *ctx = xref->ctx;
 	int i, n = pdf_dict_len(dict);
 
-	if (pdf_dict_mark(dict))
+	if (pdf_obj_mark(dict))
 		return;
 
 	fz_try(ctx)
@@ -970,7 +1014,7 @@ mark_trailer(pdf_document *xref, pdf_write_options *opts, pdf_obj *dict)
 	}
 	fz_always(ctx)
 	{
-		pdf_dict_unmark(dict);
+		pdf_obj_unmark(dict);
 	}
 	fz_catch(ctx)
 	{
@@ -1161,7 +1205,7 @@ lpr(fz_context *ctx, pdf_obj *node, int depth, int page)
 	pdf_obj *o = NULL;
 	int i, n;
 
-	if (pdf_dict_mark(node))
+	if (pdf_obj_mark(node))
 		return page;
 
 	fz_var(o);
@@ -1226,7 +1270,7 @@ lpr(fz_context *ctx, pdf_obj *node, int depth, int page)
 		fz_rethrow(ctx);
 	}
 
-	pdf_dict_unmark(node);
+	pdf_obj_unmark(node);
 
 	return page;
 }
@@ -1348,7 +1392,6 @@ update_linearization_params(pdf_document *xref, pdf_write_options *opts)
 	/* Primary hint stream length */
 	pdf_set_int(opts->hints_length, opts->hintstream_len);
 }
-
 
 /*
  * Make sure we have loaded objects from object streams.
@@ -1504,8 +1547,11 @@ static void expandstream(pdf_document *xref, pdf_write_options *opts, pdf_obj *o
 	fz_context *ctx = xref->ctx;
 	int orig_num = opts->rev_renumber_map[num];
 	int orig_gen = opts->rev_gen_list[num];
+	int truncated = 0;
 
-	buf = pdf_load_renumbered_stream(xref, num, gen, orig_num, orig_gen);
+	buf = pdf_load_renumbered_stream(xref, num, gen, orig_num, orig_gen, (opts->continue_on_error ? &truncated : NULL));
+	if (truncated && opts->errors)
+		(*opts->errors)++;
 
 	obj = pdf_copy_dict(ctx, obj_orig);
 	pdf_dict_dels(obj, "Filter");
@@ -1536,7 +1582,7 @@ static void expandstream(pdf_document *xref, pdf_write_options *opts, pdf_obj *o
 
 static int is_image_filter(char *s)
 {
-	if (	!strcmp(s, "CCITTFaxDecode") || !strcmp(s, "CCF") ||
+	if (!strcmp(s, "CCITTFaxDecode") || !strcmp(s, "CCF") ||
 		!strcmp(s, "DCTDecode") || !strcmp(s, "DCT") ||
 		!strcmp(s, "RunLengthDecode") || !strcmp(s, "RL") ||
 		!strcmp(s, "JBIG2Decode") ||
@@ -1568,7 +1614,23 @@ static void writeobject(pdf_document *xref, pdf_write_options *opts, int num, in
 	pdf_obj *type;
 	fz_context *ctx = xref->ctx;
 
-	obj = pdf_load_object(xref, num, gen);
+	fz_try(ctx)
+	{
+		obj = pdf_load_object(xref, num, gen);
+	}
+	fz_catch(ctx)
+	{
+		if (opts->continue_on_error)
+		{
+			fprintf(opts->out, "%d %d obj\nnull\nendobj\n", num, gen);
+			if (opts->errors)
+				(*opts->errors)++;
+			fz_warn(ctx, "%s", fz_caught(ctx));
+			return;
+		}
+		else
+			fz_rethrow(ctx);
+	}
 
 	/* skip ObjStm and XRef objects */
 	if (pdf_is_dict(obj))
@@ -1629,10 +1691,28 @@ static void writeobject(pdf_document *xref, pdf_write_options *opts, int num, in
 			if (pdf_dict_gets(obj, "Width") != NULL && pdf_dict_gets(obj, "Height") != NULL)
 				dontexpand = !(opts->do_expand & fz_expand_images);
 		}
-		if (opts->do_expand && !dontexpand && !pdf_is_jpx_image(ctx, obj))
-			expandstream(xref, opts, obj, num, gen);
-		else
-			copystream(xref, opts, obj, num, gen);
+		fz_try(ctx)
+		{
+			if (opts->do_expand && !dontexpand && !pdf_is_jpx_image(ctx, obj))
+				expandstream(xref, opts, obj, num, gen);
+			else
+				copystream(xref, opts, obj, num, gen);
+		}
+		fz_catch(ctx)
+		{
+			if (opts->continue_on_error)
+			{
+				fprintf(opts->out, "%d %d obj\nnull\nendobj\n", num, gen);
+				if (opts->errors)
+					(*opts->errors)++;
+				fz_warn(ctx, "%s", fz_caught(ctx));
+			}
+			else
+			{
+				pdf_drop_obj(obj);
+				fz_rethrow(ctx);
+			}
+		}
 	}
 
 	pdf_drop_obj(obj);
@@ -1731,6 +1811,14 @@ dowriteobject(pdf_document *xref, pdf_write_options *opts, int num, int pass)
 		opts->gen_list[num] = xref->table[num].gen;
 	if (xref->table[num].type == 'o')
 		opts->gen_list[num] = 0;
+
+	/* If we are renumbering, then make sure all generation numbers are
+	 * zero (except object 0 which must be free, and have a gen number of
+	 * 65535). Changing the generation numbers (and indeed object numbers)
+	 * will break encryption - so only do this if we are renumbering
+	 * anyway. */
+	if (opts->do_garbage >= 2)
+		opts->gen_list[num] = (num == 0 ? 65535 : 0);
 
 	if (opts->do_garbage && !opts->use_list[num])
 		return;
@@ -2101,7 +2189,6 @@ static void dump_object_details(pdf_document *xref, pdf_write_options *opts)
 }
 #endif
 
-
 void pdf_write_document(pdf_document *xref, char *filename, fz_write_options *fz_opts)
 {
 	int lastfree;
@@ -2109,7 +2196,7 @@ void pdf_write_document(pdf_document *xref, char *filename, fz_write_options *fz
 	pdf_write_options opts = { 0 };
 	fz_context *ctx;
 
-	if (!xref || !fz_opts)
+	if (!xref)
 		return;
 
 	ctx = xref->ctx;
@@ -2135,6 +2222,8 @@ void pdf_write_document(pdf_document *xref, char *filename, fz_write_options *fz
 		opts.renumber_map = fz_malloc_array(ctx, xref->len + 3, sizeof(int));
 		opts.rev_renumber_map = fz_malloc_array(ctx, xref->len + 3, sizeof(int));
 		opts.rev_gen_list = fz_malloc_array(ctx, xref->len + 3, sizeof(int));
+		opts.continue_on_error = fz_opts->continue_on_error;
+		opts.errors = fz_opts->errors;
 
 		for (num = 0; num < xref->len; num++)
 		{

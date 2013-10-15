@@ -20,21 +20,6 @@ intermediate results rather than ints.
  */
 #define SINGLE_PIXEL_SPECIALS
 
-/* If we're compiling as thumb code, then we need to tell the compiler
- * to enter and exit ARM mode around our assembly sections. If we move
- * the ARM functions to a separate file and arrange for it to be compiled
- * without thumb mode, we can save some time on entry.
- */
-#ifdef ARCH_ARM
-#ifdef ARCH_THUMB
-#define ENTER_ARM ".balign 4\nmov r12,pc\nbx r12\n0:.arm\n"
-#define ENTER_THUMB "9:.thumb\n"
-#else
-#define ENTER_ARM
-#define ENTER_THUMB
-#endif
-#endif
-
 #ifdef DEBUG_SCALING
 #ifdef WIN32
 #include <windows.h>
@@ -227,6 +212,21 @@ struct fz_weights_s
 	int new_line;	/* True if no weights for the current output pixel */
 	int patch_l;	/* How many output pixels we skip over */
 	int index[1];
+};
+
+struct fz_scale_cache_s
+{
+	int src_w;
+	float x;
+	float dst_w;
+	fz_scale_filter *filter;
+	int vertical;
+	int dst_w_int;
+	int patch_l;
+	int patch_r;
+	int n;
+	int flip;
+	fz_weights *weights;
 };
 
 static fz_weights *
@@ -457,12 +457,36 @@ check_weights(fz_weights *weights, int j, int w, float x, float wf)
 }
 
 static fz_weights *
-make_weights(fz_context *ctx, int src_w, float x, float dst_w, fz_scale_filter *filter, int vertical, int dst_w_int, int patch_l, int patch_r, int n, int flip)
+make_weights(fz_context *ctx, int src_w, float x, float dst_w, fz_scale_filter *filter, int vertical, int dst_w_int, int patch_l, int patch_r, int n, int flip, fz_scale_cache *cache)
 {
 	fz_weights *weights;
 	float F, G;
 	float window;
 	int j;
+
+	if (cache)
+	{
+		if (cache->src_w == src_w && cache->x == x && cache->dst_w == dst_w &&
+			cache->filter == filter && cache->vertical == vertical &&
+			cache->dst_w_int == dst_w_int &&
+			cache->patch_l == patch_l && cache->patch_r == patch_r &&
+			cache->n == n && cache->flip == flip)
+		{
+			return cache->weights;
+		}
+		cache->src_w = src_w;
+		cache->x = x;
+		cache->dst_w = dst_w;
+		cache->filter = filter;
+		cache->vertical = vertical;
+		cache->dst_w_int = dst_w_int;
+		cache->patch_l = patch_l;
+		cache->patch_r = patch_r;
+		cache->n = n;
+		cache->flip = flip;
+		fz_free(ctx, cache->weights);
+		cache->weights = NULL;
+	}
 
 	if (dst_w < src_w)
 	{
@@ -501,6 +525,10 @@ make_weights(fz_context *ctx, int src_w, float x, float dst_w, fz_scale_filter *
 		}
 	}
 	weights->count++; /* weights->count = dst_w_int now */
+	if (cache)
+	{
+		cache->weights = weights;
+	}
 	return weights;
 }
 
@@ -583,10 +611,9 @@ __attribute__((naked));
 static void
 scale_row_to_temp1(unsigned char *dst, unsigned char *src, fz_weights *weights)
 {
-	/* possible optimisation in here; unroll inner loops to avoid stall. */
 	asm volatile(
 	ENTER_ARM
-	"stmfd	r13!,{r4-r5,r9,r14}				\n"
+	"stmfd	r13!,{r4-r7,r9,r14}				\n"
 	"@ r0 = dst						\n"
 	"@ r1 = src						\n"
 	"@ r2 = weights						\n"
@@ -594,7 +621,7 @@ scale_row_to_temp1(unsigned char *dst, unsigned char *src, fz_weights *weights)
 	"ldr	r3, [r2],#20		@ r3 = count r2 = &index\n"
 	"ldr	r4, [r2]		@ r4 = index[0]		\n"
 	"cmp	r12,#0			@ if (flip)		\n"
-	"beq	4f			@ {			\n"
+	"beq	5f			@ {			\n"
 	"add	r2, r2, r4, LSL #2	@ r2 = &index[index[0]] \n"
 	"add	r0, r0, r3		@ dst += count		\n"
 	"1:							\n"
@@ -602,43 +629,47 @@ scale_row_to_temp1(unsigned char *dst, unsigned char *src, fz_weights *weights)
 	"ldr	r9, [r2], #4		@ r9 = len = *contrib++	\n"
 	"mov	r5, #128		@ r5 = a = 128		\n"
 	"add	r4, r1, r4		@ r4 = min = &src[r4]	\n"
-	"cmp	r9, #0			@ while (len-- > 0)	\n"
-	"beq	3f			@ {			\n"
-	"2:							\n"
+	"subs	r9, r9, #1		@ len--			\n"
+	"blt	3f			@ while (len >= 0)	\n"
+	"2:				@ {			\n"
+	"ldrgt	r6, [r2], #4		@ r6 = *contrib++	\n"
+	"ldrgtb	r7, [r4], #1		@ r7 = *min++		\n"
 	"ldr	r12,[r2], #4		@ r12 = *contrib++	\n"
 	"ldrb	r14,[r4], #1		@ r14 = *min++		\n"
-	"subs	r9, r9, #1		@ r9 = len--		\n"
-	"@stall on r14						\n"
+	"mlagt	r5, r6, r7, r5		@ g += r6 * r7		\n"
+	"subs	r9, r9, #2		@ r9 = len -= 2		\n"
 	"mla	r5, r12,r14,r5		@ g += r14 * r12	\n"
-	"bgt	2b			@ }			\n"
+	"bge	2b			@ }			\n"
 	"3:							\n"
 	"mov	r5, r5, lsr #8		@ g >>= 8		\n"
 	"strb	r5,[r0, #-1]!		@ *--dst=a		\n"
 	"subs	r3, r3, #1		@ i--			\n"
 	"bgt	1b			@ 			\n"
-	"ldmfd	r13!,{r4-r5,r9,PC}	@ pop, return to thumb	\n"
-	"4:"
-	"add	r2, r2, r4, LSL #2	@ r2 = &index[index[0]] \n"
+	"ldmfd	r13!,{r4-r7,r9,PC}	@ pop, return to thumb	\n"
 	"5:"
+	"add	r2, r2, r4, LSL #2	@ r2 = &index[index[0]] \n"
+	"6:"
 	"ldr	r4, [r2], #4		@ r4 = *contrib++	\n"
 	"ldr	r9, [r2], #4		@ r9 = len = *contrib++	\n"
 	"mov	r5, #128		@ r5 = a = 128		\n"
 	"add	r4, r1, r4		@ r4 = min = &src[r4]	\n"
-	"cmp	r9, #0			@ while (len-- > 0)	\n"
-	"beq	7f			@ {			\n"
-	"6:							\n"
+	"subs	r9, r9, #1		@ len--			\n"
+	"blt	9f			@ while (len > 0)	\n"
+	"7:				@ {			\n"
+	"ldrgt	r6, [r2], #4		@ r6 = *contrib++	\n"
+	"ldrgtb	r7, [r4], #1		@ r7 = *min++		\n"
 	"ldr	r12,[r2], #4		@ r12 = *contrib++	\n"
 	"ldrb	r14,[r4], #1		@ r14 = *min++		\n"
-	"subs	r9, r9, #1		@ r9 = len--		\n"
-	"@stall on r14						\n"
+	"mlagt	r5, r6,r7,r5		@ a += r6 * r7		\n"
+	"subs	r9, r9, #2		@ r9 = len -= 2		\n"
 	"mla	r5, r12,r14,r5		@ a += r14 * r12	\n"
-	"bgt	6b			@ }			\n"
-	"7:							\n"
+	"bge	7b			@ }			\n"
+	"9:							\n"
 	"mov	r5, r5, LSR #8		@ a >>= 8		\n"
 	"strb	r5, [r0], #1		@ *dst++=a		\n"
 	"subs	r3, r3, #1		@ i--			\n"
-	"bgt	5b			@ 			\n"
-	"ldmfd	r13!,{r4-r5,r9,PC}	@ pop, return to thumb	\n"
+	"bgt	6b			@ 			\n"
+	"ldmfd	r13!,{r4-r7,r9,PC}	@ pop, return to thumb	\n"
 	ENTER_THUMB
 	);
 }
@@ -808,7 +839,7 @@ scale_row_from_temp(unsigned char *dst, unsigned char *src, fz_weights *weights,
 	"blt	4f			@ while (x >= 0) {	\n"
 #ifndef ARCH_ARM_CAN_LOAD_UNALIGNED
 	"tst	r3, #3			@ if ((r3 & 3)		\n"
-	"tsteq	r1, #3			@     || (r1 & 3))	\n"
+	"tsteq	r1, #3			@	|| (r1 & 3))	\n"
 	"bne	4f			@ can't do fast code	\n"
 #endif
 	"ldr	r9, =0x00FF00FF		@ r9 = 0x00FF00FF	\n"
@@ -862,6 +893,7 @@ scale_row_from_temp(unsigned char *dst, unsigned char *src, fz_weights *weights,
 	"bgt	5b			@ 			\n"
 	"8:							\n"
 	"ldmfd	r13!,{r4-r11,PC}	@ pop, return to thumb	\n"
+	".ltorg							\n"
 	ENTER_THUMB
 	);
 }
@@ -1182,7 +1214,13 @@ scale_single_col(unsigned char *dst, unsigned char *src, fz_weights *weights, in
 #endif /* SINGLE_PIXEL_SPECIALS */
 
 fz_pixmap *
-fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h, fz_bbox *clip)
+fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h, fz_irect *clip)
+{
+	return fz_scale_pixmap_cached(ctx, src, x, y, w, h, clip, NULL, NULL);
+}
+
+fz_pixmap *
+fz_scale_pixmap_cached(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h, const fz_irect *clip, fz_scale_cache *cache_x, fz_scale_cache *cache_y)
 {
 	fz_scale_filter *filter = &fz_scale_filter_simple;
 	fz_weights *contrib_rows = NULL;
@@ -1192,12 +1230,40 @@ fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, floa
 	int max_row, temp_span, temp_rows, row;
 	int dst_w_int, dst_h_int, dst_x_int, dst_y_int;
 	int flip_x, flip_y;
-	fz_bbox patch;
+	fz_rect patch;
 
 	fz_var(contrib_cols);
 	fz_var(contrib_rows);
 
 	DBUG(("Scale: (%d,%d) to (%g,%g) at (%g,%g)\n",src->w,src->h,w,h,x,y));
+
+	/* Avoid extreme scales where overflows become problematic. */
+	if (w > (1<<24) || h > (1<<24) || w < -(1<<24) || h < -(1<<24))
+		return NULL;
+
+	/* Clamp small ranges of w and h */
+	if (w <= -1)
+	{
+	}
+	else if (w < 0)
+	{
+		w = -1;
+	}
+	else if (w < 1)
+	{
+		w = 1;
+	}
+	if (h <= -1)
+	{
+	}
+	else if (h < 0)
+	{
+		h = -1;
+	}
+	else if (h < 1)
+	{
+		h = 1;
+	}
 
 	/* Find the destination bbox, width/height, and sub pixel offset,
 	 * allowing for whether we're flipping or not. */
@@ -1321,20 +1387,22 @@ fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, floa
 			contrib_cols = NULL;
 		else
 #endif /* SINGLE_PIXEL_SPECIALS */
-			contrib_cols = make_weights(ctx, src->w, x, w, filter, 0, dst_w_int, patch.x0, patch.x1, src->n, flip_x);
+			contrib_cols = make_weights(ctx, src->w, x, w, filter, 0, dst_w_int, patch.x0, patch.x1, src->n, flip_x, cache_x);
 #ifdef SINGLE_PIXEL_SPECIALS
 		if (src->h == 1)
 			contrib_rows = NULL;
 		else
 #endif /* SINGLE_PIXEL_SPECIALS */
-			contrib_rows = make_weights(ctx, src->h, y, h, filter, 1, dst_h_int, patch.y0, patch.y1, src->n, flip_y);
+			contrib_rows = make_weights(ctx, src->h, y, h, filter, 1, dst_h_int, patch.y0, patch.y1, src->n, flip_y, cache_y);
 
 		output = fz_new_pixmap(ctx, src->colorspace, patch.x1 - patch.x0, patch.y1 - patch.y0);
 	}
 	fz_catch(ctx)
 	{
-		fz_free(ctx, contrib_cols);
-		fz_free(ctx, contrib_rows);
+		if (!cache_x)
+			fz_free(ctx, contrib_cols);
+		if (!cache_y)
+			fz_free(ctx, contrib_rows);
 		fz_rethrow(ctx);
 	}
 	output->x = dst_x_int;
@@ -1377,8 +1445,10 @@ fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, floa
 		fz_catch(ctx)
 		{
 			fz_drop_pixmap(ctx, output);
-			fz_free(ctx, contrib_cols);
-			fz_free(ctx, contrib_rows);
+			if (!cache_x)
+				fz_free(ctx, contrib_cols);
+			if (!cache_y)
+				fz_free(ctx, contrib_rows);
 			fz_rethrow(ctx);
 		}
 		switch (src->n)
@@ -1423,7 +1493,24 @@ fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, floa
 	}
 
 cleanup:
-	fz_free(ctx, contrib_rows);
-	fz_free(ctx, contrib_cols);
+	if (!cache_y)
+		fz_free(ctx, contrib_rows);
+	if (!cache_x)
+		fz_free(ctx, contrib_cols);
 	return output;
+}
+
+void
+fz_free_scale_cache(fz_context *ctx, fz_scale_cache *sc)
+{
+	if (!sc)
+		return;
+	fz_free(ctx, sc->weights);
+	fz_free(ctx, sc);
+}
+
+fz_scale_cache *
+fz_new_scale_cache(fz_context *ctx)
+{
+	return fz_malloc_struct(ctx, fz_scale_cache);
 }

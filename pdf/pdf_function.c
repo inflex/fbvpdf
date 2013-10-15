@@ -401,7 +401,7 @@ ps_run(fz_context *ctx, psobj *code, ps_stack *st, int pc)
 			case PS_OP_DIV:
 				r2 = ps_pop_real(st);
 				r1 = ps_pop_real(st);
-				if (fabsf(r2) < FLT_EPSILON)
+				if (fabsf(r2) >= FLT_EPSILON)
 					ps_push_real(st, r1 / r2);
 				else
 					ps_push_real(st, DIV_BY_ZERO(r1, r2, -FLT_MAX, FLT_MAX));
@@ -703,7 +703,7 @@ resize_code(fz_context *ctx, pdf_function *func, int newsize)
 static void
 parse_code(pdf_function *func, fz_stream *stream, int *codeptr, pdf_lexbuf *buf)
 {
-	int tok;
+	pdf_token tok;
 	int opptr, elseptr, ifptr;
 	int a, b, mid, cmp;
 	fz_context *ctx = stream->ctx;
@@ -844,7 +844,7 @@ load_postscript_func(pdf_function *func, pdf_document *xref, pdf_obj *dict, int 
 	fz_stream *stream = NULL;
 	int codeptr;
 	pdf_lexbuf buf;
-	int tok;
+	pdf_token tok;
 	fz_context *ctx = xref->ctx;
 	int locked = 0;
 
@@ -932,9 +932,9 @@ load_sample_func(pdf_function *func, pdf_document *xref, pdf_obj *dict, int num,
 	for (i = 0; i < func->m; i++)
 	{
 		func->u.sa.size[i] = pdf_to_int(pdf_array_get(obj, i));
-		if (func->u.sa.size[i] < 0)
+		if (func->u.sa.size[i] <= 0)
 		{
-			fz_warn(ctx, "negative sample function dimension size");
+			fz_warn(ctx, "non-positive sample function dimension size");
 			func->u.sa.size[i] = 1;
 		}
 	}
@@ -1236,7 +1236,10 @@ load_stitching_func(pdf_function *func, pdf_document *xref, pdf_obj *dict)
 	obj = pdf_dict_gets(dict, "Functions");
 	if (!pdf_is_array(obj))
 		fz_throw(ctx, "stitching function has no input functions");
+
+	fz_try(ctx)
 	{
+		pdf_obj_mark(obj);
 		k = pdf_array_len(obj);
 
 		func->u.st.funcs = fz_malloc_array(ctx, k, sizeof(pdf_function*));
@@ -1258,7 +1261,14 @@ load_stitching_func(pdf_function *func, pdf_document *xref, pdf_obj *dict)
 				fz_warn(ctx, "wrong number of outputs for sub function %d", i);
 		}
 	}
-
+	fz_always(ctx)
+	{
+		pdf_obj_unmark(obj);
+	}
+	fz_catch(ctx)
+	{
+		fz_rethrow(ctx);
+	}
 
 	obj = pdf_dict_gets(dict, "Bounds");
 	if (!pdf_is_array(obj))
@@ -1401,6 +1411,9 @@ pdf_load_function(pdf_document *xref, pdf_obj *dict, int in, int out)
 	pdf_function *func;
 	pdf_obj *obj;
 	int i;
+
+	if (pdf_obj_marked(dict))
+		fz_throw(ctx, "Recursion in function definition");
 
 	if ((func = pdf_find_item(ctx, pdf_free_function_imp, dict)))
 	{

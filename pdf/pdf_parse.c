@@ -1,31 +1,29 @@
 #include "fitz-internal.h"
 #include "mupdf-internal.h"
 
-fz_rect
-pdf_to_rect(fz_context *ctx, pdf_obj *array)
+fz_rect *
+pdf_to_rect(fz_context *ctx, pdf_obj *array, fz_rect *r)
 {
-	fz_rect r;
 	float a = pdf_to_real(pdf_array_get(array, 0));
 	float b = pdf_to_real(pdf_array_get(array, 1));
 	float c = pdf_to_real(pdf_array_get(array, 2));
 	float d = pdf_to_real(pdf_array_get(array, 3));
-	r.x0 = fz_min(a, c);
-	r.y0 = fz_min(b, d);
-	r.x1 = fz_max(a, c);
-	r.y1 = fz_max(b, d);
+	r->x0 = fz_min(a, c);
+	r->y0 = fz_min(b, d);
+	r->x1 = fz_max(a, c);
+	r->y1 = fz_max(b, d);
 	return r;
 }
 
-fz_matrix
-pdf_to_matrix(fz_context *ctx, pdf_obj *array)
+fz_matrix *
+pdf_to_matrix(fz_context *ctx, pdf_obj *array, fz_matrix *m)
 {
-	fz_matrix m;
-	m.a = pdf_to_real(pdf_array_get(array, 0));
-	m.b = pdf_to_real(pdf_array_get(array, 1));
-	m.c = pdf_to_real(pdf_array_get(array, 2));
-	m.d = pdf_to_real(pdf_array_get(array, 3));
-	m.e = pdf_to_real(pdf_array_get(array, 4));
-	m.f = pdf_to_real(pdf_array_get(array, 5));
+	m->a = pdf_to_real(pdf_array_get(array, 0));
+	m->b = pdf_to_real(pdf_array_get(array, 1));
+	m->c = pdf_to_real(pdf_array_get(array, 2));
+	m->d = pdf_to_real(pdf_array_get(array, 3));
+	m->e = pdf_to_real(pdf_array_get(array, 4));
+	m->f = pdf_to_real(pdf_array_get(array, 5));
 	return m;
 }
 
@@ -152,6 +150,35 @@ pdf_to_ucs2(pdf_document *xref, pdf_obj *src)
 	return dst;
 }
 
+/* allow to convert to UCS-2 without the need for an fz_context */
+/* (buffer must be at least (fz_to_str_len(src) + 1) * 2 bytes in size) */
+void
+pdf_to_ucs2_buf(unsigned short *buffer, pdf_obj *src)
+{
+	unsigned char *srcptr = (unsigned char *) pdf_to_str_buf(src);
+	unsigned short *dstptr = buffer;
+	int srclen = pdf_to_str_len(src);
+	int i;
+
+	if (srclen >= 2 && srcptr[0] == 254 && srcptr[1] == 255)
+	{
+		for (i = 2; i + 1 < srclen; i += 2)
+			*dstptr++ = srcptr[i] << 8 | srcptr[i+1];
+	}
+	else if (srclen >= 2 && srcptr[0] == 255 && srcptr[1] == 254)
+	{
+		for (i = 2; i + 1 < srclen; i += 2)
+			*dstptr++ = srcptr[i] | srcptr[i+1] << 8;
+	}
+	else
+	{
+		for (i = 0; i < srclen; i++)
+			*dstptr++ = pdf_doc_encoding[srcptr[i]];
+	}
+
+	*dstptr = '\0';
+}
+
 /* Convert UCS-2 string into PdfDocEncoding for authentication */
 char *
 pdf_from_ucs2(pdf_document *xref, unsigned short *src)
@@ -207,7 +234,7 @@ pdf_parse_array(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 	pdf_obj *ary = NULL;
 	pdf_obj *obj = NULL;
 	int a = 0, b = 0, n = 0;
-	int tok;
+	pdf_token tok;
 	fz_context *ctx = file->ctx;
 	pdf_obj *op;
 
@@ -347,7 +374,7 @@ pdf_parse_dict(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 	pdf_obj *dict;
 	pdf_obj *key = NULL;
 	pdf_obj *val = NULL;
-	int tok;
+	pdf_token tok;
 	int a, b;
 	fz_context *ctx = file->ctx;
 
@@ -444,7 +471,7 @@ pdf_parse_dict(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 pdf_obj *
 pdf_parse_stm_obj(pdf_document *xref, fz_stream *file, pdf_lexbuf *buf)
 {
-	int tok;
+	pdf_token tok;
 	fz_context *ctx = file->ctx;
 
 	tok = pdf_lex(file, buf);
@@ -474,7 +501,7 @@ pdf_parse_ind_obj(pdf_document *xref,
 {
 	pdf_obj *obj = NULL;
 	int num = 0, gen = 0, stm_ofs;
-	int tok;
+	pdf_token tok;
 	int a, b;
 	fz_context *ctx = file->ctx;
 

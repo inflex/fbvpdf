@@ -28,12 +28,12 @@ static char getline_buffer[LONGLINE];
 
 void winwarn(pdfapp_t *app, char *msg)
 {
-	fprintf(stderr, "warning: %s", msg);
+	fprintf(stderr, "warning: %s\n", msg);
 }
 
 void winerror(pdfapp_t *app, char *msg)
 {
-	fprintf(stderr, "%s", msg);
+	fprintf(stderr, "%s\n", msg);
 	exit(1);
 }
 
@@ -107,6 +107,10 @@ int wingetsavepath(pdfapp_t *app, char *buf, int len)
 	return 0;
 }
 
+void winreplacefile(char *source, char *target)
+{
+}
+
 void wincursor(pdfapp_t *app, int curs)
 {
 }
@@ -164,7 +168,7 @@ usage(void)
 	fprintf(stderr, "\nSyntax: mujstest -o <filename> [ -p <prefix> ] [-v] <scriptfile>\n");
 	fprintf(stderr, "\n<filename> should sensibly be of the form file-%%d.png\n");
 	fprintf(stderr, "\n<prefix> is a path prefix to apply to filenames within the script\n");
-	fprintf(stderr, "\n-v    verbose\n");
+	fprintf(stderr, "\n-v\tverbose\n");
 	fprintf(stderr, "\nscriptfile contains a list of commands:\n");
 	fprintf(stderr, "\tPASSWORD <password>\tSet the password\n");
 	fprintf(stderr, "\tOPEN <filename>\tOpen a file\n");
@@ -285,7 +289,6 @@ static void unescape_string(char *d, const char *s)
 	}
 	*d = 0;
 }
-
 
 int
 main(int argc, char *argv[])

@@ -2,6 +2,7 @@
 
 #define LINE_DIST 0.9f
 #define SPACE_DIST 0.2f
+#define SPACE_MAX_DIST 15.0f
 #define PARAGRAPH_DIST 0.5f
 
 #include <ft2build.h>
@@ -73,7 +74,7 @@ fz_lookup_text_style_imp(fz_context *ctx, fz_text_sheet *sheet,
 }
 
 static fz_text_style *
-fz_lookup_text_style(fz_context *ctx, fz_text_sheet *sheet, fz_text *text, fz_matrix *ctm,
+fz_lookup_text_style(fz_context *ctx, fz_text_sheet *sheet, fz_text *text, const fz_matrix *ctm,
 	fz_colorspace *colorspace, float *color, float alpha, fz_stroke_state *stroke)
 {
 	float size = 1.0f;
@@ -85,17 +86,17 @@ fz_lookup_text_style(fz_context *ctx, fz_text_sheet *sheet, fz_text *text, fz_ma
 		fz_matrix trm;
 		tm.e = 0;
 		tm.f = 0;
-		trm = fz_concat(tm, *ctm);
-		size = fz_matrix_expansion(trm);
+		fz_concat(&trm, &tm, ctm);
+		size = fz_matrix_expansion(&trm);
 	}
 	return fz_lookup_text_style_imp(ctx, sheet, size, font, wmode, 0);
 }
 
 fz_text_page *
-fz_new_text_page(fz_context *ctx, fz_rect mediabox)
+fz_new_text_page(fz_context *ctx, const fz_rect *mediabox)
 {
 	fz_text_page *page = fz_malloc(ctx, sizeof(*page));
-	page->mediabox = mediabox;
+	page->mediabox = *mediabox;
 	page->len = 0;
 	page->cap = 0;
 	page->blocks = NULL;
@@ -133,7 +134,7 @@ append_char(fz_context *ctx, fz_text_span *span, int c, fz_rect bbox)
 		span->text = fz_resize_array(ctx, span->text, new_cap, sizeof(*span->text));
 		span->cap = new_cap;
 	}
-	span->bbox = fz_union_rect(span->bbox, bbox);
+	fz_union_rect(&span->bbox, &bbox);
 	span->text[span->len].c = c;
 	span->text[span->len].bbox = bbox;
 	span->len++;
@@ -159,7 +160,7 @@ append_span(fz_context *ctx, fz_text_line *line, fz_text_span *span)
 		line->spans = fz_resize_array(ctx, line->spans, new_cap, sizeof(*line->spans));
 		line->cap = new_cap;
 	}
-	line->bbox = fz_union_rect(line->bbox, span->bbox);
+	fz_union_rect(&line->bbox, &span->bbox);
 	line->spans[line->len++] = *span;
 }
 
@@ -180,7 +181,7 @@ append_line(fz_context *ctx, fz_text_block *block, fz_text_line *line)
 		block->lines = fz_resize_array(ctx, block->lines, new_cap, sizeof *block->lines);
 		block->cap = new_cap;
 	}
-	block->bbox = fz_union_rect(block->bbox, line->bbox);
+	fz_union_rect(&block->bbox, &line->bbox);
 	block->lines[block->len++] = *line;
 }
 
@@ -298,7 +299,7 @@ fz_add_text_char(fz_context *ctx, fz_text_device *dev, fz_text_style *style, int
 }
 
 static void
-fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, fz_matrix ctm, fz_text_style *style)
+fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, const fz_matrix *ctm, fz_text_style *style)
 {
 	fz_point *pen = &dev->point;
 	fz_font *font = text->font;
@@ -329,7 +330,7 @@ fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, fz_matrix c
 		descender = (float)face->descender / face->units_per_EM;
 		fz_unlock(ctx, FZ_LOCK_FREETYPE);
 	}
-	else if (font->t3procs && !fz_is_empty_rect(font->bbox))
+	else if (font->t3procs && !fz_is_empty_rect(&font->bbox))
 	{
 		ascender = font->bbox.y1;
 		descender = font->bbox.y0;
@@ -350,21 +351,21 @@ fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, fz_matrix c
 
 	tm.e = 0;
 	tm.f = 0;
-	trm = fz_concat(tm, ctm);
+	fz_concat(&trm, &tm, ctm);
 
-	dir = fz_transform_vector(trm, dir);
+	fz_transform_vector(&dir, &trm);
 	dist = sqrtf(dir.x * dir.x + dir.y * dir.y);
 	ndir.x = dir.x / dist;
 	ndir.y = dir.y / dist;
 
-	size = fz_matrix_expansion(trm);
+	size = fz_matrix_expansion(&trm);
 
 	for (i = 0; i < text->len; i++)
 	{
 		/* Calculate new pen location and delta */
 		tm.e = text->items[i].x;
 		tm.f = text->items[i].y;
-		trm = fz_concat(tm, ctm);
+		fz_concat(&trm, &tm, ctm);
 
 		delta.x = pen->x - trm.e;
 		delta.y = pen->y - trm.f;
@@ -380,20 +381,23 @@ fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, fz_matrix c
 			ndelta.y = delta.y / dist;
 			dot = ndelta.x * ndir.x + ndelta.y * ndir.y;
 
-			if (dist > size * LINE_DIST)
+			if (fabsf(dot) > 0.9995f && dist > size * SPACE_DIST && dist < size * SPACE_MAX_DIST)
+			{
+				if (dev->lastchar != ' ')
+				{
+					fz_rect spacerect;
+					spacerect.x0 = -0.2f;
+					spacerect.y0 = descender;
+					spacerect.x1 = 0;
+					spacerect.y1 = ascender;
+					fz_transform_rect(&spacerect, &trm);
+					fz_add_text_char(ctx, dev, style, ' ', spacerect);
+					dev->lastchar = ' ';
+				}
+			}
+			else if (dist > size * LINE_DIST)
 			{
 				fz_flush_text_line(ctx, dev, style);
-				dev->lastchar = ' ';
-			}
-			else if (fabsf(dot) > 0.95f && dist > size * SPACE_DIST && dev->lastchar != ' ')
-			{
-				fz_rect spacerect;
-				spacerect.x0 = -0.2f;
-				spacerect.y0 = descender;
-				spacerect.x1 = 0;
-				spacerect.y1 = ascender;
-				spacerect = fz_transform_rect(trm, spacerect);
-				fz_add_text_char(ctx, dev, style, ' ', spacerect);
 				dev->lastchar = ' ';
 			}
 		}
@@ -429,7 +433,7 @@ fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, fz_matrix c
 			rect.y1 = ascender;
 		}
 
-		rect = fz_transform_rect(trm, rect);
+		fz_transform_rect(&rect, &trm);
 		pen->x = trm.e + dir.x * adv;
 		pen->y = trm.f + dir.y * adv;
 
@@ -458,49 +462,49 @@ fz_text_extract(fz_context *ctx, fz_text_device *dev, fz_text *text, fz_matrix c
 }
 
 static void
-fz_text_fill_text(fz_device *dev, fz_text *text, fz_matrix ctm,
+fz_text_fill_text(fz_device *dev, fz_text *text, const fz_matrix *ctm,
 	fz_colorspace *colorspace, float *color, float alpha)
 {
 	fz_text_device *tdev = dev->user;
 	fz_text_style *style;
-	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, &ctm, colorspace, color, alpha, NULL);
+	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, ctm, colorspace, color, alpha, NULL);
 	fz_text_extract(dev->ctx, tdev, text, ctm, style);
 }
 
 static void
-fz_text_stroke_text(fz_device *dev, fz_text *text, fz_stroke_state *stroke, fz_matrix ctm,
+fz_text_stroke_text(fz_device *dev, fz_text *text, fz_stroke_state *stroke, const fz_matrix *ctm,
 	fz_colorspace *colorspace, float *color, float alpha)
 {
 	fz_text_device *tdev = dev->user;
 	fz_text_style *style;
-	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, &ctm, colorspace, color, alpha, stroke);
+	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, ctm, colorspace, color, alpha, stroke);
 	fz_text_extract(dev->ctx, tdev, text, ctm, style);
 }
 
 static void
-fz_text_clip_text(fz_device *dev, fz_text *text, fz_matrix ctm, int accumulate)
+fz_text_clip_text(fz_device *dev, fz_text *text, const fz_matrix *ctm, int accumulate)
 {
 	fz_text_device *tdev = dev->user;
 	fz_text_style *style;
-	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, &ctm, NULL, NULL, 0, NULL);
+	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, ctm, NULL, NULL, 0, NULL);
 	fz_text_extract(dev->ctx, tdev, text, ctm, style);
 }
 
 static void
-fz_text_clip_stroke_text(fz_device *dev, fz_text *text, fz_stroke_state *stroke, fz_matrix ctm)
+fz_text_clip_stroke_text(fz_device *dev, fz_text *text, fz_stroke_state *stroke, const fz_matrix *ctm)
 {
 	fz_text_device *tdev = dev->user;
 	fz_text_style *style;
-	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, &ctm, NULL, NULL, 0, stroke);
+	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, ctm, NULL, NULL, 0, stroke);
 	fz_text_extract(dev->ctx, tdev, text, ctm, style);
 }
 
 static void
-fz_text_ignore_text(fz_device *dev, fz_text *text, fz_matrix ctm)
+fz_text_ignore_text(fz_device *dev, fz_text *text, const fz_matrix *ctm)
 {
 	fz_text_device *tdev = dev->user;
 	fz_text_style *style;
-	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, &ctm, NULL, NULL, 0, NULL);
+	style = fz_lookup_text_style(dev->ctx, tdev->sheet, text, ctm, NULL, NULL, 0, NULL);
 	fz_text_extract(dev->ctx, tdev, text, ctm, style);
 }
 
@@ -569,43 +573,43 @@ static int font_is_italic(fz_font *font)
 }
 
 static void
-fz_print_style_begin(FILE *out, fz_text_style *style)
+fz_print_style_begin(fz_output *out, fz_text_style *style)
 {
 	int script = style->script;
-	fprintf(out, "<span class=\"s%d\">", style->id);
+	fz_printf(out, "<span class=\"s%d\">", style->id);
 	while (script-- > 0)
-		fprintf(out, "<sup>");
+		fz_printf(out, "<sup>");
 	while (++script < 0)
-		fprintf(out, "<sub>");
+		fz_printf(out, "<sub>");
 }
 
 static void
-fz_print_style_end(FILE *out, fz_text_style *style)
+fz_print_style_end(fz_output *out, fz_text_style *style)
 {
 	int script = style->script;
 	while (script-- > 0)
-		fprintf(out, "</sup>");
+		fz_printf(out, "</sup>");
 	while (++script < 0)
-		fprintf(out, "</sub>");
-	fprintf(out, "</span>");
+		fz_printf(out, "</sub>");
+	fz_printf(out, "</span>");
 }
 
 static void
-fz_print_style(FILE *out, fz_text_style *style)
+fz_print_style(fz_output *out, fz_text_style *style)
 {
 	char *s = strchr(style->font->name, '+');
 	s = s ? s + 1 : style->font->name;
-	fprintf(out, "span.s%d{font-family:\"%s\";font-size:%gpt;",
+	fz_printf(out, "span.s%d{font-family:\"%s\";font-size:%gpt;",
 		style->id, s, style->size);
 	if (font_is_italic(style->font))
-		fprintf(out, "font-style:italic;");
+		fz_printf(out, "font-style:italic;");
 	if (font_is_bold(style->font))
-		fprintf(out, "font-weight:bold;");
-	fprintf(out, "}\n");
+		fz_printf(out, "font-weight:bold;");
+	fz_printf(out, "}\n");
 }
 
 void
-fz_print_text_sheet(fz_context *ctx, FILE *out, fz_text_sheet *sheet)
+fz_print_text_sheet(fz_context *ctx, fz_output *out, fz_text_sheet *sheet)
 {
 	fz_text_style *style;
 	for (style = sheet->style; style; style = style->next)
@@ -613,7 +617,7 @@ fz_print_text_sheet(fz_context *ctx, FILE *out, fz_text_sheet *sheet)
 }
 
 void
-fz_print_text_page_html(fz_context *ctx, FILE *out, fz_text_page *page)
+fz_print_text_page_html(fz_context *ctx, fz_output *out, fz_text_page *page)
 {
 	int block_n, line_n, span_n, ch_n;
 	fz_text_style *style = NULL;
@@ -621,16 +625,16 @@ fz_print_text_page_html(fz_context *ctx, FILE *out, fz_text_page *page)
 	fz_text_line *line;
 	fz_text_span *span;
 
-	fprintf(out, "<div class=\"page\">\n");
+	fz_printf(out, "<div class=\"page\">\n");
 
 	for (block_n = 0; block_n < page->len; block_n++)
 	{
 		block = &page->blocks[block_n];
-		fprintf(out, "<div class=\"block\">\n");
+		fz_printf(out, "<div class=\"block\"><p>\n");
 		for (line_n = 0; line_n < block->len; line_n++)
 		{
 			line = &block->lines[line_n];
-			fprintf(out, "<p>");
+			fz_printf(out, "<span>");
 			style = NULL;
 
 			for (span_n = 0; span_n < line->len; span_n++)
@@ -648,29 +652,29 @@ fz_print_text_page_html(fz_context *ctx, FILE *out, fz_text_page *page)
 				{
 					fz_text_char *ch = &span->text[ch_n];
 					if (ch->c == '<')
-						fprintf(out, "&lt;");
+						fz_printf(out, "&lt;");
 					else if (ch->c == '>')
-						fprintf(out, "&gt;");
+						fz_printf(out, "&gt;");
 					else if (ch->c == '&')
-						fprintf(out, "&amp;");
+						fz_printf(out, "&amp;");
 					else if (ch->c >= 32 && ch->c <= 127)
-						fprintf(out, "%c", ch->c);
+						fz_printf(out, "%c", ch->c);
 					else
-						fprintf(out, "&#x%x;", ch->c);
+						fz_printf(out, "&#x%x;", ch->c);
 				}
 			}
 			if (style)
 				fz_print_style_end(out, style);
-			fprintf(out, "</p>\n");
+			fz_printf(out, "</span>\n");
 		}
-		fprintf(out, "</div>\n");
+		fz_printf(out, "</p></div>\n");
 	}
 
-	fprintf(out, "</div>\n");
+	fz_printf(out, "</div>\n");
 }
 
 void
-fz_print_text_page_xml(fz_context *ctx, FILE *out, fz_text_page *page)
+fz_print_text_page_xml(fz_context *ctx, fz_output *out, fz_text_page *page)
 {
 	fz_text_block *block;
 	fz_text_line *line;
@@ -678,54 +682,54 @@ fz_print_text_page_xml(fz_context *ctx, FILE *out, fz_text_page *page)
 	fz_text_char *ch;
 	char *s;
 
-	fprintf(out, "<page>\n");
+	fz_printf(out, "<page>\n");
 	for (block = page->blocks; block < page->blocks + page->len; block++)
 	{
-		fprintf(out, "<block bbox=\"%g %g %g %g\">\n",
+		fz_printf(out, "<block bbox=\"%g %g %g %g\">\n",
 			block->bbox.x0, block->bbox.y0, block->bbox.x1, block->bbox.y1);
 		for (line = block->lines; line < block->lines + block->len; line++)
 		{
-			fprintf(out, "<line bbox=\"%g %g %g %g\">\n",
+			fz_printf(out, "<line bbox=\"%g %g %g %g\">\n",
 				line->bbox.x0, line->bbox.y0, line->bbox.x1, line->bbox.y1);
 			for (span = line->spans; span < line->spans + line->len; span++)
 			{
 				fz_text_style *style = span->style;
 				s = strchr(style->font->name, '+');
 				s = s ? s + 1 : style->font->name;
-				fprintf(out, "<span bbox=\"%g %g %g %g\" font=\"%s\" size=\"%g\">\n",
+				fz_printf(out, "<span bbox=\"%g %g %g %g\" font=\"%s\" size=\"%g\">\n",
 					span->bbox.x0, span->bbox.y0, span->bbox.x1, span->bbox.y1,
 					s, style->size);
 				for (ch = span->text; ch < span->text + span->len; ch++)
 				{
-					fprintf(out, "<char bbox=\"%g %g %g %g\" c=\"",
+					fz_printf(out, "<char bbox=\"%g %g %g %g\" c=\"",
 						ch->bbox.x0, ch->bbox.y0, ch->bbox.x1, ch->bbox.y1);
 					switch (ch->c)
 					{
-					case '<': fprintf(out, "&lt;"); break;
-					case '>': fprintf(out, "&gt;"); break;
-					case '&': fprintf(out, "&amp;"); break;
-					case '"': fprintf(out, "&quot;"); break;
-					case '\'': fprintf(out, "&apos;"); break;
+					case '<': fz_printf(out, "&lt;"); break;
+					case '>': fz_printf(out, "&gt;"); break;
+					case '&': fz_printf(out, "&amp;"); break;
+					case '"': fz_printf(out, "&quot;"); break;
+					case '\'': fz_printf(out, "&apos;"); break;
 					default:
 						if (ch->c >= 32 && ch->c <= 127)
-							fprintf(out, "%c", ch->c);
+							fz_printf(out, "%c", ch->c);
 						else
-							fprintf(out, "&#x%x;", ch->c);
+							fz_printf(out, "&#x%x;", ch->c);
 						break;
 					}
-					fprintf(out, "\"/>\n");
+					fz_printf(out, "\"/>\n");
+				}
+				fz_printf(out, "</span>\n");
 			}
-				fprintf(out, "</span>\n");
-			}
-			fprintf(out, "</line>\n");
+			fz_printf(out, "</line>\n");
 		}
-		fprintf(out, "</block>\n");
+		fz_printf(out, "</block>\n");
 	}
-	fprintf(out, "</page>\n");
+	fz_printf(out, "</page>\n");
 }
 
 void
-fz_print_text_page(fz_context *ctx, FILE *out, fz_text_page *page)
+fz_print_text_page(fz_context *ctx, fz_output *out, fz_text_page *page)
 {
 	fz_text_block *block;
 	fz_text_line *line;
@@ -744,11 +748,243 @@ fz_print_text_page(fz_context *ctx, FILE *out, fz_text_page *page)
 				{
 					n = fz_runetochar(utf, ch->c);
 					for (i = 0; i < n; i++)
-						putc(utf[i], out);
+						fz_printf(out, "%c", utf[i]);
 				}
 			}
-			fprintf(out, "\n");
+			fz_printf(out, "\n");
 		}
-		fprintf(out, "\n");
+		fz_printf(out, "\n");
+	}
+}
+
+typedef struct line_height_s
+{
+	float height;
+	int count;
+	fz_text_style *style;
+} line_height;
+
+typedef struct line_heights_s
+{
+	fz_context *ctx;
+	int cap;
+	int len;
+	line_height *lh;
+} line_heights;
+
+static line_heights *
+new_line_heights(fz_context *ctx)
+{
+	line_heights *lh = fz_malloc_struct(ctx, line_heights);
+	lh->ctx = ctx;
+	return lh;
+}
+
+static void
+insert_line_height(line_heights *lh, fz_text_style *style, float height)
+{
+	int i;
+
+	/* If we have one already, add it in */
+	for (i=0; i < lh->cap; i++)
+	{
+		/* Match if we are within 5% */
+		if (lh->lh[i].style == style && lh->lh[i].height * 0.95 <= height && lh->lh[i].height * 1.05 >= height)
+		{
+			/* Ensure that the average height is correct */
+			lh->lh[i].height = (lh->lh[i].height * lh->lh[i].count + height) / (lh->lh[i].count+1);
+			lh->lh[i].count++;
+			return;
+		}
+	}
+
+	/* Otherwise extend (if required) and add it */
+	if (lh->cap == lh->len)
+	{
+		int newcap = (lh->cap ? lh->cap * 2 : 4);
+		lh->lh = fz_resize_array(lh->ctx, lh->lh, newcap, sizeof(line_height));
+		lh->cap = newcap;
+	}
+
+	lh->lh[lh->len].count = 1;
+	lh->lh[lh->len].height = height;
+	lh->lh[lh->len].style = style;
+	lh->len++;
+}
+
+static void
+cull_line_heights(line_heights *lh)
+{
+	int i, j, k;
+
+	for (i = 0; i < lh->len; i++)
+	{
+		fz_text_style *style = lh->lh[i].style;
+		int count = lh->lh[i].count;
+		int max = i;
+
+		/* Find the max for this style */
+		for (j = i+1; j < lh->len; j++)
+		{
+			if (lh->lh[j].style == style && lh->lh[j].count > count)
+			{
+				max = j;
+				count = lh->lh[j].count;
+			}
+		}
+
+		/* Destroy all the ones other than the max */
+		if (max != i)
+		{
+			lh->lh[i].count = count;
+			lh->lh[i].height = lh->lh[max].height;
+			lh->lh[max].count = 0;
+		}
+		j = i+1;
+		for (k = j; k < lh->len; k++)
+		{
+			if (lh->lh[k].style == style)
+			{
+				k++;
+			}
+			else
+			{
+				lh->lh[j++] = lh->lh[k];
+			}
+		}
+		lh->len = j;
+	}
+}
+
+static float
+line_height_for_style(line_heights *lh, fz_text_style *style)
+{
+	int i;
+
+	for (i=0; i < lh->len; i++)
+	{
+		if (lh->lh[i].style == style)
+			return lh->lh[i].height;
+	}
+	return 0.0; /* Never reached */
+}
+
+static void
+split_block(fz_context *ctx, fz_text_page *page, int blocknum, int linenum)
+{
+	int split_len;
+
+	if (page->len == page->cap)
+	{
+		int new_cap = fz_maxi(16, page->cap * 2);
+		page->blocks = fz_resize_array(ctx, page->blocks, new_cap, sizeof(*page->blocks));
+		page->cap = new_cap;
+	}
+
+	memmove(page->blocks+blocknum+1, page->blocks+blocknum, (page->len - blocknum)*sizeof(*page->blocks));
+	page->len++;
+
+	split_len = page->blocks[blocknum].len - linenum;
+	page->blocks[blocknum+1].bbox = page->blocks[blocknum].bbox; /* FIXME! */
+	page->blocks[blocknum+1].cap = 0;
+	page->blocks[blocknum+1].len = 0;
+	page->blocks[blocknum+1].lines = NULL;
+	page->blocks[blocknum+1].lines = fz_malloc_array(ctx, split_len, sizeof(fz_text_line));
+	page->blocks[blocknum+1].cap = page->blocks[blocknum+1].len;
+	page->blocks[blocknum+1].len = split_len;
+	page->blocks[blocknum].len = linenum;
+	memcpy(page->blocks[blocknum+1].lines, page->blocks[blocknum].lines + linenum, split_len * sizeof(fz_text_line));
+}
+
+void
+fz_text_analysis(fz_context *ctx, fz_text_sheet *sheet, fz_text_page *page)
+{
+	fz_text_block *block;
+	fz_text_line *line;
+	fz_text_span *span;
+	fz_text_line *prev_line;
+	line_heights *lh;
+	int blocknum;
+
+	/* Simple paragraph analysis; look for the most common 'inter line'
+	 * spacing. This will be assumed to be our line spacing. Anything
+	 * more than 25% wider than this will be assumed to be a paragraph
+	 * space. */
+
+	/* Step 1: Gather the line height information */
+	lh = new_line_heights(ctx);
+	prev_line = NULL;
+	for (block = page->blocks; block < page->blocks + page->len; block++)
+	{
+		for (line = block->lines; line < block->lines + block->len; line++)
+		{
+			/* In a line made up of several spans, find the tallest
+			 * span. This line difference will count as being a
+			 * difference in a line of that style. */
+			fz_text_span *tallest_span = NULL;
+			float tallest = 0;
+			float span_height;
+			for (span = line->spans; span < line->spans + line->len; span++)
+			{
+				span_height = span->bbox.y1 - span->bbox.y0;
+				if (tallest_span == NULL || span_height > tallest)
+				{
+					tallest_span = span;
+					tallest = span_height;
+				}
+			}
+			if (prev_line)
+			{
+				/* Should really work on the baseline positions,
+				 * but we don't have that at this stage. */
+				float line_step = line->bbox.y1 - prev_line->bbox.y1;
+				if (line_step > 0)
+				{
+					insert_line_height(lh, tallest_span->style, line_step);
+				}
+			}
+			prev_line = line;
+		}
+	}
+
+	/* Step 2: Find the most popular line height for each style */
+	cull_line_heights(lh);
+
+	/* Step 3: Run through the blocks, breaking each block into two if
+	 * the line height isn't right. */
+	prev_line = NULL;
+	for (blocknum = 0; blocknum < page->len; blocknum++)
+	{
+		block = &page->blocks[blocknum];
+		for (line = block->lines; line < block->lines + block->len; line++)
+		{
+			/* In a line made up of several spans, find the tallest
+			 * span. This line difference will count as being a
+			 * difference in a line of that style. */
+			fz_text_span *tallest_span = NULL;
+			float tallest = 0;
+			float span_height;
+			for (span = line->spans; span < line->spans + line->len; span++)
+			{
+				span_height = span->bbox.y1 - span->bbox.y0;
+				if (tallest_span == NULL || span_height > tallest)
+				{
+					tallest_span = span;
+					tallest = span_height;
+				}
+			}
+			if (prev_line)
+			{
+				float proper_step = line_height_for_style(lh, tallest_span->style);
+				float line_step = line->bbox.y1 - prev_line->bbox.y1;
+				if (proper_step * 0.95 > line_step || line_step > proper_step * 1.05)
+				{
+					split_block(ctx, page, block - page->blocks, line - block->lines);
+					prev_line = NULL;
+					break;
+				}
+			}
+			prev_line = line;
+		}
 	}
 }

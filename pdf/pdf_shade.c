@@ -69,10 +69,11 @@ pdf_load_function_based_shading(fz_shade *shade, pdf_document *xref, pdf_obj *di
 		y1 = pdf_to_real(pdf_array_get(obj, 3));
 	}
 
-	matrix = fz_identity;
 	obj = pdf_dict_gets(dict, "Matrix");
 	if (obj)
-		matrix = pdf_to_matrix(ctx, obj);
+		pdf_to_matrix(ctx, obj, &matrix);
+	else
+		matrix = fz_identity;
 	shade->u.f.matrix = matrix;
 	shade->u.f.xdivs = FUNSEGS;
 	shade->u.f.ydivs = FUNSEGS;
@@ -312,7 +313,7 @@ pdf_load_type7_shade(fz_shade *shade, pdf_document *xref, pdf_obj *dict,
 /* Load all of the shading dictionary parameters, then switch on the shading type. */
 
 static fz_shade *
-pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
+pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, const fz_matrix *transform)
 {
 	fz_shade *shade = NULL;
 	pdf_function *func[FZ_MAX_COLORS] = { NULL };
@@ -334,7 +335,7 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 		shade->type = FZ_MESH_TYPE4;
 		shade->use_background = 0;
 		shade->use_function = 0;
-		shade->matrix = transform;
+		shade->matrix = *transform;
 		shade->bbox = fz_infinite_rect;
 
 		shade->colorspace = NULL;
@@ -359,9 +360,7 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 
 		obj = pdf_dict_gets(dict, "BBox");
 		if (pdf_is_array(obj))
-		{
-			shade->bbox = pdf_to_rect(ctx, obj);
-		}
+			pdf_to_rect(ctx, obj, &shade->bbox);
 
 		obj = pdf_dict_gets(dict, "Function");
 		if (pdf_is_dict(obj))
@@ -382,7 +381,15 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 		{
 			funcs = pdf_array_len(obj);
 			if (funcs != 1 && funcs != shade->colorspace->n)
+			{
+				funcs = 0;
 				fz_throw(ctx, "incorrect number of shading functions");
+			}
+			if (funcs > FZ_MAX_COLORS)
+			{
+				funcs = 0;
+				fz_throw(ctx, "too many shading functions");
+			}
 
 			if (type == 1)
 				in = 2;
@@ -396,6 +403,11 @@ pdf_load_shading_dict(pdf_document *xref, pdf_obj *dict, fz_matrix transform)
 				if (!func[i])
 					fz_throw(ctx, "cannot load shading function (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj));
 			}
+		}
+		else if (type < 4)
+		{
+			/* Functions are compulsory for types 1,2,3 */
+			fz_throw(ctx, "cannot load shading function (%d %d R)", pdf_to_num(obj), pdf_to_gen(obj));
 		}
 
 		shade->type = type;
@@ -456,7 +468,7 @@ pdf_load_shading(pdf_document *xref, pdf_obj *dict)
 	{
 		obj = pdf_dict_gets(dict, "Matrix");
 		if (obj)
-			mat = pdf_to_matrix(ctx, obj);
+			pdf_to_matrix(ctx, obj, &mat);
 		else
 			mat = fz_identity;
 
@@ -473,13 +485,13 @@ pdf_load_shading(pdf_document *xref, pdf_obj *dict)
 		if (!obj)
 			fz_throw(ctx, "syntaxerror: missing shading dictionary");
 
-		shade = pdf_load_shading_dict(xref, obj, mat);
+		shade = pdf_load_shading_dict(xref, obj, &mat);
 	}
 
 	/* Naked shading dictionary */
 	else
 	{
-		shade = pdf_load_shading_dict(xref, dict, fz_identity);
+		shade = pdf_load_shading_dict(xref, dict, &fz_identity);
 	}
 
 	pdf_store_item(ctx, dict, shade, fz_shade_size(shade));

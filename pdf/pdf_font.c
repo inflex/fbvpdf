@@ -260,7 +260,8 @@ pdf_load_system_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontname, c
 			pdf_load_substitute_cjk_font(ctx, fontdesc, fontname, PDF_ROS_KOREA, serif);
 		else
 		{
-			fz_warn(ctx, "unknown cid collection: %s", collection);
+			if (strcmp(collection, "Adobe-Identity") != 0)
+				fz_warn(ctx, "unknown cid collection: %s", collection);
 			pdf_load_substitute_font(ctx, fontdesc, fontname, mono, serif, bold, italic);
 		}
 	}
@@ -454,6 +455,7 @@ pdf_load_simple_font(pdf_document *xref, pdf_obj *dict)
 			{
 				fz_warn(ctx, "workaround for S22PDF lying about chinese font encodings");
 				pdf_drop_font(ctx, fontdesc);
+				fontdesc = NULL;
 				fontdesc = pdf_new_font_desc(ctx);
 				pdf_load_font_descriptor(fontdesc, xref, descriptor, "Adobe-GB1", cp936fonts[i+1]);
 				fontdesc->encoding = pdf_load_system_cmap(ctx, "GBK-EUC-H");
@@ -1096,13 +1098,14 @@ pdf_make_width_table(fz_context *ctx, pdf_font_desc *fontdesc)
 }
 
 pdf_font_desc *
-pdf_load_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
+pdf_load_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict, int nested_depth)
 {
 	char *subtype;
 	pdf_obj *dfonts;
 	pdf_obj *charprocs;
 	fz_context *ctx = xref->ctx;
 	pdf_font_desc *fontdesc;
+	int type3 = 0;
 
 	if ((fontdesc = pdf_find_item(ctx, pdf_free_font_imp, dict)))
 	{
@@ -1122,11 +1125,15 @@ pdf_load_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 	else if (subtype && !strcmp(subtype, "TrueType"))
 		fontdesc = pdf_load_simple_font(xref, dict);
 	else if (subtype && !strcmp(subtype, "Type3"))
+	{
 		fontdesc = pdf_load_type3_font(xref, rdb, dict);
+		type3 = 1;
+	}
 	else if (charprocs)
 	{
 		fz_warn(ctx, "unknown font format, guessing type3.");
 		fontdesc = pdf_load_type3_font(xref, rdb, dict);
+		type3 = 1;
 	}
 	else if (dfonts)
 	{
@@ -1144,6 +1151,9 @@ pdf_load_font(pdf_document *xref, pdf_obj *rdb, pdf_obj *dict)
 		pdf_make_width_table(ctx, fontdesc);
 
 	pdf_store_item(ctx, dict, fontdesc, fontdesc->size);
+
+	if (type3)
+		pdf_load_type3_glyphs(xref, fontdesc, nested_depth);
 
 	return fontdesc;
 }
@@ -1182,23 +1192,23 @@ pdf_print_font(fz_context *ctx, pdf_font_desc *fontdesc)
 }
 #endif
 
-fz_rect pdf_measure_text(fz_context *ctx, pdf_font_desc *fontdesc, unsigned char *buf, int len)
+fz_rect *pdf_measure_text(fz_context *ctx, pdf_font_desc *fontdesc, unsigned char *buf, int len, fz_rect *acc)
 {
 	pdf_hmtx h;
 	int gid;
 	int i;
 	float x = 0.0;
-	fz_rect acc = fz_empty_rect;
 	fz_rect bbox;
 
+	*acc = fz_empty_rect;
 	for (i = 0; i < len; i++)
 	{
 		gid = pdf_font_cid_to_gid(ctx, fontdesc, buf[i]);
 		h = pdf_lookup_hmtx(ctx, fontdesc, buf[i]);
-		bbox = fz_bound_glyph(ctx, fontdesc->font, gid, fz_identity);
+		fz_bound_glyph(ctx, fontdesc->font, gid, &fz_identity, &bbox);
 		bbox.x0 += x;
 		bbox.x1 += x;
-		acc = fz_union_rect(acc, bbox);
+		fz_union_rect(acc, &bbox);
 		x += h.w / 1000.0;
 	}
 
