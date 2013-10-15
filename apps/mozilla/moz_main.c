@@ -127,7 +127,7 @@ void pdfmoz_open(pdfmoz_t *moz, char *filename)
 		moz->pages[i].page_links = NULL;
 
 		page = fz_load_page( moz->doc, i);
-		bbox = fz_bound_page(moz->doc, page);
+		fz_bound_page(moz->doc, page, &bbox);
 		moz->pages[i].w = bbox.x1 - bbox.x0;
 		moz->pages[i].h = bbox.y1 - bbox.y0;
 		fz_free_page(moz->doc, page);
@@ -170,10 +170,9 @@ static void decodescroll(pdfmoz_t *moz, int spos)
 	}
 }
 
-fz_matrix pdfmoz_pagectm(pdfmoz_t *moz, int pagenum)
+static void pdfmoz_pagectm(fz_matrix *mat, pdfmoz_t *moz, int pagenum)
 {
 	page_t *page = moz->pages + pagenum;
-	fz_matrix ctm;
 	float zoom;
 	RECT rc;
 
@@ -181,9 +180,7 @@ fz_matrix pdfmoz_pagectm(pdfmoz_t *moz, int pagenum)
 
 	zoom = (rc.right - rc.left) / (float) page->w;
 
-	ctm = fz_scale(zoom, zoom);
-
-	return ctm;
+	mat = fz_scale(mat, zoom, zoom);
 }
 
 void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
@@ -202,7 +199,7 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	{
 		page->page = fz_load_page(moz->doc, pagenum);
 
-		page->page_bbox = fz_bound_page(moz->doc, page->page);
+		fz_bound_page(moz->doc, page->page, &page->page_bbox);
 	}
 	fz_catch(moz->ctx)
 	{
@@ -216,13 +213,13 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 		/* Create display list */
 		page->page_list = fz_new_display_list(moz->ctx);
 		mdev = fz_new_list_device(moz->ctx, page->page_list);
-		fz_run_page_contents(moz->doc, page->page, mdev, fz_identity, &cookie);
+		fz_run_page_contents(moz->doc, page->page, mdev, &fz_identity, &cookie);
 		fz_free_device(mdev);
 		mdev = NULL;
 		page->annotations_list = fz_new_display_list(moz->ctx);
 		mdev = fz_new_list_device(moz->ctx, page->annotations_list);
 		for (annot = fz_first_annot(moz->doc, page->page); annot; annot = fz_next_annot(moz->doc, annot))
-			fz_run_annot(moz->doc, page->page, annot, mdev, fz_identity, &cookie);
+			fz_run_annot(moz->doc, page->page, annot, mdev, &fz_identity, &cookie);
 		if (cookie.errors)
 		{
 			pdfmoz_warn(moz, "Errors found on page");
@@ -255,7 +252,8 @@ void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 {
 	page_t *page = moz->pages + pagenum;
 	fz_matrix ctm;
-	fz_bbox bbox;
+	fz_rect bounds;
+	fz_irect ibounds;
 	fz_colorspace *colorspace = fz_device_bgr;// we're not imlementing grayscale toggle
 	fz_device *idev;
 	fz_cookie cookie = { 0 };
@@ -263,17 +261,19 @@ void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	if (page->image)
 		return;
 
-	ctm = pdfmoz_pagectm(moz, pagenum);
-	bbox = fz_round_rect(fz_transform_rect(ctm, page->page_bbox));
-	page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, bbox);
+	pdfmoz_pagectm(&ctm, moz, pagenum);
+	bounds = page->page_bbox;
+	fz_round_rect(&ibounds, fz_transform_rect(&bounds, &ctm));
+	fz_rect_from_irect(&bounds, &ibounds);
+	page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, &ibounds);
 	fz_clear_pixmap_with_value(moz->ctx, page->image, 255);
 	if (page->page_list || page->annotations_list)
 	{
 		idev = fz_new_draw_device(moz->ctx, page->image);
 		if (page->page_list)
-			fz_run_display_list(page->page_list, idev, ctm, bbox, &cookie);
+			fz_run_display_list(page->page_list, idev, &ctm, &bounds, &cookie);
 		if (page->annotations_list)
-			fz_run_display_list(page->annotations_list, idev, ctm, bbox, &cookie);
+			fz_run_display_list(page->annotations_list, idev, &ctm, &bounds, &cookie);
 		fz_free_device(idev);
 	}
 
@@ -309,7 +309,7 @@ void pdfmoz_gotopage(pdfmoz_t *moz, int number)
 void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 {
 	char buf[512];
-	fz_bbox rect;
+	fz_irect rect;
 	fz_link *link;
 	fz_matrix ctm;
 	fz_point p;
@@ -333,14 +333,14 @@ void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 	if (pi == moz->pagecount)
 		return;
 
-	rect = fz_pixmap_bbox(moz->ctx, moz->pages[pi].image);
+	fz_pixmap_bbox(moz->ctx, moz->pages[pi].image, &rect);
 	p.x = x + rect.x0;
 	p.y = y + rect.y0 - py;
 
-	ctm = pdfmoz_pagectm(moz, pi);
-	ctm = fz_invert_matrix(ctm);
+	pdfmoz_pagectm(&ctm, moz, pi);
+	fz_invert_matrix(&ctm, &ctm);
 
-	p = fz_transform_point(ctm, p);
+	fz_transform_point(&p, &ctm);
 
 	for (link = moz->pages[pi].page_links; link; link = link->next)
 	{

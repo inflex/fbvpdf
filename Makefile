@@ -191,7 +191,7 @@ JSTARGETS :=
 endif
 
 ifeq "$(MOZDLL)" "yes"
-MUPLUGIN := $(OUT)/npmupdf-1.1-forms-tech-preview.dll
+MUPLUGIN := $(OUT)/npmupdf-1.2.dll
 WINDRES ?= windres
 W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
 $(OUT)/%.o : apps/mozilla/%.c fitz/fitz.h pdf/mupdf.h xps/muxps.h cbz/mucbz.h | $(OUT)
