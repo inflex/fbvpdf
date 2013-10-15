@@ -53,7 +53,7 @@ struct pdfmoz_s
 	char error[1024];	/* empty if no error has occured */
 };
 
-void pdfmoz_warn(pdfmoz_t *moz, const char *fmt, ...)
+static void pdfmoz_warn(pdfmoz_t *moz, const char *fmt, ...)
 {
 	char buf[1024];
 	va_list ap;
@@ -64,13 +64,13 @@ void pdfmoz_warn(pdfmoz_t *moz, const char *fmt, ...)
 	NPN_Status(moz->inst, buf);
 }
 
-void pdfmoz_error(pdfmoz_t *moz, char *msg)
+static void pdfmoz_error(pdfmoz_t *moz, char *msg)
 {
 	strcpy(moz->error, msg);
 	InvalidateRect(moz->hwnd, NULL, FALSE);
 }
 
-void pdfmoz_open(pdfmoz_t *moz, char *filename)
+static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 {
 	SCROLLINFO si;
 	fz_page *page;
@@ -248,7 +248,7 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	page->errored = errored;
 }
 
-void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
+static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 {
 	page_t *page = moz->pages + pagenum;
 	fz_matrix ctm;
@@ -284,12 +284,12 @@ void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	}
 }
 
-void pdfmoz_gotouri(pdfmoz_t *moz, char *uri)
+static void pdfmoz_gotouri(pdfmoz_t *moz, char *uri)
 {
 	NPN_GetURL(moz->inst, uri, "_blank");
 }
 
-void pdfmoz_gotopage(pdfmoz_t *moz, int number)
+static void pdfmoz_gotopage(pdfmoz_t *moz, int number)
 {
 	int i, y = 0;
 
@@ -306,7 +306,7 @@ void pdfmoz_gotopage(pdfmoz_t *moz, int number)
 	}
 }
 
-void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
+static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 {
 	char buf[512];
 	fz_irect rect;
