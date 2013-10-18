@@ -1,7 +1,5 @@
-#include "fitz.h"
-#include "mupdf.h"
-#include "muxps.h"
-#include "mucbz.h"
+#include "mupdf/fitz.h"
+#include "mupdf/pdf.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -248,13 +246,23 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	page->errored = errored;
 }
 
+static void pdfmoz_runpage(page_t *page, fz_device *dev, const fz_matrix *ctm, const fz_rect *rect, fz_cookie *cookie)
+{
+	fz_begin_page(dev, rect, ctm);
+	if (page->page_list)
+		fz_run_display_list(page->page_list, dev, ctm, rect, cookie);
+	if (page->annotations_list)
+		fz_run_display_list(page->annotations_list, dev, ctm, rect, cookie);
+	fz_end_page(dev);
+}
+
 static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 {
 	page_t *page = moz->pages + pagenum;
 	fz_matrix ctm;
 	fz_rect bounds;
 	fz_irect ibounds;
-	fz_colorspace *colorspace = fz_device_bgr;// we're not imlementing grayscale toggle
+	fz_colorspace *colorspace = fz_device_bgr(moz->ctx);// we're not imlementing grayscale toggle
 	fz_device *idev;
 	fz_cookie cookie = { 0 };
 
@@ -270,10 +278,7 @@ static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	if (page->page_list || page->annotations_list)
 	{
 		idev = fz_new_draw_device(moz->ctx, page->image);
-		if (page->page_list)
-			fz_run_display_list(page->page_list, idev, &ctm, &bounds, &cookie);
-		if (page->annotations_list)
-			fz_run_display_list(page->annotations_list, idev, &ctm, &bounds, &cookie);
+		pdfmoz_runpage(page, idev, &ctm, &bounds, &cookie);
 		fz_free_device(idev);
 	}
 
@@ -309,7 +314,7 @@ static void pdfmoz_gotopage(pdfmoz_t *moz, int number)
 static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 {
 	char buf[512];
-	fz_irect rect;
+	fz_irect irect;
 	fz_link *link;
 	fz_matrix ctm;
 	fz_point p;
@@ -333,9 +338,9 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 	if (pi == moz->pagecount)
 		return;
 
-	fz_pixmap_bbox(moz->ctx, moz->pages[pi].image, &rect);
-	p.x = x + rect.x0;
-	p.y = y + rect.y0 - py;
+	fz_pixmap_bbox(moz->ctx, moz->pages[pi].image, &irect);
+	p.x = x + irect.x0;
+	p.y = y + irect.y0 - py;
 
 	pdfmoz_pagectm(&ctm, moz, pi);
 	fz_invert_matrix(&ctm, &ctm);
@@ -479,27 +484,26 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			{
 				if (i < moz->scrollpage - 2 || i > moz->scrollpage + 6)
 				{
-					if (moz->pages[i].page_links)
-						fz_drop_link(moz->ctx, moz->pages[i].page_links);
+					fz_drop_link(moz->ctx, moz->pages[i].page_links);
 					moz->pages[i].page_links = NULL;
-					if (moz->pages[i].page_list)
-						fz_free_display_list( moz->ctx, moz->pages[i].page_list);
+
+					fz_drop_display_list( moz->ctx, moz->pages[i].page_list);
 					moz->pages[i].page_list =NULL;
-					if (moz->pages[i].annotations_list)
-						fz_free_display_list( moz->ctx, moz->pages[i].annotations_list);
+
+					fz_drop_display_list( moz->ctx, moz->pages[i].annotations_list);
 					moz->pages[i].annotations_list = NULL;
+
 					moz->pages[i].page_bbox.x0 = 0;
 					moz->pages[i].page_bbox.y0 = 0;
 					moz->pages[i].page_bbox.x1 = 100;
 					moz->pages[i].page_bbox.y1 = 100;
-					if (moz->pages[i].page)
-						fz_free_page(moz->doc, moz->pages[i].page);
+
+					fz_free_page(moz->doc, moz->pages[i].page);
 					moz->pages[i].page = NULL;
 				}
 				if (i < moz->scrollpage - 1 || i > moz->scrollpage + 3)
 				{
-					if (moz->pages[i].image)
-						fz_drop_pixmap(moz->ctx, moz->pages[i].image);
+					fz_drop_pixmap(moz->ctx, moz->pages[i].image);
 					moz->pages[i].image = NULL;
 				}
 			}
@@ -744,35 +748,31 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 	DestroyCursor(moz->hand);
 	DestroyCursor(moz->wait);
 
-	if (moz->dibinf)
-		fz_free(moz->ctx, moz->dibinf);
+	fz_free(moz->ctx, moz->dibinf);
 	moz->dibinf = NULL;
 
 	for (i = 0; i < moz->pagecount; i++)
 	{
-		if (moz->pages[i].page_links)
-			fz_drop_link(moz->ctx, moz->pages[i].page_links);
+		fz_drop_link(moz->ctx, moz->pages[i].page_links);
 		moz->pages[i].page_links = NULL;
-		if (moz->pages[i].page_list)
-			fz_free_display_list( moz->ctx, moz->pages[i].page_list);
+
+		fz_drop_display_list( moz->ctx, moz->pages[i].page_list);
 		moz->pages[i].page_list = NULL;
-		if (moz->pages[i].annotations_list)
-			fz_free_display_list( moz->ctx, moz->pages[i].annotations_list);
+
+		fz_drop_display_list( moz->ctx, moz->pages[i].annotations_list);
 		moz->pages[i].annotations_list = NULL;
-		if (moz->pages[i].page)
-			fz_free_page(moz->doc, moz->pages[i].page);
+
+		fz_free_page(moz->doc, moz->pages[i].page);
 		moz->pages[i].page = NULL;
-		if (moz->pages[i].image)
-			fz_drop_pixmap(moz->ctx, moz->pages[i].image);
+
+		fz_drop_pixmap(moz->ctx, moz->pages[i].image);
 		moz->pages[i].image = NULL;
 	}
 
-	if (moz->pages)
-		fz_free(moz->ctx, moz->pages);
+	fz_free(moz->ctx, moz->pages);
 	moz->pages = NULL;
 
-	if (moz->doc)
-		fz_close_document(moz->doc);
+	fz_close_document(moz->doc);
 	moz->doc = NULL;
 
 	fz_context *ctx = moz->ctx;

@@ -257,16 +257,19 @@ endif
 endif
 
 ifeq "$(MOZDLL)" "yes"
-MUPLUGIN := $(OUT)/npmupdf-1.2.dll
+MUPLUGIN := $(OUT)/npmupdf-1.3.dll
+MOZILLA_OUT := $(OUT)/platform/mozilla
+$(MOZILLA_OUT):
+	$(MKDIR_CMD)
 WINDRES ?= windres
 W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
-$(OUT)/%.o : apps/mozilla/%.c fitz/fitz.h pdf/mupdf.h xps/muxps.h cbz/mucbz.h | $(OUT)
+$(MOZILLA_OUT)/%.o : platform/mozilla/%.c | $(MOZILLA_OUT)
 	$(CC_CMD)
-$(OUT)/%.o : apps/mozilla/%.rc
-	$(WINDRES) -i $< -o $@ --include-dir=apps/mozilla
-$(MUPLUGIN) : $(FITZ_LIB) $(THIRD_LIBS)
-$(MUPLUGIN) : $(addprefix $(OUT)/, moz_main.o npwin.o moz_winres.o)
-	$(LINK_CMD) -shared apps/mozilla/moz_export.def -Wl,--kill-at $(W32_LIBS)
+$(MOZILLA_OUT)/%.o : platform/mozilla/%.rc
+	$(WINDRES) -i $< -o $@ --include-dir=platform/mozilla
+$(MUPLUGIN) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
+$(MUPLUGIN) : $(addprefix $(MOZILLA_OUT)/, moz_main.o npwin.o moz_winres.o)
+	$(LINK_CMD) -shared platform/mozilla/moz_export.def -Wl,--kill-at $(W32_LIBS)
 endif
 
 MUVIEW := $(MUVIEW_X11)
