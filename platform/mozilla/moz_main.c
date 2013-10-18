@@ -72,7 +72,6 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 {
 	SCROLLINFO si;
 	fz_page *page;
-	char *password = "";
 	fz_rect bbox;
 	int i;
 
@@ -86,11 +85,7 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 		* Handle encrypted PDF files
 		*/  
 		if (fz_needs_password(moz->doc))
-		{
-			int okay = fz_authenticate_password(moz->doc, password);
-			if (!okay)
-				pdfmoz_warn(moz, "Invalid password.");
-		}
+			fz_throw(moz->ctx, FZ_ERROR_GENERIC, "Needs a password");
 		moz->doctitle = filename;
 		if (strrchr(moz->doctitle, '\\'))
 			moz->doctitle = strrchr(moz->doctitle, '\\') + 1;
@@ -102,7 +97,8 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 	}
 	fz_catch(moz->ctx)
 	{
-		pdfmoz_error(moz, "cannot open document");
+		pdfmoz_error(moz, "Cannot open document");
+		return;
 	}
 
 
