@@ -18,10 +18,10 @@ struct page_s
 {
 	fz_page *page;
 	fz_pixmap *image;
-	fz_rect page_bbox;
-	fz_display_list *page_list;
-	fz_display_list *annotations_list;
-	fz_link *page_links;
+	fz_rect bbox;
+	fz_display_list *contents;
+	fz_display_list *annotations;
+	fz_link *links;
 	int errored;
 	int w, h;	/* page size in units */
 	int px; /* pixel height */
@@ -111,18 +111,18 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 	{
 		moz->pages[i].page = NULL;
 		moz->pages[i].image = NULL;
-		moz->pages[i].page_bbox.x0 = 0;
-		moz->pages[i].page_bbox.y0 = 0;
-		moz->pages[i].page_bbox.x1 = 100;
-		moz->pages[i].page_bbox.y1 = 100;
-		moz->pages[i].page_list = NULL;
-		moz->pages[i].annotations_list = NULL;
-		moz->pages[i].page_links = NULL;
+		moz->pages[i].bbox.x0 = 0;
+		moz->pages[i].bbox.y0 = 0;
+		moz->pages[i].bbox.x1 = 100;
+		moz->pages[i].bbox.y1 = 100;
+		moz->pages[i].contents = NULL;
+		moz->pages[i].annotations = NULL;
+		moz->pages[i].links = NULL;
 
 		page = fz_load_page( moz->doc, i);
-		fz_bound_page(moz->doc, page, &moz->pages[i].page_bbox);
-		moz->pages[i].w = moz->pages[i].page_bbox.x1 - moz->pages[i].page_bbox.x0;
-		moz->pages[i].h = moz->pages[i].page_bbox.y1 - moz->pages[i].page_bbox.y0;
+		fz_bound_page(moz->doc, page, &moz->pages[i].bbox);
+		moz->pages[i].w = moz->pages[i].bbox.x1 - moz->pages[i].bbox.x0;
+		moz->pages[i].h = moz->pages[i].bbox.y1 - moz->pages[i].bbox.y0;
 		fz_free_page(moz->doc, page);
 
 		moz->pages[i].px = 1 + PAD;
@@ -201,14 +201,14 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	fz_try(moz->ctx)
 	{
 		fz_annot *annot;
-		/* Create display list */
-		page->page_list = fz_new_display_list(moz->ctx);
-		mdev = fz_new_list_device(moz->ctx, page->page_list);
+		/* Create display lists */
+		page->contents = fz_new_display_list(moz->ctx);
+		mdev = fz_new_list_device(moz->ctx, page->contents);
 		fz_run_page_contents(moz->doc, page->page, mdev, &fz_identity, &cookie);
 		fz_free_device(mdev);
 		mdev = NULL;
-		page->annotations_list = fz_new_display_list(moz->ctx);
-		mdev = fz_new_list_device(moz->ctx, page->annotations_list);
+		page->annotations = fz_new_display_list(moz->ctx);
+		mdev = fz_new_list_device(moz->ctx, page->annotations);
 		for (annot = fz_first_annot(moz->doc, page->page); annot; annot = fz_next_annot(moz->doc, annot))
 			fz_run_annot(moz->doc, page->page, annot, mdev, &fz_identity, &cookie);
 		if (cookie.errors)
@@ -228,7 +228,7 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	}
 	fz_try(moz->ctx)
 	{
-		page->page_links = fz_load_links(moz->doc, page->page);
+		page->links = fz_load_links(moz->doc, page->page);
 	}
 	fz_catch(moz->ctx)
 	{
@@ -242,10 +242,10 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 static void pdfmoz_runpage(page_t *page, fz_device *dev, const fz_matrix *ctm, const fz_rect *rect, fz_cookie *cookie)
 {
 	fz_begin_page(dev, rect, ctm);
-	if (page->page_list)
-		fz_run_display_list(page->page_list, dev, ctm, rect, cookie);
-	if (page->annotations_list)
-		fz_run_display_list(page->annotations_list, dev, ctm, rect, cookie);
+	if (page->contents)
+		fz_run_display_list(page->contents, dev, ctm, rect, cookie);
+	if (page->annotations)
+		fz_run_display_list(page->annotations, dev, ctm, rect, cookie);
 	fz_end_page(dev);
 }
 
@@ -263,12 +263,12 @@ static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 		return;
 
 	pdfmoz_pagectm(&ctm, moz, pagenum);
-	bounds = page->page_bbox;
+	bounds = page->bbox;
 	fz_round_rect(&ibounds, fz_transform_rect(&bounds, &ctm));
 	fz_rect_from_irect(&bounds, &ibounds);
 	page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, &ibounds);
 	fz_clear_pixmap_with_value(moz->ctx, page->image, 255);
-	if (page->page_list || page->annotations_list)
+	if (page->contents || page->annotations)
 	{
 		idev = fz_new_draw_device(moz->ctx, page->image);
 		pdfmoz_runpage(page, idev, &ctm, &bounds, &cookie);
@@ -340,7 +340,7 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 
 	fz_transform_point(&p, &ctm);
 
-	for (link = moz->pages[pi].page_links; link; link = link->next)
+	for (link = moz->pages[pi].links; link; link = link->next)
 	{
 		if (p.x >= link->rect.x0 && p.x <= link->rect.x1)
 			if (p.y >= link->rect.y0 && p.y <= link->rect.y1)
@@ -477,14 +477,14 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			{
 				if (i < moz->scrollpage - 2 || i > moz->scrollpage + 6)
 				{
-					fz_drop_link(moz->ctx, moz->pages[i].page_links);
-					moz->pages[i].page_links = NULL;
+					fz_drop_link(moz->ctx, moz->pages[i].links);
+					moz->pages[i].links = NULL;
 
-					fz_drop_display_list( moz->ctx, moz->pages[i].page_list);
-					moz->pages[i].page_list =NULL;
+					fz_drop_display_list( moz->ctx, moz->pages[i].contents);
+					moz->pages[i].contents =NULL;
 
-					fz_drop_display_list( moz->ctx, moz->pages[i].annotations_list);
-					moz->pages[i].annotations_list = NULL;
+					fz_drop_display_list( moz->ctx, moz->pages[i].annotations);
+					moz->pages[i].annotations = NULL;
 
 					fz_free_page(moz->doc, moz->pages[i].page);
 					moz->pages[i].page = NULL;
@@ -741,14 +741,14 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 
 	for (i = 0; i < moz->pagecount; i++)
 	{
-		fz_drop_link(moz->ctx, moz->pages[i].page_links);
-		moz->pages[i].page_links = NULL;
+		fz_drop_link(moz->ctx, moz->pages[i].links);
+		moz->pages[i].links = NULL;
 
-		fz_drop_display_list( moz->ctx, moz->pages[i].page_list);
-		moz->pages[i].page_list = NULL;
+		fz_drop_display_list( moz->ctx, moz->pages[i].contents);
+		moz->pages[i].contents = NULL;
 
-		fz_drop_display_list( moz->ctx, moz->pages[i].annotations_list);
-		moz->pages[i].annotations_list = NULL;
+		fz_drop_display_list( moz->ctx, moz->pages[i].annotations);
+		moz->pages[i].annotations = NULL;
 
 		fz_free_page(moz->doc, moz->pages[i].page);
 		moz->pages[i].page = NULL;
