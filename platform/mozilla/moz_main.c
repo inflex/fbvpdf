@@ -72,7 +72,6 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 {
 	SCROLLINFO si;
 	fz_page *page;
-	fz_rect bbox;
 	int i;
 
 	strcpy(moz->error, "");
@@ -121,9 +120,9 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 		moz->pages[i].page_links = NULL;
 
 		page = fz_load_page( moz->doc, i);
-		fz_bound_page(moz->doc, page, &bbox);
-		moz->pages[i].w = bbox.x1 - bbox.x0;
-		moz->pages[i].h = bbox.y1 - bbox.y0;
+		fz_bound_page(moz->doc, page, &moz->pages[i].page_bbox);
+		moz->pages[i].w = moz->pages[i].page_bbox.x1 - moz->pages[i].page_bbox.x0;
+		moz->pages[i].h = moz->pages[i].page_bbox.y1 - moz->pages[i].page_bbox.y0;
 		fz_free_page(moz->doc, page);
 
 		moz->pages[i].px = 1 + PAD;
@@ -192,8 +191,6 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	fz_try(moz->ctx)
 	{
 		page->page = fz_load_page(moz->doc, pagenum);
-
-		fz_bound_page(moz->doc, page->page, &page->page_bbox);
 	}
 	fz_catch(moz->ctx)
 	{
@@ -488,11 +485,6 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 					fz_drop_display_list( moz->ctx, moz->pages[i].annotations_list);
 					moz->pages[i].annotations_list = NULL;
-
-					moz->pages[i].page_bbox.x0 = 0;
-					moz->pages[i].page_bbox.y0 = 0;
-					moz->pages[i].page_bbox.x1 = 100;
-					moz->pages[i].page_bbox.y1 = 100;
 
 					fz_free_page(moz->doc, moz->pages[i].page);
 					moz->pages[i].page = NULL;
