@@ -383,7 +383,6 @@ static void drawimage(HDC hdc, pdfmoz_t *moz, fz_pixmap *image, int yofs)
 {
 	int image_w = fz_pixmap_width(moz->ctx, image);
 	int image_h = fz_pixmap_height(moz->ctx, image);
-	int image_n = fz_pixmap_components(moz->ctx, image);
 	unsigned char *samples = fz_pixmap_samples(moz->ctx, image);
 
 	if (!image)
@@ -393,31 +392,10 @@ static void drawimage(HDC hdc, pdfmoz_t *moz, fz_pixmap *image, int yofs)
 	moz->dibinf->bmiHeader.biHeight = -image_h;
 	moz->dibinf->bmiHeader.biSizeImage = image_h * 4;
 
-	if (image_n == 2)
-	{
-		int i = image_w * image_h;
-		unsigned char *color = fz_malloc(moz->ctx, i*4);
-		unsigned char *s = samples;
-		unsigned char *d = color;
-		for (; i > 0 ; i--)
-		{
-			d[2] = d[1] = d[0] = *s++;
-			d[3] = *s++;
-			d += 4;
-		}
-		SetDIBitsToDevice(hdc,
-			0, yofs, image_w, image_h,
-			0, 0, 0, image_h, color,
-		moz->dibinf, DIB_RGB_COLORS);
-		fz_free(moz->ctx, color);
-	}
-	if (image_n == 4)
-	{
-		SetDIBitsToDevice(hdc,
-			0, yofs, image_w, image_h,
-			0, 0, 0, image_h, samples,
-		moz->dibinf, DIB_RGB_COLORS);
-	}
+	SetDIBitsToDevice(hdc,
+		0, yofs, image_w, image_h,
+		0, 0, 0, image_h, samples,
+	moz->dibinf, DIB_RGB_COLORS);
 }
 
 LRESULT CALLBACK
