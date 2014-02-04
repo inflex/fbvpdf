@@ -42,8 +42,6 @@ struct pdfmoz_s
 	int pagecount;
 	page_t *pages;
 
-	char *doctitle;
-
 	fz_document *doc;
 
 	char error[1024];	/* empty if no error has occured */
@@ -83,12 +81,6 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 		*/  
 		if (fz_needs_password(moz->doc))
 			fz_throw(moz->ctx, FZ_ERROR_GENERIC, "Needs a password");
-		moz->doctitle = filename;
-		if (strrchr(moz->doctitle, '\\'))
-			moz->doctitle = strrchr(moz->doctitle, '\\') + 1;
-		if (strrchr(moz->doctitle, '/'))
-			moz->doctitle = strrchr(moz->doctitle, '/') + 1;
-		moz->doctitle = fz_strdup(moz->ctx, moz->doctitle);
 
 		moz->pagecount = fz_count_pages(moz->doc);
 	}
