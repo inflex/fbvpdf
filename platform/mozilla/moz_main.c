@@ -9,8 +9,6 @@
 
 #define PAD 5
 
-#define MSG(s) MessageBox(0,s,"MuPDF Debug",MB_OK)
-
 typedef struct pdfmoz_s pdfmoz_t;
 typedef struct page_s page_t;
 
@@ -655,8 +653,6 @@ NPP_New(NPMIMEType mime, NPP inst, uint16 mode,
 	pdfmoz_t *moz;
 	fz_context *ctx;
 
-	//MSG("NPP_New");
-
 	ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
 	if (!ctx)
 		return NPERR_OUT_OF_MEMORY_ERROR;
@@ -703,8 +699,6 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 {
 	pdfmoz_t *moz = inst->pdata;
 	int i;
-
-	//MSG("NPP_Destroy");
 
 	inst->pdata = NULL;
 
@@ -773,7 +767,6 @@ NPP_NewStream(NPP inst, NPMIMEType type,
 	NPStream* stream, NPBool seekable,
 	uint16* stype)
 {
-	//MSG("NPP_NewStream");
 	*stype = NP_ASFILE;
 	return NPERR_NO_ERROR;
 }
@@ -781,21 +774,18 @@ NPP_NewStream(NPP inst, NPMIMEType type,
 NPError
 NPP_DestroyStream(NPP inst, NPStream* stream, NPReason reason)
 {
-	//MSG("NPP_DestroyStream");
 	return NPERR_NO_ERROR;
 }
 
 int32
 NPP_WriteReady(NPP inst, NPStream* stream)
 {
-	//MSG("NPP_WriteReady");
 	return 2147483647;
 }
 
 int32
 NPP_Write(NPP inst, NPStream* stream, int32 offset, int32 len, void* buffer)
 {
-	//MSG("NPP_Write");
 	return len;
 }
 
@@ -803,20 +793,18 @@ void
 NPP_StreamAsFile(NPP inst, NPStream* stream, const char* fname)
 {
 	pdfmoz_t *moz = inst->pdata;
-	//MSG("NPP_StreamAsFile");
+
 	pdfmoz_open(moz, (char*)fname);
 }
 
 void
 NPP_Print(NPP inst, NPPrint* platformPrint)
 {
-	MSG("Sorry, printing is not supported.");
 }
 
 int16
 NPP_HandleEvent(NPP inst, void* event)
 {
-	MSG("handle event\n");
 	return 0;
 }
 
@@ -824,7 +812,6 @@ void
 NPP_URLNotify(NPP inst, const char* url,
 	NPReason reason, void* notifyData)
 {
-	MSG("notify url\n");
 }
 
 NPError
@@ -847,14 +834,10 @@ void* NPP_GetJavaClass(void)
 NPError
 NPP_Initialize(void)
 {
-	//MSG("NPP_Initialize");
 	return NPERR_NO_ERROR;
 }
 
 void
 NPP_Shutdown(void)
 {
-	//MSG("NPP_Shutdown");
 }
-
-
