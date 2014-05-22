@@ -74,6 +74,8 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 
 	fz_try(moz->ctx)
 	{
+		fz_register_document_handlers(moz->ctx);
+
 		moz->doc = fz_open_document(moz->ctx, filename);
 
 		/*

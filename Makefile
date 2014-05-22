@@ -269,7 +269,7 @@ endif
 endif
 
 ifeq "$(MOZDLL)" "yes"
-MUPLUGIN := $(OUT)/npmupdf-1.3.dll
+MUPLUGIN := $(OUT)/npmupdf-1.4.dll
 MOZILLA_OUT := $(OUT)/platform/mozilla
 $(MOZILLA_OUT):
 	$(MKDIR_CMD)
@@ -279,7 +279,7 @@ $(MOZILLA_OUT)/%.o : platform/mozilla/%.c | $(MOZILLA_OUT)
 	$(CC_CMD)
 $(MOZILLA_OUT)/%.o : platform/mozilla/%.rc
 	$(WINDRES) -i $< -o $@ --include-dir=platform/mozilla
-$(MUPLUGIN) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
+$(MUPLUGIN) : $(MUPDF_LIB) $(THIRD_LIBS)
 $(MUPLUGIN) : $(addprefix $(MOZILLA_OUT)/, moz_main.o npwin.o moz_winres.o)
 	$(LINK_CMD) -shared platform/mozilla/moz_export.def -Wl,--kill-at $(W32_LIBS)
 endif
