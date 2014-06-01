@@ -696,6 +696,8 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 
 	inst->pdata = NULL;
 
+	SetWindowLongPtr(moz->hwnd, GWLP_WNDPROC, (LONG_PTR)moz->winproc);
+
 	DeleteObject(moz->graybrush);
 
 	DestroyCursor(moz->arrow);
