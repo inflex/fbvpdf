@@ -85,6 +85,8 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 			fz_throw(moz->ctx, FZ_ERROR_GENERIC, "Needs a password");
 
 		moz->pagecount = fz_count_pages(moz->doc);
+		if (moz->pagecount <= 0)
+			fz_throw(moz->ctx, FZ_ERROR_GENERIC, "No pages in document");
 	}
 	fz_catch(moz->ctx)
 	{
