@@ -274,13 +274,15 @@ endif
 endif
 
 ifeq "$(WIN32GUI)" "yes"
-MUVIEW_W32 := $(OUT)/mupdf
-WINDRES ?= windres
 W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
+WINDRES ?= windres
 $(OUT)/platform/x11/%.o : platform/x11/%.rc
 	$(WINDRES) -i $< -o $@
-$(MUVIEW_W32) : $(MUPDF_LIB) $(MUPDF_JS_NONE_LIB) $(THIRD_LIBS)
-$(MUVIEW_W32) : $(addprefix $(OUT)/platform/x11/, win_main.o win_res.o pdfapp.o)
+MUVIEW_W32 := $(OUT)/mupdf
+MUVIEW_W32_OBJ := $(addprefix $(OUT)/platform/x11/, win_main.o win_res.o pdfapp.o)
+$(MUVIEW_W32_OBJ) := $(FITZ_HDR) $(PDF_HDR)
+$(MUVIEW_W32) : $(MUPDF_LIB) $(THIRD_LIBS)
+$(MUVIEW_W32) : $(MUVIEW_W32_OBJ)
 	$(LINK_CMD) $(W32_LIBS)
 MUVIEW := $(MUVIEW_W32)
 endif
