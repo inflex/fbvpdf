@@ -278,7 +278,7 @@ MOZILLA_OUT := $(OUT)/platform/mozilla
 $(MOZILLA_OUT):
 	$(MKDIR_CMD)
 WINDRES ?= windres
-W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
+W32_LIBS := -mwindows
 $(MOZILLA_OUT)/%.o : platform/mozilla/%.c | $(MOZILLA_OUT)
 	$(CC_CMD)
 $(MOZILLA_OUT)/%.o : platform/mozilla/%.rc
