@@ -274,7 +274,7 @@ endif
 endif
 
 ifeq "$(WIN32GUI)" "yes"
-W32_LIBS := -lgdi32 -lcomdlg32 -luser32 -ladvapi32 -lshell32 -mwindows
+W32_LIBS := -mwindows
 WINDRES ?= windres
 $(OUT)/platform/x11/%.o : platform/x11/%.rc
 	$(WINDRES) -i $< -o $@
