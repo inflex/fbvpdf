@@ -273,7 +273,7 @@ endif
 endif
 
 ifeq "$(MOZDLL)" "yes"
-MUPLUGIN := $(OUT)/npmupdf-1.5.dll
+MUPLUGIN := $(OUT)/npmupdf-1.6.dll
 MOZILLA_OUT := $(OUT)/platform/mozilla
 $(MOZILLA_OUT):
 	$(MKDIR_CMD)
