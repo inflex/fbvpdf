@@ -1,6 +1,7 @@
 //
 // MuPDF Plugin description
 //
+#include "mupdf/fitz.h"
 
 1 VERSIONINFO
 
@@ -11,7 +12,7 @@ BEGIN
 		BEGIN
 			VALUE "ProductName", "MuPDF Plug-in\0"
 			VALUE "OriginalFilename", "npmupdf.dll\0"
-			VALUE "FileDescription", "The MuPDF plugin allows you to browse PDF files with a simple light-weight scrolling interface.\0"
+			VALUE "FileDescription", "The MuPDF plugin allows you to browse PDF files with a simple light-weight scrolling interface. (Based on MuPDF " FZ_VERSION ".)\0"
 			VALUE "MIMEType", "application/pdf|application/x-mupdf\0"
 			VALUE "FileExtents", "pdf|foo"
 			VALUE "FileOpenName", "Acrobat PDF File|Acrobat PDF File"

@@ -286,7 +286,7 @@ $(MUVIEW_WIN32) : $(MUVIEW_WIN32_OBJ)
 	$(LINK_CMD) $(WIN32_LIBS)
 
 ifeq "$(MOZDLL)" "yes"
-MUPLUGIN := $(OUT)/npmupdf-1.6.dll
+MUPLUGIN := $(OUT)/npmupdf-1.7.dll
 MOZILLA_OUT := $(OUT)/platform/mozilla
 $(MOZILLA_OUT):
 	$(MKDIR_CMD)
