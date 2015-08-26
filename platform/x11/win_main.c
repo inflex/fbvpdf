@@ -1,5 +1,3 @@
-#include "pdfapp.h"
-
 #ifndef UNICODE
 #define UNICODE
 #endif
@@ -14,6 +12,8 @@
 #ifndef WM_MOUSEWHEEL
 #define WM_MOUSEWHEEL 0x020A
 #endif
+
+#include "pdfapp.h"
 
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
 
