@@ -1,5 +1,11 @@
 #include "pdfapp.h"
 
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commdlg.h>
@@ -170,7 +176,7 @@ int winsavequery(pdfapp_t *app)
 
 int winfilename(wchar_t *buf, int len)
 {
-	OPENFILENAMEW ofn;
+	OPENFILENAME ofn;
 	buf[0] = 0;
 	memset(&ofn, 0, sizeof(OPENFILENAME));
 	ofn.lStructSize = sizeof(OPENFILENAME);
@@ -187,7 +193,7 @@ int winfilename(wchar_t *buf, int len)
 int wingetsavepath(pdfapp_t *app, char *buf, int len)
 {
 	wchar_t twbuf[MAX_PATH];
-	OPENFILENAMEW ofn;
+	OPENFILENAME ofn;
 
 	wcscpy(twbuf, wbuf);
 	memset(&ofn, 0, sizeof(OPENFILENAME));
@@ -199,7 +205,7 @@ int wingetsavepath(pdfapp_t *app, char *buf, int len)
 	ofn.lpstrTitle = L"MuPDF: Save PDF file";
 	ofn.lpstrFilter = L"PDF Documents (*.pdf)\0*.pdf\0All Files\0*\0\0";
 	ofn.Flags = OFN_HIDEREADONLY;
-	if (GetSaveFileNameW(&ofn))
+	if (GetSaveFileName(&ofn))
 	{
 		int code = WideCharToMultiByte(CP_UTF8, 0, twbuf, -1, buf, MIN(MAX_PATH, len), NULL, NULL);
 		if (code == 0)
@@ -238,10 +244,10 @@ void winreplacefile(char *source, char *target)
 	}
 
 #if (_WIN32_WINNT >= 0x0500)
-	ReplaceFileW(wtarget, wsource, NULL, REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
+	ReplaceFile(wtarget, wsource, NULL, REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
 #else
-	DeleteFileW(wtarget);
-	MoveFileW(wsource, wtarget);
+	DeleteFile(wtarget);
+	MoveFile(wsource, wtarget);
 #endif
 }
 
@@ -264,7 +270,7 @@ void wincopyfile(char *source, char *target)
 		return;
 	}
 
-	CopyFileW(wsource, wtarget, FALSE);
+	CopyFile(wsource, wtarget, FALSE);
 }
 
 static char pd_filename[256] = "The file is encrypted.";
@@ -545,7 +551,7 @@ void winhelp(pdfapp_t*app)
 
 void winopen()
 {
-	WNDCLASSW wc;
+	WNDCLASS wc;
 	HMENU menu;
 	RECT r;
 	ATOM a;
@@ -1018,7 +1024,7 @@ frameproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return 0;
 	}
 
-	return DefWindowProcW(hwnd, message, wParam, lParam);
+	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
 LRESULT CALLBACK
@@ -1158,7 +1164,7 @@ viewproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	fflush(stdout);
 
 	/* Pass on unhandled events to Windows */
-	return DefWindowProcW(hwnd, message, wParam, lParam);
+	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
 int WINAPI
