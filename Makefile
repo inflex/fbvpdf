@@ -286,7 +286,8 @@ $(MUVIEW_WIN32) : $(MUVIEW_WIN32_OBJ)
 	$(LINK_CMD) $(WIN32_LIBS)
 
 ifeq "$(MOZDLL)" "yes"
-MUPLUGIN := $(OUT)/npmupdf-1.7a.dll
+TAG = ${shell  sed -ne "s/\\\#define FZ_VERSION \"\([^\"]*\)\"/\1/p" include/mupdf/fitz/version.h}
+MUPLUGIN := $(OUT)/npmupdf-$(TAG).dll
 MOZILLA_OUT := $(OUT)/platform/mozilla
 $(MOZILLA_OUT):
 	$(MKDIR_CMD)
