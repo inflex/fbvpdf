@@ -16,8 +16,6 @@
 #define WM_MOUSEWHEEL 0x020A
 #endif
 
-#include "pdfapp.h"
-
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
 
 #define ID_ABOUT	0x1000
