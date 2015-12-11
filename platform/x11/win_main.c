@@ -35,9 +35,13 @@ static int timer_pending = 0;
 static int justcopied = 0;
 
 static pdfapp_t gapp;
+ 
+#ifndef PATH_MAX
+#define PATH_MAX (1024)
+#endif
 
-static wchar_t wbuf[MAX_PATH];
-static char filename[MAX_PATH];
+static wchar_t wbuf[PATH_MAX];
+static char filename[PATH_MAX];
 
 /*
  * Create registry keys to associate MuPDF with PDF and XPS files.
@@ -193,7 +197,7 @@ int winfilename(wchar_t *buf, int len)
 
 int wingetsavepath(pdfapp_t *app, char *buf, int len)
 {
-	wchar_t twbuf[MAX_PATH];
+	wchar_t twbuf[PATH_MAX];
 	OPENFILENAME ofn;
 
 	wcscpy(twbuf, wbuf);
@@ -201,14 +205,14 @@ int wingetsavepath(pdfapp_t *app, char *buf, int len)
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = hwndframe;
 	ofn.lpstrFile = twbuf;
-	ofn.nMaxFile = MAX_PATH;
+	ofn.nMaxFile = PATH_MAX;
 	ofn.lpstrInitialDir = NULL;
 	ofn.lpstrTitle = L"MuPDF: Save PDF file";
 	ofn.lpstrFilter = L"PDF Documents (*.pdf)\0*.pdf\0All Files\0*\0\0";
 	ofn.Flags = OFN_HIDEREADONLY;
 	if (GetSaveFileName(&ofn))
 	{
-		int code = WideCharToMultiByte(CP_UTF8, 0, twbuf, -1, buf, MIN(MAX_PATH, len), NULL, NULL);
+		int code = WideCharToMultiByte(CP_UTF8, 0, twbuf, -1, buf, MIN(PATH_MAX, len), NULL, NULL);
 		if (code == 0)
 		{
 			winerror(&gapp, "cannot convert filename to utf-8");
@@ -227,17 +231,17 @@ int wingetsavepath(pdfapp_t *app, char *buf, int len)
 
 void winreplacefile(char *source, char *target)
 {
-	wchar_t wsource[MAX_PATH];
-	wchar_t wtarget[MAX_PATH];
+	wchar_t wsource[PATH_MAX];
+	wchar_t wtarget[PATH_MAX];
 
-	int sz = MultiByteToWideChar(CP_UTF8, 0, source, -1, wsource, MAX_PATH);
+	int sz = MultiByteToWideChar(CP_UTF8, 0, source, -1, wsource, PATH_MAX);
 	if (sz == 0)
 	{
 		winerror(&gapp, "cannot convert filename to Unicode");
 		return;
 	}
 
-	sz = MultiByteToWideChar(CP_UTF8, 0, target, -1, wtarget, MAX_PATH);
+	sz = MultiByteToWideChar(CP_UTF8, 0, target, -1, wtarget, PATH_MAX);
 	if (sz == 0)
 	{
 		winerror(&gapp, "cannot convert filename to Unicode");
@@ -254,17 +258,17 @@ void winreplacefile(char *source, char *target)
 
 void wincopyfile(char *source, char *target)
 {
-	wchar_t wsource[MAX_PATH];
-	wchar_t wtarget[MAX_PATH];
+	wchar_t wsource[PATH_MAX];
+	wchar_t wtarget[PATH_MAX];
 
-	int sz = MultiByteToWideChar(CP_UTF8, 0, source, -1, wsource, MAX_PATH);
+	int sz = MultiByteToWideChar(CP_UTF8, 0, source, -1, wsource, PATH_MAX);
 	if (sz == 0)
 	{
 		winerror(&gapp, "cannot convert filename to Unicode");
 		return;
 	}
 
-	sz = MultiByteToWideChar(CP_UTF8, 0, target, -1, wtarget, MAX_PATH);
+	sz = MultiByteToWideChar(CP_UTF8, 0, target, -1, wtarget, PATH_MAX);
 	if (sz == 0)
 	{
 		winerror(&gapp, "cannot convert filename to Unicode");
