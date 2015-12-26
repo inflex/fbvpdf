@@ -315,7 +315,7 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 	{
 		if (!moz->pages[pi].image)
 			return;
-		if (y > py && y < moz->pages[pi].px)
+		if ( y < (moz->pages[pi].px + py))
 			break;
 		py += moz->pages[pi].px;
 		pi ++;
