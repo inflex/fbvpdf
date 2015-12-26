@@ -37,6 +37,9 @@ struct pdfmoz_s
 	int scrollpage;	/* scrollbar -> page (n) */
 	int scrollyofs;	/* scrollbar -> page offset in pixels */
 
+	int mouse_x;
+	int mouse_y;
+
 	int pagecount;
 	page_t *pages;
 
@@ -369,6 +372,8 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 		NPN_Status(moz->inst, buf);
 		SetCursor(moz->arrow);
 	}
+	moz->mouse_x = x;
+	moz->mouse_y = y;
 }
 
 static void drawimage(HDC hdc, pdfmoz_t *moz, fz_pixmap *image, int yofs)
@@ -594,8 +599,7 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			InvalidateRect(moz->hwnd, NULL, FALSE);
 
 			decodescroll(moz, si.nPos);
-			sprintf(buf, "Page %d of %d", moz->scrollpage + 1, moz->pagecount);
-			NPN_Status(moz->inst, buf);
+			pdfmoz_onmouse(moz, moz->mouse_x, moz->mouse_y, 0);
 
 			return 0;
 
@@ -608,7 +612,6 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SendMessage(hwnd, WM_VSCROLL, MAKELONG(SB_LINEUP, 0), 0);
 			else
 				SendMessage(hwnd, WM_VSCROLL, MAKELONG(SB_LINEDOWN, 0), 0);
-			pdfmoz_onmouse(moz, x, y, 0);
 			break;
 
 		case WM_KEYDOWN:
