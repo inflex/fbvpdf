@@ -365,7 +365,7 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 	}
 	else
 	{
-		sprintf(buf, "Page %d of %d", moz->scrollpage + 1, moz->pagecount);
+		sprintf(buf, "Page %d of %d", pi + 1, moz->pagecount);
 		NPN_Status(moz->inst, buf);
 		SetCursor(moz->arrow);
 	}
@@ -608,6 +608,7 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SendMessage(hwnd, WM_VSCROLL, MAKELONG(SB_LINEUP, 0), 0);
 			else
 				SendMessage(hwnd, WM_VSCROLL, MAKELONG(SB_LINEDOWN, 0), 0);
+			pdfmoz_onmouse(moz, x, y, 0);
 			break;
 
 		case WM_KEYDOWN:
