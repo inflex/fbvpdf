@@ -2,7 +2,6 @@
 #include "mupdf/pdf.h"
 
 #include <windows.h>
-#include <windowsx.h>
 
 #include <npapi.h>
 
@@ -417,7 +416,7 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		if (msg == WM_PAINT)
 		{
 			hdc = BeginPaint(hwnd, &ps);
-			FillRect(hdc, &rc, GetStockBrush(WHITE_BRUSH));
+			FillRect(hdc, &rc, GetStockObject(WHITE_BRUSH));
 			rc.top += 10;
 			rc.bottom -= 10;
 			rc.left += 10;
