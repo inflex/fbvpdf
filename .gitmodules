@@ -22,3 +22,6 @@
 [submodule "thirdparty/curl"]
 	path = thirdparty/curl
 	url = git://git.ghostscript.com/thirdparty/curl.git
+[submodule "thirdparty/npapi-sdk"]
+	path = thirdparty/npapi-sdk
+	url = https://github.com/mozilla/npapi-sdk.git
