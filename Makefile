@@ -296,17 +296,17 @@ $(MUVIEW_WIN32) : $(MUPDF_LIB) $(THIRD_LIBS)
 $(MUVIEW_WIN32) : $(MUVIEW_WIN32_OBJ)
 	$(LINK_CMD) $(WIN32_LIBS)
 
-ifeq "$(MOZDLL)" "yes"
+ifeq "$(HAVE_NPAPI)" "yes"
 TAG = ${shell  sed -ne "s/\\\#define FZ_VERSION \"\([^\"]*\)\"/\1/p" include/mupdf/fitz/version.h}
 MUPLUGIN := $(OUT)/npmupdf-$(TAG).dll
 MOZILLA_OUT := $(OUT)/platform/mozilla
 $(MOZILLA_OUT):
 	$(MKDIR_CMD)
 $(MOZILLA_OUT)/%.o : platform/mozilla/%.c | $(MOZILLA_OUT)
-	$(CC_CMD)
+	$(CC_CMD) $(NPAPI_CFLAGS)
 $(MOZILLA_OUT)/%.o : platform/mozilla/%.rc
 	windres -i $< -o $@ --include-dir=include
-MUPLUGIN_OBJ := $(addprefix $(MOZILLA_OUT)/, moz_main.o npwin.o moz_winres.o)
+MUPLUGIN_OBJ := $(addprefix $(MOZILLA_OUT)/, moz_entry.o moz_main.o moz_winres.o)
 $(MUPLUGIN_OBJ) :  $(FITZ_HDR) $(PDF_HDR)
 $(MUPLUGIN) : $(MUPDF_LIB) $(THIRD_LIBS)
 $(MUPLUGIN) : $(MUPLUGIN_OBJ)

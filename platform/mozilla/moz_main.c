@@ -4,8 +4,7 @@
 #include <windows.h>
 #include <windowsx.h>
 
-#include "npapi.h"
-#include "npupp.h"
+#include <npapi.h>
 
 #define PAD 5
 
@@ -643,8 +642,8 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 
 NPError
-NPP_New(NPMIMEType mime, NPP inst, uint16 mode,
-	int16 argc, char *argn[], char *argv[], NPSavedData *saved)
+NPP_New(NPMIMEType mime, NPP inst, uint16_t mode,
+	int16_t argc, char *argn[], char *argv[], NPSavedData *saved)
 {
 	pdfmoz_t *moz;
 	fz_context *ctx;
@@ -763,7 +762,7 @@ NPP_SetWindow(NPP inst, NPWindow *npwin)
 NPError
 NPP_NewStream(NPP inst, NPMIMEType type,
 	NPStream* stream, NPBool seekable,
-	uint16* stype)
+	uint16_t* stype)
 {
 	*stype = NP_ASFILE;
 	return NPERR_NO_ERROR;
@@ -775,14 +774,14 @@ NPP_DestroyStream(NPP inst, NPStream* stream, NPReason reason)
 	return NPERR_NO_ERROR;
 }
 
-int32
+int32_t
 NPP_WriteReady(NPP inst, NPStream* stream)
 {
 	return 2147483647;
 }
 
-int32
-NPP_Write(NPP inst, NPStream* stream, int32 offset, int32 len, void* buffer)
+int32_t
+NPP_Write(NPP inst, NPStream* stream, int32_t offset, int32_t len, void* buffer)
 {
 	return len;
 }
@@ -800,7 +799,7 @@ NPP_Print(NPP inst, NPPrint* platformPrint)
 {
 }
 
-int16
+int16_t
 NPP_HandleEvent(NPP inst, void* event)
 {
 	return 0;
@@ -813,29 +812,13 @@ NPP_URLNotify(NPP inst, const char* url,
 }
 
 NPError
-NPP_GetValue(void* inst, NPPVariable variable, void *value)
+NPP_GetValue(NPP inst, NPPVariable variable, void *value)
 {
 	return NPERR_NO_ERROR;
 }
 
 NPError
-NPP_SetValue(void* inst, NPNVariable variable, void *value)
+NPP_SetValue(NPP inst, NPNVariable variable, void *value)
 {
 	return NPERR_NO_ERROR;
-}
-
-void* NPP_GetJavaClass(void)
-{
-	return 0;
-}
-
-NPError
-NPP_Initialize(void)
-{
-	return NPERR_NO_ERROR;
-}
-
-void
-NPP_Shutdown(void)
-{
 }

@@ -15,6 +15,7 @@ OPENSSL_DIR := thirdparty/openssl
 ZLIB_DIR := thirdparty/zlib
 CURL_DIR := thirdparty/curl
 GLFW_DIR := thirdparty/glfw
+NPAPI_DIR := thirdparty/npapi-sdk
 
 # --- V8 ---
 #
@@ -513,6 +514,16 @@ HAVE_GLFW := yes
 else ifeq "$(HAVE_GLFW)" "yes"
 GLFW_CFLAGS := $(SYS_GLFW_CFLAGS)
 GLFW_LIBS := $(SYS_GLFW_LIBS)
+endif
+
+# --- NPAPI ---
+
+ifneq "$(wildcard $(NPAPI_DIR)/samples/COPYING)" ""
+NPAPI_CFLAGS := -I$(NPAPI_DIR)/headers
+HAVE_NPAPI := yes
+
+else ifeq "$(HAVE_NPAPI)" "yes"
+NPAPI_CFLAGS := $(SYS_NPAPI_CFLAGS)
 endif
 
 # --- X11 ---
