@@ -472,15 +472,6 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 
 			i = moz->scrollpage;
-
-			pdfmoz_loadpage(moz, i);
-			if (moz->error[0])
-				return 0;
-
-			pdfmoz_drawpage(moz, i);
-			if (moz->error[0])
-				return 0;
-
 			y = -moz->scrollyofs;
 			while (y < h && i < moz->pagecount)
 			{
