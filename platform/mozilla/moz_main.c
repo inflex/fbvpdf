@@ -399,7 +399,6 @@ LRESULT CALLBACK
 MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	pdfmoz_t *moz = (pdfmoz_t*) GetWindowLongPtr(hwnd, GWLP_USERDATA);
-	char buf[256];
 
 	int x = (signed short) LOWORD(lParam);
 	int y = (signed short) HIWORD(lParam);
