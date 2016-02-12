@@ -446,30 +446,6 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			decodescroll(moz, si.nPos);
 
-			/* evict out-of-range images and pages */
-			for (i = 0; i < moz->pagecount; i++)
-			{
-				if (i < moz->scrollpage - 2 || i > moz->scrollpage + 6)
-				{
-					fz_drop_link(moz->ctx, moz->pages[i].links);
-					moz->pages[i].links = NULL;
-
-					fz_drop_display_list( moz->ctx, moz->pages[i].contents);
-					moz->pages[i].contents =NULL;
-
-					fz_drop_display_list( moz->ctx, moz->pages[i].annotations);
-					moz->pages[i].annotations = NULL;
-
-					fz_drop_page(moz->ctx, moz->pages[i].page);
-					moz->pages[i].page = NULL;
-				}
-				if (i < moz->scrollpage - 1 || i > moz->scrollpage + 3)
-				{
-					fz_drop_pixmap(moz->ctx, moz->pages[i].image);
-					moz->pages[i].image = NULL;
-				}
-			}
-
 			hdc = BeginPaint(hwnd, &ps);
 
 			pad.left = rc.left;
@@ -503,6 +479,30 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 
 			EndPaint(hwnd, &ps);
+
+			/* evict out-of-range images and pages */
+			for (i = 0; i < moz->pagecount; i++)
+			{
+				if (i < moz->scrollpage - 2 || i > moz->scrollpage + 6)
+				{
+					fz_drop_link(moz->ctx, moz->pages[i].links);
+					moz->pages[i].links = NULL;
+
+					fz_drop_display_list( moz->ctx, moz->pages[i].contents);
+					moz->pages[i].contents =NULL;
+
+					fz_drop_display_list( moz->ctx, moz->pages[i].annotations);
+					moz->pages[i].annotations = NULL;
+
+					fz_drop_page(moz->ctx, moz->pages[i].page);
+					moz->pages[i].page = NULL;
+				}
+				if (i < moz->scrollpage - 1 || i > moz->scrollpage + 3)
+				{
+					fz_drop_pixmap(moz->ctx, moz->pages[i].image);
+					moz->pages[i].image = NULL;
+				}
+			}
 
 			return 0;
 
