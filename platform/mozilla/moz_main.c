@@ -470,6 +470,11 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				}
 			}
 
+			hdc = BeginPaint(hwnd, &ps);
+
+			pad.left = rc.left;
+			pad.right = rc.right;
+
 			i = moz->scrollpage;
 			y = -moz->scrollyofs;
 			while (y < h && i < moz->pagecount)
@@ -480,19 +485,6 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				pdfmoz_drawpage(moz, i);
 				if (moz->error[0])
 					return 0;
-				y += fz_pixmap_height(moz->ctx, moz->pages[i].image);
-				i ++;
-			}
-
-			hdc = BeginPaint(hwnd, &ps);
-
-			pad.left = rc.left;
-			pad.right = rc.right;
-
-			i = moz->scrollpage;
-			y = -moz->scrollyofs;
-			while (y < h && i < moz->pagecount)
-			{
 				drawimage(hdc, moz, moz->pages[i].image, y);
 				y += fz_pixmap_height(moz->ctx, moz->pages[i].image);
 				i ++;
