@@ -141,6 +141,35 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 	InvalidateRect(moz->hwnd, NULL, FALSE);
 }
 
+static void pdfmoz_close(pdfmoz_t *moz)
+{
+	int i;
+
+	for (i = 0; i < moz->pagecount; i++)
+	{
+		fz_drop_link(moz->ctx, moz->pages[i].links);
+		moz->pages[i].links = NULL;
+
+		fz_drop_display_list( moz->ctx, moz->pages[i].contents);
+		moz->pages[i].contents = NULL;
+
+		fz_drop_display_list( moz->ctx, moz->pages[i].annotations);
+		moz->pages[i].annotations = NULL;
+
+		fz_drop_page(moz->ctx, moz->pages[i].page);
+		moz->pages[i].page = NULL;
+
+		fz_drop_pixmap(moz->ctx, moz->pages[i].image);
+		moz->pages[i].image = NULL;
+	}
+
+	fz_free(moz->ctx, moz->pages);
+	moz->pages = NULL;
+
+	fz_drop_document(moz->ctx, moz->doc);
+	moz->doc = NULL;
+}
+
 static void decodescroll(pdfmoz_t *moz, int spos)
 {
 	int i, y = 0;
@@ -678,7 +707,6 @@ NPError
 NPP_Destroy(NPP inst, NPSavedData **saved)
 {
 	pdfmoz_t *moz = inst->pdata;
-	int i;
 
 	inst->pdata = NULL;
 
@@ -693,29 +721,7 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 	fz_free(moz->ctx, moz->dibinf);
 	moz->dibinf = NULL;
 
-	for (i = 0; i < moz->pagecount; i++)
-	{
-		fz_drop_link(moz->ctx, moz->pages[i].links);
-		moz->pages[i].links = NULL;
-
-		fz_drop_display_list( moz->ctx, moz->pages[i].contents);
-		moz->pages[i].contents = NULL;
-
-		fz_drop_display_list( moz->ctx, moz->pages[i].annotations);
-		moz->pages[i].annotations = NULL;
-
-		fz_drop_page(moz->ctx, moz->pages[i].page);
-		moz->pages[i].page = NULL;
-
-		fz_drop_pixmap(moz->ctx, moz->pages[i].image);
-		moz->pages[i].image = NULL;
-	}
-
-	fz_free(moz->ctx, moz->pages);
-	moz->pages = NULL;
-
-	fz_drop_document(moz->ctx, moz->doc);
-	moz->doc = NULL;
+	pdfmoz_close(moz);
 
 	fz_context *ctx = moz->ctx;
 	fz_free(ctx, moz);
