@@ -59,8 +59,13 @@ static void pdfmoz_warn(pdfmoz_t *moz, const char *fmt, ...)
 	NPN_Status(moz->inst, buf);
 }
 
+static void pdfmoz_close(pdfmoz_t *moz);
+
 static void pdfmoz_error(pdfmoz_t *moz, char *msg)
 {
+	if (moz->doc)
+		pdfmoz_close(moz);
+
 	strcpy(moz->error, msg);
 	InvalidateRect(moz->hwnd, NULL, FALSE);
 }
@@ -721,7 +726,8 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 	fz_free(moz->ctx, moz->dibinf);
 	moz->dibinf = NULL;
 
-	pdfmoz_close(moz);
+	if (moz->doc)
+		pdfmoz_close(moz);
 
 	fz_context *ctx = moz->ctx;
 	fz_free(ctx, moz);
