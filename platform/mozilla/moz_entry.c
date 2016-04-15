@@ -15,6 +15,18 @@ NPN_GetURL(NPP instance, const char* url, const char* target)
 	return sBrowserFuncs->geturl(instance, url, target);
 }
 
+void*
+NPN_MemAlloc(uint32_t size)
+{
+	return sBrowserFuncs->memalloc(size);
+}
+
+void
+NPN_MemFree(void* ptr)
+{
+	sBrowserFuncs->memfree(ptr);
+}
+
 NPError OSCALL
 NP_Initialize(NPNetscapeFuncs* bFuncs)
 {

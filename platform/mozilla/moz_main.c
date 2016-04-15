@@ -70,6 +70,71 @@ static void pdfmoz_error(pdfmoz_t *moz, char *msg)
 	InvalidateRect(moz->hwnd, NULL, FALSE);
 }
 
+static void *
+fz_malloc_moz(void *opaque, unsigned int size)
+{
+	unsigned int * result = NPN_MemAlloc(size + sizeof(unsigned int));
+	if (result)
+	{
+		*result = size;
+		++result;
+	}
+	return result;
+}
+
+static void
+fz_free_moz(void *opaque, void *ptr)
+{
+	unsigned int * in = ptr;
+	if (in)
+	{
+		--in;
+		NPN_MemFree(in);
+	}
+}
+
+static unsigned int
+getsize(void * p)
+{
+	unsigned int * in = p;
+	if (in)
+	{
+		--in;
+		return *in;
+	}
+	return -1;
+}
+
+static void *
+fz_realloc_moz(void *opaque, void *oldptr, unsigned int newsize)
+{
+	void *newptr;
+	unsigned int oldsize;
+	if(newsize == 0)
+	{
+		fz_free_moz(NULL, oldptr);
+		return NULL;
+	}
+	if (!oldptr)
+		return fz_malloc_moz(NULL, newsize);
+	oldsize = getsize(oldptr);
+	if (newsize < oldsize)
+		oldsize = newsize;
+	newptr=fz_malloc_moz(NULL, newsize);
+	memcpy(newptr, oldptr, oldsize);
+	fz_free_moz(NULL, oldptr);
+	return newptr;
+}
+
+fz_alloc_context fz_alloc_moz =
+{
+	NULL,
+	fz_malloc_moz,
+	fz_realloc_moz,
+	fz_free_moz
+};
+
+
 static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 {
 	SCROLLINFO si;
@@ -667,7 +732,7 @@ NPP_New(NPMIMEType mime, NPP inst, uint16_t mode,
 	pdfmoz_t *moz;
 	fz_context *ctx;
 
-	ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
+	ctx = fz_new_context(&fz_alloc_moz, NULL, FZ_STORE_DEFAULT);
 	if (!ctx)
 		return NPERR_OUT_OF_MEMORY_ERROR;
 
