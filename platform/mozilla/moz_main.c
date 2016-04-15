@@ -193,6 +193,25 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 		moz->pages[i].px = 1 + PAD;
 	}
 
+	moz->dibinf = fz_malloc( moz->ctx, sizeof(BITMAPINFO) + 12);
+	if (!moz->dibinf)
+	{
+		pdfmoz_error(moz, "Cannot open document");
+		return;
+	}
+
+	moz->dibinf->bmiHeader.biSize = sizeof(moz->dibinf->bmiHeader);
+	moz->dibinf->bmiHeader.biPlanes = 1;
+	moz->dibinf->bmiHeader.biBitCount = 32;
+	moz->dibinf->bmiHeader.biCompression = BI_RGB;
+	moz->dibinf->bmiHeader.biXPelsPerMeter = 2834;
+	moz->dibinf->bmiHeader.biYPelsPerMeter = 2834;
+	moz->dibinf->bmiHeader.biClrUsed = 0;
+	moz->dibinf->bmiHeader.biClrImportant = 0;
+	moz->dibinf->bmiHeader.biClrUsed = 0;
+
+	moz->graybrush = CreateSolidBrush(RGB(0x70,0x70,0x70));
+
 	/*
 	* Start at first page
 	*/
@@ -214,6 +233,11 @@ static void pdfmoz_open(pdfmoz_t *moz, char *filename)
 static void pdfmoz_close(pdfmoz_t *moz)
 {
 	int i;
+
+	DeleteObject(moz->graybrush);
+
+	fz_free(moz->ctx, moz->dibinf);
+	moz->dibinf = NULL;
 
 	for (i = 0; i < moz->pagecount; i++)
 	{
@@ -752,22 +776,6 @@ NPP_New(NPMIMEType mime, NPP inst, uint16_t mode,
 	moz->hand = LoadCursor(NULL, IDC_HAND);
 	moz->wait = LoadCursor(NULL, IDC_WAIT);
 
-	moz->dibinf = fz_malloc( moz->ctx, sizeof(BITMAPINFO) + 12);
-	if (!moz->dibinf)
-		return NPERR_OUT_OF_MEMORY_ERROR;
-
-	moz->dibinf->bmiHeader.biSize = sizeof(moz->dibinf->bmiHeader);
-	moz->dibinf->bmiHeader.biPlanes = 1;
-	moz->dibinf->bmiHeader.biBitCount = 32;
-	moz->dibinf->bmiHeader.biCompression = BI_RGB;
-	moz->dibinf->bmiHeader.biXPelsPerMeter = 2834;
-	moz->dibinf->bmiHeader.biYPelsPerMeter = 2834;
-	moz->dibinf->bmiHeader.biClrUsed = 0;
-	moz->dibinf->bmiHeader.biClrImportant = 0;
-	moz->dibinf->bmiHeader.biClrUsed = 0;
-
-	moz->graybrush = CreateSolidBrush(RGB(0x70,0x70,0x70));
-
 	inst->pdata = moz;
 
 	return NPERR_NO_ERROR;
@@ -782,14 +790,9 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 
 	SetWindowLongPtr(moz->hwnd, GWLP_WNDPROC, (LONG_PTR)moz->winproc);
 
-	DeleteObject(moz->graybrush);
-
 	DestroyCursor(moz->arrow);
 	DestroyCursor(moz->hand);
 	DestroyCursor(moz->wait);
-
-	fz_free(moz->ctx, moz->dibinf);
-	moz->dibinf = NULL;
 
 	if (moz->doc)
 		pdfmoz_close(moz);
