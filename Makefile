@@ -316,7 +316,7 @@ $(MOZILLA_OUT)/%.o : platform/mozilla/%.rc
 	windres -i $< -o $@ --include-dir=include
 MUPLUGIN_OBJ := $(addprefix $(MOZILLA_OUT)/, moz_entry.o moz_main.o moz_winres.o)
 $(MUPLUGIN_OBJ) :  $(FITZ_HDR) $(PDF_HDR)
-$(MUPLUGIN) : $(MUPDF_LIB) $(THIRD_LIBS)
+$(MUPLUGIN) : $(MUPDF_LIB) $(THIRD_LIB)
 $(MUPLUGIN) : $(MUPLUGIN_OBJ)
 	$(LINK_CMD) -shared platform/mozilla/moz_export.def -Wl,--kill-at $(WIN32_LIBS)
 endif
