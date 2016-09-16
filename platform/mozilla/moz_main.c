@@ -327,8 +327,8 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 		mdev = NULL;
 		page->annotations = fz_new_display_list(moz->ctx);
 		mdev = fz_new_list_device(moz->ctx, page->annotations);
-		for (annot = fz_first_annot(moz->ctx, page->page); annot; annot = fz_next_annot(moz->ctx, page->page, annot))
-			fz_run_annot(moz->ctx, page->page, annot, mdev, &fz_identity, &cookie);
+		for (annot = fz_first_annot(moz->ctx, page->page); annot; annot = fz_next_annot(moz->ctx, annot))
+			fz_run_annot(moz->ctx, annot, mdev, &fz_identity, &cookie);
 		if (cookie.errors)
 		{
 			pdfmoz_warn(moz, "Errors found on page");
