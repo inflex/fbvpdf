@@ -359,12 +359,10 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 
 static void pdfmoz_runpage(fz_context *ctx, page_t *page, fz_device *dev, const fz_matrix *ctm, const fz_rect *rect, fz_cookie *cookie)
 {
-	fz_begin_page(ctx, dev, rect, ctm);
 	if (page->contents)
 		fz_run_display_list(ctx, page->contents, dev, ctm, rect, cookie);
 	if (page->annotations)
 		fz_run_display_list(ctx, page->annotations, dev, ctm, rect, cookie);
-	fz_end_page(ctx, dev);
 }
 
 static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
