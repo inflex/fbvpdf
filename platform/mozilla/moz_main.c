@@ -53,7 +53,7 @@ static void pdfmoz_warn(pdfmoz_t *moz, const char *fmt, ...)
 	char buf[1024];
 	va_list ap;
 	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, ap);
+	fz_vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 	buf[sizeof(buf)-1] = 0;
 	NPN_Status(moz->inst, buf);
@@ -320,12 +320,13 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 	{
 		fz_annot *annot;
 		/* Create display lists */
-		page->contents = fz_new_display_list(moz->ctx);
+		page->contents = fz_new_display_list(moz->ctx, NULL);
 		mdev = fz_new_list_device(moz->ctx, page->contents);
 		fz_run_page_contents(moz->ctx, page->page, mdev, &fz_identity, &cookie);
+		fz_close_device(moz->ctx, mdev);
 		fz_drop_device(moz->ctx, mdev);
 		mdev = NULL;
-		page->annotations = fz_new_display_list(moz->ctx);
+		page->annotations = fz_new_display_list(moz->ctx, NULL);
 		mdev = fz_new_list_device(moz->ctx, page->annotations);
 		for (annot = fz_first_annot(moz->ctx, page->page); annot; annot = fz_next_annot(moz->ctx, annot))
 			fz_run_annot(moz->ctx, annot, mdev, &fz_identity, &cookie);
@@ -334,6 +335,7 @@ void pdfmoz_loadpage(pdfmoz_t *moz, int pagenum)
 			pdfmoz_warn(moz, "Errors found on page");
 			errored = 1;
 		}
+		fz_close_device(moz->ctx, mdev);
 	}
 	fz_always(moz->ctx)
 	{
@@ -382,11 +384,11 @@ static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	bounds = page->bbox;
 	fz_round_rect(&ibounds, fz_transform_rect(&bounds, &ctm));
 	fz_rect_from_irect(&bounds, &ibounds);
-	page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, &ibounds);
+	page->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, &ibounds, 1);
 	fz_clear_pixmap_with_value(moz->ctx, page->image, 255);
 	if (page->contents || page->annotations)
 	{
-		idev = fz_new_draw_device(moz->ctx, page->image);
+		idev = fz_new_draw_device(moz->ctx, NULL, page->image);
 		pdfmoz_runpage(moz->ctx, page, idev, &ctm, &bounds, &cookie);
 		fz_drop_device(moz->ctx, idev);
 	}
@@ -429,6 +431,7 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 	fz_point p;
 	int pi;
 	int py;
+	int dest_page;
 
 	if (!moz->pages)
 		return;
@@ -468,19 +471,19 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 		SetCursor(moz->hand);
 		if (click)
 		{
-			if (link->dest.kind == FZ_LINK_URI)
-				pdfmoz_gotouri(moz, link->dest.ld.uri.uri);
-			else if (link->dest.kind == FZ_LINK_GOTO)
-				pdfmoz_gotopage(moz, link->dest.ld.gotor.page);
+			if (fz_is_external_link(moz->ctx, link->uri))
+				pdfmoz_gotouri(moz, link->uri);
+			else if ((dest_page = fz_resolve_link(moz->ctx, moz->doc, link->uri, NULL, NULL)) >= 0)
+				pdfmoz_gotopage(moz, dest_page);
 			return;
 		}
 		else
 		{
-			if (link->dest.kind == FZ_LINK_URI)
-				NPN_Status(moz->inst, link->dest.ld.uri.uri);
-			else if (link->dest.kind == FZ_LINK_GOTO)
+			if (fz_is_external_link(moz->ctx, link->uri))
+				NPN_Status(moz->inst, link->uri);
+			else if ((dest_page = fz_resolve_link(moz->ctx, moz->doc, link->uri, NULL, NULL)) >= 0)
 			{
-				sprintf(buf, "Go to page %d", link->dest.ld.gotor.page + 1);
+				sprintf(buf, "Go to page %d", dest_page + 1);
 				NPN_Status(moz->inst, buf);
 			}
 			else
