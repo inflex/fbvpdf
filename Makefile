@@ -303,11 +303,13 @@ endif
 endif
 
 ifeq "$(HAVE_GLFW)" "yes"
+ifneq "$(HAVE_WIN32)" "yes"
 MUVIEW_GLFW := $(OUT)/mupdf-gl
 MUVIEW_GLFW_OBJ := $(addprefix $(OUT)/platform/gl/, gl-font.o gl-input.o gl-main.o)
 $(MUVIEW_GLFW_OBJ) : $(FITZ_HDR) $(PDF_HDR) platform/gl/gl-app.h
 $(MUVIEW_GLFW) : $(MUVIEW_GLFW_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(GLFW_LIB)
 	$(LINK_CMD) $(GLFW_LIBS)
+endif
 endif
 
 ifeq "$(HAVE_WIN32)" "yes"
