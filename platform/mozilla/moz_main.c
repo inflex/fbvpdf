@@ -502,12 +502,15 @@ static void pdfmoz_onmouse(pdfmoz_t *moz, int x, int y, int click)
 
 static void drawimage(HDC hdc, pdfmoz_t *moz, fz_pixmap *image, int yofs)
 {
-	int image_w = fz_pixmap_width(moz->ctx, image);
-	int image_h = fz_pixmap_height(moz->ctx, image);
-	unsigned char *samples = fz_pixmap_samples(moz->ctx, image);
+	int image_w, image_h;
+	unsigned char *samples;
 
 	if (!image)
 		return;
+
+	image_w = fz_pixmap_width(moz->ctx, image);
+	image_h = fz_pixmap_height(moz->ctx, image);
+	samples = fz_pixmap_samples(moz->ctx, image);
 
 	moz->dibinf->bmiHeader.biWidth = image_w;
 	moz->dibinf->bmiHeader.biHeight = -image_h;
