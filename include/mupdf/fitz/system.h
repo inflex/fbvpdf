@@ -81,6 +81,11 @@
 #define fz_jmp_buf jmp_buf
 #endif
 
+#ifdef _WIN32
+char **fz_argv_from_wargv(int argc, wchar_t **wargv);
+void fz_free_argv(int argc, char **argv);
+#endif
+
 #ifdef _MSC_VER /* Microsoft Visual C */
 
 /* MSVC up to VS2012 */
@@ -157,10 +162,6 @@ FILE *fz_fopen_utf8(const char *name, const char *mode);
 
 char *fz_utf8_from_wchar(const wchar_t *s);
 wchar_t *fz_wchar_from_utf8(const char *s);
-
-FILE *fz_fopen_utf8(const char *name, const char *mode);
-char **fz_argv_from_wargv(int argc, wchar_t **wargv);
-void fz_free_argv(int argc, char **argv);
 
 #define fseeko64 _fseeki64
 #define ftello64 _ftelli64
