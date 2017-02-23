@@ -647,6 +647,27 @@ GLFW_OBJ := $(GLFW_OBJ:%.m=%.o)
 $(GLFW_LIB): $(GLFW_OBJ)
 GLFW_LIBS := -framework OpenGL -framework IOKit -framework CoreVideo -framework Cocoa
 
+else ifeq "$(HAVE_WIN32)" "yes"
+
+GLFW_SRC := \
+	context.c \
+	init.c \
+	input.c \
+	monitor.c \
+	wgl_context.c \
+	win32_init.c \
+	win32_monitor.c \
+	win32_time.c \
+	win32_tls.c \
+	win32_window.c \
+	window.c \
+	winmm_joystick.c
+
+$(GLFW_OUT)/%.o: $(GLFW_DIR)/src/%.c | $(GLFW_OUT)
+	$(CC_CMD) -D_GLFW_WIN32 -D_GLFW_WGL -D_GLFW_USE_OPENGL
+$(GLFW_LIB): $(addprefix $(GLFW_OUT)/, $(GLFW_SRC:%.c=%.o))
+GLFW_LIBS := -lopengl32
+
 else
 
 GLFW_SRC := \
@@ -681,13 +702,6 @@ GLFW_SRC_UNUSED := \
 	mir_init.c \
 	mir_monitor.c \
 	mir_window.c \
-	win32_init.c \
-	win32_monitor.c \
-	win32_time.c \
-	win32_tls.c \
-	win32_window.c \
-	winmm_joystick.c \
-	wgl_context.c \
 	wl_init.c \
 	wl_monitor.c \
 	wl_window.c \
