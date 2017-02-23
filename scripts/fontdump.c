@@ -48,7 +48,8 @@ main(int argc, char **argv)
 	}
 
 	fprintf(fo, "#ifndef __STRICT_ANSI__\n");
-	fprintf(fo, "#if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)\n");
+	fprintf(fo, "#if defined(__linux__) || defined(__FreeBSD__) ||"
+			"defined(__OpenBSD__) || defined(__MINGW32__)\n");
 	fprintf(fo, "#if !defined(__ICC)\n");
 	fprintf(fo, "#define HAVE_INCBIN\n");
 	fprintf(fo, "#endif\n");
@@ -95,11 +96,19 @@ main(int argc, char **argv)
 		fprintf(fo, "\n#ifdef HAVE_INCBIN\n");
 		fprintf(fo, "const int fz_font_%s_size = %d;\n", fontname, size);
 		fprintf(fo, "asm(\".section .rodata\");\n");
+		fprintf(fo, "#ifdef __MINGW32__\n");
+		fprintf(fo, "asm(\".def _fz_font_%s\");\n", fontname);
+		fprintf(fo, "asm(\".size %d\");\n", size);
+		fprintf(fo, "asm(\".scl 2\");\n");
+		fprintf(fo, "asm(\".endef\");\n");
+		fprintf(fo, "asm(\"_fz_font_%s:\");\n", fontname);
+		fprintf(fo, "#else\n");
 		fprintf(fo, "asm(\".global fz_font_%s\");\n", fontname);
 		fprintf(fo, "asm(\".type fz_font_%s STT_OBJECT\");\n", fontname);
 		fprintf(fo, "asm(\".size fz_font_%s, %d\");\n", fontname, size);
 		fprintf(fo, "asm(\".balign 64\");\n");
 		fprintf(fo, "asm(\"fz_font_%s:\");\n", fontname);
+		fprintf(fo, "#endif\n");
 		fprintf(fo, "asm(\".incbin \\\"%s\\\"\");\n", argv[i]);
 		fprintf(fo, "#else\n");
 		fprintf(fo, "const int fz_font_%s_size = %d;\n", fontname, size);
