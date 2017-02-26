@@ -197,17 +197,14 @@ fz_vsnprintf(char *buffer, size_t space, const char *fmt, va_list args)
 					fmt--;
 				}
 				break;
+			case 't':
+				length = sizeof(ptrdiff_t) * 8;
+				break;
 			case 'z':
-				if (sizeof(size_t) >= 8)
-					length = 64;
-				else
-					length = 32;
+				length = sizeof(size_t) * 8;
 				break;
 			case 'Z':
-				if (sizeof(fz_off_t) >= 8)
-					length = 64;
-				else
-					length = 32;
+				length = sizeof(fz_off_t) * 8;
 				break;
 			}
 			if (length != 0)

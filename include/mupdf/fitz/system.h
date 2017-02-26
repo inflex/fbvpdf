@@ -86,6 +86,11 @@ char **fz_argv_from_wargv(int argc, wchar_t **wargv);
 void fz_free_argv(int argc, char **argv);
 #endif
 
+#ifndef _MSC_VER
+/* For gettimeofday */
+#include <sys/time.h>
+#endif
+
 #ifdef _MSC_VER /* Microsoft Visual C */
 
 /* MSVC up to VS2012 */
