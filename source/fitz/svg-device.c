@@ -979,7 +979,6 @@ svg_dev_end_mask(fz_context *ctx, fz_device *dev)
 	fz_printf(ctx, out, "\"/></mask>\n");
 	out = end_def(ctx, sdev);
 	fz_printf(ctx, out, "<g mask=\"url(#ma%d)\">\n", mask);
-
 }
 
 static void
@@ -989,7 +988,10 @@ svg_dev_begin_group(fz_context *ctx, fz_device *dev, const fz_rect *bbox, int is
 	fz_output *out = sdev->out;
 
 	/* SVG 1.1 doesn't support adequate blendmodes/knockout etc, so just ignore it for now */
-	fz_printf(ctx, out, "<g>\n");
+	if (alpha == 1)
+		fz_printf(ctx, out, "<g>\n");
+	else
+		fz_printf(ctx, out, "<g opacity=\"%g\">\n", alpha);
 }
 
 static void

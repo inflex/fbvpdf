@@ -1196,7 +1196,6 @@ static inline int iswhite(int ch)
 		ch == '\014' || ch == '\015' || ch == '\040';
 }
 
-
 static void apply_layer_config(fz_context *ctx, fz_document *doc, const char *lc)
 {
 	pdf_document *pdoc = pdf_specifics(ctx, doc);
@@ -1289,7 +1288,6 @@ static void apply_layer_config(fz_context *ctx, fz_document *doc, const char *lc
 		fprintf(stderr, "\n");
 	}
 }
-
 
 #ifdef MUDRAW_STANDALONE
 int main(int argc, char **argv)
@@ -1575,9 +1573,10 @@ int mudraw_main(int argc, char **argv)
 	}
 	else
 #endif
-	if (output_format == OUT_GPROOF)
+	if (output_format == OUT_GPROOF || output_format == OUT_SVG)
 	{
 		/* GPROOF files are saved direct. Do not open "output". */
+		/* SVG files are always opened for each page. Do not open "output". */
 	}
 	else if (output && (output[0] != '-' || output[1] != 0) && *output != 0)
 	{

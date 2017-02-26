@@ -108,7 +108,7 @@ load_separation(fz_context *ctx, pdf_document *doc, pdf_obj *array)
 		sep->base = base;
 		sep->tint = tint;
 
-		cs = fz_new_colorspace(ctx, n == 1 ? "Separation" : "DeviceN", n, separation_to_rgb, NULL, free_separation, sep,
+		cs = fz_new_colorspace(ctx, n == 1 ? "Separation" : "DeviceN", n, 1, separation_to_rgb, NULL, free_separation, sep,
 			sizeof(struct separation) + (base ? base->size : 0) + fz_function_size(ctx, tint));
 	}
 	fz_catch(ctx)
@@ -203,7 +203,6 @@ load_indexed(fz_context *ctx, pdf_document *doc, pdf_obj *array)
 static fz_colorspace *
 pdf_load_colorspace_imp(fz_context *ctx, pdf_document *doc, pdf_obj *obj)
 {
-
 	if (pdf_obj_marked(ctx, obj))
 		fz_throw(ctx, FZ_ERROR_GENERIC, "Recursion in colorspace definition");
 

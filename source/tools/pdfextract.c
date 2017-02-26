@@ -28,20 +28,18 @@ static int isfontdesc(pdf_obj *obj)
 	return pdf_name_eq(ctx, type, PDF_NAME_FontDescriptor);
 }
 
-static void writepixmap(fz_context *ctx, fz_pixmap *pix, char *file, int rgb)
+static void writepixmap(fz_context *ctx, fz_pixmap *pix, char *file, int dorgb)
 {
 	char buf[1024];
-	fz_pixmap *converted = NULL;
+	fz_pixmap *rgb = NULL;
 
 	if (!pix)
 		return;
 
-	if (rgb && pix->colorspace && pix->colorspace != fz_device_rgb(ctx))
+	if (dorgb && pix->colorspace && pix->colorspace != fz_device_rgb(ctx))
 	{
-		fz_irect bbox;
-		converted = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), fz_pixmap_bbox(ctx, pix, &bbox), pix->alpha);
-		fz_convert_pixmap(ctx, converted, pix);
-		pix = converted;
+		rgb = fz_convert_pixmap(ctx, pix, fz_device_rgb(ctx), 1);
+		pix = rgb;
 	}
 
 	if (pix->n - pix->alpha <= 3)
@@ -57,7 +55,7 @@ static void writepixmap(fz_context *ctx, fz_pixmap *pix, char *file, int rgb)
 		fz_save_pixmap_as_pam(ctx, pix, buf);
 	}
 
-	fz_drop_pixmap(ctx, converted);
+	fz_drop_pixmap(ctx, rgb);
 }
 
 static void
@@ -132,7 +130,6 @@ static void saveimage(int num)
 	}
 	fz_catch(ctx)
 		fz_rethrow(ctx);
-
 }
 
 static void savefont(pdf_obj *dict, int num)

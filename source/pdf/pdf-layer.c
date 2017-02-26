@@ -79,7 +79,6 @@ pdf_count_layer_configs(fz_context *ctx, pdf_document *doc)
 	return doc->ocg->num_configs;
 }
 
-
 static int
 count_entries(fz_context *ctx, pdf_obj *obj)
 {
@@ -90,7 +89,14 @@ count_entries(fz_context *ctx, pdf_obj *obj)
 	for (i = 0; i < len; i++)
 	{
 		pdf_obj *o = pdf_array_get(ctx, obj, i);
-		count += (pdf_is_array(ctx, o) ? count_entries(ctx, o) : 1);
+		if (pdf_mark_obj(ctx, o))
+			continue;
+		fz_try(ctx)
+			count += (pdf_is_array(ctx, o) ? count_entries(ctx, o) : 1);
+		fz_always(ctx)
+			pdf_unmark_obj(ctx, o);
+		fz_catch(ctx)
+			fz_rethrow(ctx);
 	}
 	return count;
 }
@@ -106,7 +112,16 @@ populate_ui(fz_context *ctx, pdf_ocg_descriptor *desc, pdf_ocg_ui *ui, pdf_obj *
 		pdf_obj *o = pdf_array_get(ctx, order, i);
 		if (pdf_is_array(ctx, o))
 		{
-			ui = populate_ui(ctx, desc, ui, o, depth+1, rbgroups, locked);
+			if (pdf_mark_obj(ctx, o))
+				continue;
+
+			fz_try(ctx)
+				ui = populate_ui(ctx, desc, ui, o, depth+1, rbgroups, locked);
+			fz_always(ctx)
+				pdf_unmark_obj(ctx, o);
+			fz_catch(ctx)
+				fz_rethrow(ctx);
+
 			continue;
 		}
 		ui->depth = depth;

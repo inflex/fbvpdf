@@ -38,6 +38,7 @@
  */
 
 #include <stddef.h> /* For size_t */
+#include "mupdf/fitz.h" /* For fz_context/fz_document/fz_page */
 
 /** Error type returned from most MuOffice functions
  *
@@ -49,7 +50,6 @@
  * non-zero and any explicitly documented values.
  */
 typedef int MuError;
-
 
 /** Errors returned to MuOfficeLoadingErrorFn
  *
@@ -78,7 +78,6 @@ typedef enum MuOfficeDocErrorType
 	MuOfficeDocErrorType_PasswordRequest = 0x1000
 } MuOfficeDocErrorType;
 
-
 /**
  *Structure holding the detail of the layout of a bitmap. b5g6r5 is assumed.
  */
@@ -89,7 +88,6 @@ typedef struct MuOfficeBitmap_s
 	int   height;
 	int   lineSkip;
 } MuOfficeBitmap;
-
 
 /**
  * Structure defining a point
@@ -145,7 +143,6 @@ typedef struct MuOfficeRenderArea_s
 	MuOfficeBox     renderArea;
 } MuOfficeRenderArea;
 
-
 typedef struct MuOfficeLib_s MuOfficeLib;
 typedef struct MuOfficeDoc_s MuOfficeDoc;
 typedef struct MuOfficePage_s MuOfficePage;
@@ -162,7 +159,6 @@ typedef struct MuOfficeRender_s MuOfficeRender;
  */
 typedef void *(MuOfficeAllocFn)(void   *cookie,
 				size_t  size);
-
 
 /**
  * Callback function monitoring document loading
@@ -182,7 +178,6 @@ typedef void (MuOfficeLoadingProgressFn)(void *cookie,
 					int   pagesLoaded,
 					int   complete);
 
-
 /**
  * Callback function used to monitor errors in the process of loading
  * a document.
@@ -193,8 +188,6 @@ typedef void (MuOfficeLoadingProgressFn)(void *cookie,
  */
 typedef void (MuOfficeLoadingErrorFn)(	void                 *cookie,
 					MuOfficeDocErrorType  error);
-
-
 
 /**
  * Callback function used to monitor page changes
@@ -229,7 +222,6 @@ typedef enum
 	MuOfficeDocType_IMG
 } MuOfficeDocType;
 
-
 /**
  * The possible results of a save operation
  */
@@ -241,7 +233,6 @@ typedef enum MuOfficeSaveResult
 }
 MuOfficeSaveResult;
 
-
 /**
  * Callback function used to monitor save operations.
  *
@@ -251,7 +242,6 @@ MuOfficeSaveResult;
  */
 typedef void (MuOfficeSaveResultFn)(	void                 *cookie,
 					MuOfficeSaveResult result);
-
 
 /**
  * Create a MuOfficeLib instance.
@@ -321,6 +311,22 @@ MuError MuOfficeLib_loadDocument(MuOfficeLib              *mu,
 				void                      *cookie,
 				MuOfficeDoc              **pDoc);
 
+/**
+ * Perform MuPDF native operations on a given MuOfficeLib
+ * instance.
+ *
+ * The function is called with an fz_context value that can
+ * be safely used (i.e. the context is cloned/dropped
+ * appropriately around the call). The function should signal
+ * errors by fz_throw-ing.
+ *
+ * @param mu           the MuOfficeLib instance.
+ * @param fn           the function to call to run the operations.
+ * @param arg          Opaque data pointer.
+ *
+ * @return             error indication - 0 for success
+ */
+MuError MuOfficeLib_run(MuOfficeLib *mu, void (*fn)(fz_context *ctx, void *arg), void *arg);
 
 /**
  * Provide the password for a document
@@ -336,7 +342,6 @@ MuError MuOfficeLib_loadDocument(MuOfficeLib              *mu,
  */
 int MuOfficeDoc_providePassword(MuOfficeDoc *doc, const char *password);
 
-
 /**
  * Return the type of an open document
  *
@@ -345,7 +350,6 @@ int MuOfficeDoc_providePassword(MuOfficeDoc *doc, const char *password);
  * @return            the document type
  */
 MuOfficeDocType MuOfficeDoc_docType(MuOfficeDoc *doc);
-
 
 /**
  * Return the number of pages of a document
@@ -365,7 +369,6 @@ MuOfficeDocType MuOfficeDoc_docType(MuOfficeDoc *doc);
  */
 MuError MuOfficeDoc_getNumPages(MuOfficeDoc *doc, int *pNumPages);
 
-
 /**
  * Determine if the document has been modified
  *
@@ -374,7 +377,6 @@ MuError MuOfficeDoc_getNumPages(MuOfficeDoc *doc, int *pNumPages);
  * @return            modified flag
  */
 int MuOfficeDoc_hasBeenModified(MuOfficeDoc *doc);
-
 
 /**
  * Start a save operation
@@ -391,7 +393,6 @@ MuError MuOfficeDoc_save(MuOfficeDoc         *doc,
 			MuOfficeSaveResultFn *resultFn,
 			void                 *cookie);
 
-
 /**
  * Stop a document loading. The document is not destroyed, but
  * no further content will be read from the file.
@@ -400,7 +401,6 @@ MuError MuOfficeDoc_save(MuOfficeDoc         *doc,
  */
 void MuOfficeDoc_abortLoad(MuOfficeDoc *doc);
 
-
 /**
  * Destroy a MuOfficeDoc object. Loading of the document is shutdown
  * and no further callbacks will be issued for the specified object.
@@ -408,7 +408,6 @@ void MuOfficeDoc_abortLoad(MuOfficeDoc *doc);
  * @param doc       the MuOfficeDoc object
  */
 void MuOfficeDoc_destroy(MuOfficeDoc *doc);
-
 
 /**
  * Get a page of a document
@@ -428,6 +427,31 @@ MuError MuOfficeDoc_getPage(	MuOfficeDoc          *doc,
 				void                 *cookie,
 				MuOfficePage        **pPage);
 
+/**
+ * Perform MuPDF native operations on a given document.
+ *
+ * The function is called with fz_context and fz_document
+ * values that can be safely used (i.e. the context is
+ * cloned/dropped appropriately around the function, and
+ * locking is used to ensure that no other threads are
+ * simultaneously using the document). Functions can
+ * signal errors by fz_throw-ing.
+ *
+ * Due to the locking, it is best to ensure that as little
+ * time is taken here as possible (i.e. if you fetch some
+ * data and then spend a long time processing it, it is
+ * probably best to fetch the data using MuOfficeDoc_run
+ * and then process it outside). This avoids potentially
+ * blocking the UI.
+ *
+ * @param doc          the document object.
+ * @param fn           the function to call with fz_context/fz_document
+ *                     values.
+ * @param arg          Opaque data pointer.
+ *
+ * @return             error indication - 0 for success
+ */
+MuError MuOfficeDoc_run(MuOfficeDoc *doc, void (*fn)(fz_context *ctx, fz_document *doc, void *arg), void *arg);
 
 /**
  * Destroy a page object
@@ -439,7 +463,6 @@ MuError MuOfficeDoc_getPage(	MuOfficeDoc          *doc,
  * @param page         the page object
  */
 void MuOfficePage_destroy(MuOfficePage *page);
-
 
 /**
  * Get the size of a page in pixels
@@ -459,7 +482,6 @@ MuError MuOfficePage_getSize(	MuOfficePage *page,
 				float        *pWidth,
 				float        *pHeight);
 
-
 /**
  * Return the zoom factors necessary to render at to a given
  * size in pixels. (deprecated)
@@ -477,7 +499,6 @@ MuError MuOfficePage_calculateZoom(	MuOfficePage *page,
 					int           height,
 					float        *pXZoom,
 					float        *pYZoom);
-
 
 /**
  * Get the size of a page in pixels for a specified zoom factor
@@ -499,6 +520,31 @@ MuError MuOfficePage_getSizeForZoom(	MuOfficePage *page,
 					int          *pWidth,
 					int          *pHeight);
 
+/**
+ * Perform MuPDF native operations on a given page.
+ *
+ * The function is called with fz_context and fz_page
+ * values that can be safely used (i.e. the context is
+ * cloned/dropped appropriately around the function, and
+ * locking is used to ensure that no other threads are
+ * simultaneously using the document). Functions can
+ * signal errors by fz_throw-ing.
+ *
+ * Due to the locking, it is best to ensure that as little
+ * time is taken here as possible (i.e. if you fetch some
+ * data and then spend a long time processing it, it is
+ * probably best to fetch the data using MuOfficePage_run
+ * and then process it outside). This avoids potentially
+ * blocking the UI.
+ *
+ * @param page         the page object.
+ * @param fn           the function to call with fz_context/fz_document
+ *                     values.
+ * @param arg          Opaque data pointer.
+ *
+ * @return             error indication - 0 for success
+ */
+MuError MuOfficePage_run(MuOfficePage *page, void (*fn)(fz_context *ctx, fz_page *page, void *arg), void *arg);
 
 /**
  * Schedule the rendering of an area of document page to
@@ -534,7 +580,6 @@ MuError MuOfficePage_render(	MuOfficePage             *page,
 				MuOfficeRenderProgressFn *progressFn,
 				void                     *cookie,
 				MuOfficeRender          **pRender);
-
 
 /**
  * Destroy a render

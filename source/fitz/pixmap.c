@@ -89,7 +89,9 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 fz_pixmap *
 fz_new_pixmap(fz_context *ctx, fz_colorspace *colorspace, int w, int h, int alpha)
 {
-	int stride = (fz_colorspace_n(ctx, colorspace) + alpha) * w;
+	int stride;
+	if (!colorspace) alpha = 1;
+	stride = (fz_colorspace_n(ctx, colorspace) + alpha) * w;
 	return fz_new_pixmap_with_data(ctx, colorspace, w, h, alpha, stride, NULL);
 }
 
@@ -107,7 +109,9 @@ fz_pixmap *
 fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r, int alpha, unsigned char *samples)
 {
 	int w = r->x1 - r->x0;
-	int stride = (fz_colorspace_n(ctx, colorspace) + alpha) * w;
+	int stride;
+	if (!colorspace) alpha = 1;
+	stride = (fz_colorspace_n(ctx, colorspace) + alpha) * w;
 	fz_pixmap *pixmap = fz_new_pixmap_with_data(ctx, colorspace, w, r->y1 - r->y0, alpha, stride, samples);
 	pixmap->x = r->x0;
 	pixmap->y = r->y0;
@@ -666,6 +670,9 @@ fz_premultiply_pixmap(fz_context *ctx, fz_pixmap *pix)
 	if (!pix->alpha)
 		return;
 
+	if (fz_colorspace_is_subtractive(ctx, pix->colorspace))
+		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot pre-multiply subtractive colors");
+
 	for (y = 0; y < pix->h; y++)
 	{
 		for (x = 0; x < pix->w; x++)
@@ -702,6 +709,18 @@ fz_unmultiply_pixmap(fz_context *ctx, fz_pixmap *pix)
 		}
 		s += stride;
 	}
+}
+
+fz_pixmap *
+fz_ensure_pixmap_is_additive(fz_context *ctx, fz_pixmap *pix)
+{
+	if (fz_colorspace_is_subtractive(ctx, pix->colorspace))
+	{
+		fz_pixmap *rgb = fz_convert_pixmap(ctx, pix, fz_device_rgb(ctx), 1);
+		fz_drop_pixmap(ctx, pix);
+		return rgb;
+	}
+	return pix;
 }
 
 fz_pixmap *
@@ -853,6 +872,36 @@ fz_pixmap_size(fz_context *ctx, fz_pixmap * pix)
 	if (pix == NULL)
 		return 0;
 	return sizeof(*pix) + pix->n * pix->w * pix->h;
+}
+
+fz_pixmap *
+fz_convert_pixmap(fz_context *ctx, fz_pixmap *pix, fz_colorspace *ds, int keep_alpha)
+{
+	fz_pixmap *cvt;
+
+	if (!ds && !keep_alpha)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot both throw away and keep alpha");
+
+	cvt = fz_new_pixmap(ctx, ds, pix->w, pix->h, keep_alpha && pix->alpha);
+
+	cvt->xres = pix->xres;
+	cvt->yres = pix->yres;
+	cvt->x = pix->x;
+	cvt->y = pix->y;
+	cvt->interpolate = pix->interpolate;
+
+	fz_try(ctx)
+	{
+		fz_pixmap_converter *pc = fz_lookup_pixmap_converter(ctx, ds, pix->colorspace);
+		pc(ctx, cvt, pix);
+	}
+	fz_catch(ctx)
+	{
+		fz_drop_pixmap(ctx, cvt);
+		fz_rethrow(ctx);
+	}
+
+	return cvt;
 }
 
 fz_pixmap *

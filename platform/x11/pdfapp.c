@@ -147,13 +147,10 @@ void pdfapp_invert(pdfapp_t *app, const fz_rect *rect)
 
 void pdfapp_reloadfile(pdfapp_t *app)
 {
-	fz_context *ctx = app->ctx;
-	char *filename = app->docpath;
-
-	app->docpath = NULL;
+	char filename[PATH_MAX];
+	fz_strlcpy(filename, app->docpath, PATH_MAX);
 	pdfapp_close(app);
 	pdfapp_open(app, filename, 1);
-	fz_free(ctx, filename);
 }
 
 static void event_cb(fz_context *ctx, pdf_document *doc, pdf_doc_event *event, void *data)
@@ -236,20 +233,22 @@ static int make_fake_doc(pdfapp_t *app)
 	fz_context *ctx = app->ctx;
 	pdf_document *pdf = NULL;
 	fz_buffer *contents = NULL;
+	pdf_obj *page_obj = NULL;
+
+	fz_var(contents);
+	fz_var(page_obj);
 
 	fz_try(ctx)
 	{
 		fz_rect mediabox = { 0, 0, app->winw, app->winh };
-		pdf_obj *page_obj;
 		int i;
 
-		contents = fz_new_buffer(ctx, 100);
 		pdf = pdf_create_document(ctx);
 
-		app->doc = (fz_document*)pdf;
 
-		fz_buffer_printf(ctx, contents, "1 0 0 rg %f w 0 0 m %f %f l 0 %f m %f 0 l\n",
-			fz_min(mediabox.x1, mediabox.y1) / 4,
+		contents = fz_new_buffer(ctx, 100);
+		fz_buffer_printf(ctx, contents, "1 0 0 RG %f w 0 0 m %f %f l 0 %f m %f 0 l s\n",
+			fz_min(mediabox.x1, mediabox.y1) / 20,
 			mediabox.x1, mediabox.y1,
 			mediabox.y1, mediabox.x1);
 
@@ -259,16 +258,19 @@ static int make_fake_doc(pdfapp_t *app)
 		page_obj = pdf_add_page(ctx, pdf, &mediabox, 0, NULL, contents);
 		for (i = 0; i < app->pagecount; i++)
 			pdf_insert_page(ctx, pdf, -1, page_obj);
-		pdf_drop_obj(ctx, page_obj);
 	}
 	fz_always(ctx)
 	{
+		pdf_drop_obj(ctx, page_obj);
 		fz_drop_buffer(ctx, contents);
 	}
 	fz_catch(ctx)
 	{
-		fz_rethrow(ctx);
+		fz_drop_document(ctx, (fz_document *) pdf);
+		return 1;
 	}
+
+	app->doc = (fz_document*)pdf;
 	return 0;
 }
 
@@ -1192,7 +1194,6 @@ void pdfapp_onkey(pdfapp_t *app, int c, int modifiers)
 
 	switch (c)
 	{
-
 	case 'q':
 		winclose(app);
 		break;
@@ -1504,7 +1505,6 @@ void pdfapp_onkey(pdfapp_t *app, int c, int modifiers)
 			pdfapp_search_in_direction(app, &panto, 1);
 		loadpage = 0;
 		break;
-
 	}
 
 	if (c < '0' || c > '9')
@@ -1884,7 +1884,6 @@ void pdfapp_onmouse(pdfapp_t *app, int x, int y, int btn, int modifiers, int sta
 		app->selr.y1 = fz_maxi(app->sely, y) - app->pany + irect.y0;
 		winrepaint(app);
 	}
-
 }
 
 void pdfapp_oncopy(pdfapp_t *app, unsigned short *ucsbuf, int ucslen)

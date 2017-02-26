@@ -1283,28 +1283,7 @@ fz_load_tiff_subimage(fz_context *ctx, unsigned char *buf, size_t len, int subim
 		/* We should only do this on non-pre-multiplied images, but files in the wild are bad */
 		if (tiff.extrasamples /* == 2 */)
 		{
-			/* CMYK is a subtractive colorspace, we want additive for premul alpha */
-			if (image->n == 5)
-			{
-				fz_pixmap *rgb = fz_new_pixmap(ctx, fz_device_rgb(ctx), image->w, image->h, 1);
-
-				fz_var(rgb);
-
-				fz_try(ctx)
-				{
-					fz_convert_pixmap(ctx, rgb, image);
-					rgb->xres = image->xres;
-					rgb->yres = image->yres;
-					fz_drop_pixmap(ctx, image);
-					image = rgb;
-					rgb = NULL;
-				}
-				fz_always(ctx)
-					fz_drop_pixmap(ctx, rgb);
-				fz_catch(ctx)
-					fz_rethrow(ctx);
-			}
-
+			image = fz_ensure_pixmap_is_additive(ctx, image);
 			fz_premultiply_pixmap(ctx, image);
 		}
 	}

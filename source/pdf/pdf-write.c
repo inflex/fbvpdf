@@ -1,4 +1,4 @@
-#include "mupdf/pdf.h"
+#include "pdf-imp.h"
 
 #include <zlib.h>
 
@@ -160,7 +160,6 @@ page_objects_create(fz_context *ctx)
 	po->cap = initial_cap;
 	po->len = 0;
 	return po;
-
 }
 
 static void
@@ -931,7 +930,6 @@ static void page_objects_list_renumber(pdf_write_state *opts)
 static void
 mark_all(fz_context *ctx, pdf_document *doc, pdf_write_state *opts, pdf_obj *val, int flag, int page)
 {
-
 	if (pdf_mark_obj(ctx, val))
 		return;
 
@@ -981,7 +979,6 @@ mark_all(fz_context *ctx, pdf_document *doc, pdf_write_state *opts, pdf_obj *val
 static int
 mark_pages(fz_context *ctx, pdf_document *doc, pdf_write_state *opts, pdf_obj *val, int pagenum)
 {
-
 	if (pdf_mark_obj(ctx, val))
 		return pagenum;
 
@@ -1593,7 +1590,6 @@ static void addhexfilter(fz_context *ctx, pdf_document *doc, pdf_obj *dict)
 		pdf_dict_put(ctx, dict, PDF_NAME_Filter, f);
 		if (dp)
 			pdf_dict_put(ctx, dict, PDF_NAME_DecodeParms, dp);
-
 	}
 	fz_always(ctx)
 	{
@@ -1602,7 +1598,6 @@ static void addhexfilter(fz_context *ctx, pdf_document *doc, pdf_obj *dict)
 	}
 	fz_catch(ctx)
 		fz_rethrow(ctx);
-
 }
 
 static fz_buffer *deflatebuf(fz_context *ctx, unsigned char *p, size_t n)
@@ -3066,6 +3061,8 @@ void pdf_save_document(fz_context *ctx, pdf_document *doc, const char *filename,
 	if (!in_opts)
 		in_opts = &opts_defaults;
 
+	if (in_opts->do_incremental && !doc->file)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Can't do incremental writes on a new document");
 	if (in_opts->do_incremental && doc->repair_attempted)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "Can't do incremental writes on a repaired file");
 	if (in_opts->do_incremental && in_opts->do_garbage)

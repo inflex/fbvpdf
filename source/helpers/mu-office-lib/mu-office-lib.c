@@ -104,98 +104,101 @@ static void muoffice_lock(void *user, int lock);
 
 static void muoffice_unlock(void *user, int lock);
 
-static fz_locks_context muoffice_locks =
+struct MuOfficeLib_s
 {
-	/* void *user; */
-	NULL,
-
-	/* void (*lock)(void *user, int lock); */
-	muoffice_lock,
-
-	/* void (*unlock)(void *user, int lock); */
-	muoffice_unlock
+	fz_context *ctx;
+	mu_mutex mutexes[FZ_LOCK_MAX+1];
+	fz_locks_context locks;
 };
 
-#define LOCKS_INIT() init_muoffice_locks()
-#define LOCKS_FIN() fin_muoffice_locks()
-
-static mu_mutex mutexes[FZ_LOCK_MAX];
+/*
+	We add 1 extra lock which we use in this helper to protect
+	against accessing the fz_document from multiple threads
+	inadvertently when the caller is calling 'run' or
+	'runBackground'.
+*/
+enum
+{
+	DOCLOCK = FZ_LOCK_MAX
+};
 
 static void muoffice_lock(void *user, int lock)
 {
-	mu_lock_mutex(&mutexes[lock]);
+	MuOfficeLib *mu = (MuOfficeLib *)user;
+
+	mu_lock_mutex(&mu->mutexes[lock]);
 }
 
 static void muoffice_unlock(void *user, int lock)
 {
-	mu_unlock_mutex(&mutexes[lock]);
+	MuOfficeLib *mu = (MuOfficeLib *)user;
+
+	mu_unlock_mutex(&mu->mutexes[lock]);
 }
 
-static void fin_muoffice_locks(void)
+static void fin_muoffice_locks(MuOfficeLib *mu)
 {
 	int i;
 
-	for (i = 0; i < FZ_LOCK_MAX; i++)
-		mu_destroy_mutex(&mutexes[i]);
+	for (i = 0; i < FZ_LOCK_MAX+1; i++)
+		mu_destroy_mutex(&mu->mutexes[i]);
 }
 
-static fz_locks_context *init_muoffice_locks(void)
+static fz_locks_context *init_muoffice_locks(MuOfficeLib *mu)
 {
 	int i;
 	int failed = 0;
 
-	for (i = 0; i < FZ_LOCK_MAX; i++)
-		failed |= mu_create_mutex(&mutexes[i]);
+	for (i = 0; i < FZ_LOCK_MAX+1; i++)
+		failed |= mu_create_mutex(&mu->mutexes[i]);
 
 	if (failed)
 	{
-		fin_muoffice_locks();
+		fin_muoffice_locks(mu);
 		return NULL;
 	}
 
-	return &muoffice_locks;
+	mu->locks.user = mu;
+	mu->locks.lock = muoffice_lock;
+	mu->locks.unlock = muoffice_unlock;
+
+	return &mu->locks;
 }
-
-struct MuOfficeLib_s
-{
-	fz_context *ctx;
-};
-
 
 MuError MuOfficeLib_create(MuOfficeLib **pMu)
 {
-	MuOfficeLib *inst;
+	MuOfficeLib *mu;
 	fz_locks_context *locks;
 
 	if (pMu == NULL)
 		return MuOfficeDocErrorType_IllegalArgument;
 
-	locks = init_muoffice_locks();
-	if (locks == NULL)
+	mu = Pal_Mem_calloc(1, sizeof(MuOfficeLib));
+	if (mu == NULL)
 		return MuOfficeDocErrorType_OutOfMemory;
 
-	inst = Pal_Mem_calloc(1, sizeof(MuOfficeLib));
-	if (inst == NULL)
+	locks = init_muoffice_locks(mu);
+	if (locks == NULL)
 		goto Fail;
 
-	inst->ctx = fz_new_context(&muoffice_alloc, locks, FZ_STORE_DEFAULT);
-	if (inst->ctx == NULL)
+	mu->ctx = fz_new_context(&muoffice_alloc, locks, FZ_STORE_DEFAULT);
+	if (mu->ctx == NULL)
 		goto Fail;
 
-	fz_try(inst->ctx)
-		fz_register_document_handlers(inst->ctx);
-	fz_catch(inst->ctx)
+	fz_try(mu->ctx)
+		fz_register_document_handlers(mu->ctx);
+	fz_catch(mu->ctx)
 		goto Fail;
 
-	*pMu = inst;
+	*pMu = mu;
 
 	return MuOfficeDocErrorType_NoError;
 
 Fail:
-	if (inst)
+	if (mu)
 	{
-		fin_muoffice_locks();
-		Pal_Mem_free(inst);
+		fin_muoffice_locks(mu);
+		Pal_Mem_free(mu);
 	}
 	return MuOfficeDocErrorType_OutOfMemory;
 }
@@ -203,16 +206,56 @@ Fail:
 /**
  * Destroy a MuOfficeLib instance
  *
- * @param so  the instance to destroy
+ * @param mu  the instance to destroy
  */
-void MuOfficeLib_destroy(MuOfficeLib *so)
+void MuOfficeLib_destroy(MuOfficeLib *mu)
 {
-	if (so == NULL)
+	if (mu == NULL)
 		return;
 
-	fz_drop_context(so->ctx);
+	fz_drop_context(mu->ctx);
+	fin_muoffice_locks(mu);
 
-	Pal_Mem_free(so);
+	Pal_Mem_free(mu);
+}
+
+/**
+ * Perform MuPDF native operations on a given MuOfficeLib
+ * instance.
+ *
+ * The function is called with an fz_context value that can
+ * be safely used (i.e. the context is cloned/dropped
+ * appropriately around the call). The function should signal
+ * errors by fz_throw-ing.
+ *
+ * @param mu           the MuOfficeLib instance.
+ * @param fn           the function to call to run the operations.
+ * @param arg          Opaque data pointer.
+ *
+ * @return             error indication - 0 for success
+ */
+MuError MuOfficeLib_run(MuOfficeLib *mu, void (*fn)(fz_context *ctx, void *arg), void *arg)
+{
+	fz_context *ctx;
+	MuError err = MuError_OK;
+
+	if (mu == NULL)
+		return MuError_BadNull;
+	if (fn == NULL)
+		return err;
+
+	ctx = fz_clone_context(mu->ctx);
+	if (ctx == NULL)
+		return MuError_OOM;
+
+	fz_try(ctx)
+		fn(ctx, arg);
+	fz_catch(ctx)
+		err = MuError_Generic;
+
+	fz_drop_context(ctx);
+
+	return err;
 }
 
 /**
@@ -294,6 +337,8 @@ static void load_worker(void *arg)
 		return;
 	}
 
+	fz_lock(ctx, DOCLOCK);
+
 	fz_try(ctx)
 	{
 		doc->doc = fz_open_document(ctx, doc->path);
@@ -330,6 +375,8 @@ static void load_worker(void *arg)
 		err = MuOfficeDocErrorType_UnableToLoadDocument;
 
 fail:
+	fz_unlock(ctx, DOCLOCK);
+
 	if (err)
 		doc->error(doc->cookie, err);
 
@@ -437,7 +484,6 @@ int MuOfficeDoc_providePassword(MuOfficeDoc *doc, const char *password)
 	return MuError_OK;
 }
 
-
 /**
  * Return the type of an open document
  *
@@ -450,7 +496,6 @@ MuOfficeDocType MuOfficeDoc_docType(MuOfficeDoc *doc)
 	return /* FIXME */MuOfficeDocType_PDF;
 }
 
-
 static void
 ensure_doc_loaded(MuOfficeDoc *doc)
 {
@@ -459,7 +504,6 @@ ensure_doc_loaded(MuOfficeDoc *doc)
 
 	mu_destroy_thread(&doc->thread);
 }
-
 
 /**
  * Return the number of pages of a document
@@ -504,7 +548,6 @@ MuError MuOfficeDoc_getNumPages(MuOfficeDoc *doc, int *pNumPages)
 	return err;
 }
 
-
 /**
  * Determine if the document has been modified
  *
@@ -537,7 +580,6 @@ int MuOfficeDoc_hasBeenModified(MuOfficeDoc *doc)
 	return modified;
 }
 
-
 /**
  * Start a save operation
  *
@@ -556,7 +598,6 @@ MuError MuOfficeDoc_save(	MuOfficeDoc          *doc,
 	return MuError_NotImplemented; /* FIXME */
 }
 
-
 /**
  * Stop a document loading. The document is not destroyed, but
  * no further content will be read from the file.
@@ -574,7 +615,6 @@ void MuOfficeDoc_abortLoad(MuOfficeDoc *doc)
 	doc->aborted = 1;
 	mu_trigger_semaphore(&doc->password_sem);
 }
-
 
 /**
  * Destroy a MuOfficeDoc object. Loading of the document is shutdown
@@ -614,6 +654,7 @@ MuError MuOfficeDoc_getPage(	MuOfficeDoc          *doc,
 {
 	MuOfficePage *page;
 	MuError err = MuError_OK;
+	fz_context *ctx;
 
 	if (!doc)
 		return MuError_BadNull;
@@ -623,12 +664,15 @@ MuError MuOfficeDoc_getPage(	MuOfficeDoc          *doc,
 	*pPage = NULL;
 
 	ensure_doc_loaded(doc);
+	ctx = doc->ctx;
 
 	page = Pal_Mem_calloc(1, sizeof(*page));
 	if (page == NULL)
 		return MuError_OOM;
 
-	fz_try(doc->ctx)
+	fz_lock(ctx, DOCLOCK);
+
+	fz_try(ctx)
 	{
 		page->doc = doc;
 		page->pageNum = pageNumber;
@@ -639,11 +683,67 @@ MuError MuOfficeDoc_getPage(	MuOfficeDoc          *doc,
 		doc->pages = page;
 		*pPage = page;
 	}
-	fz_catch(doc->ctx)
+	fz_catch(ctx)
 	{
 		Pal_Mem_free(page);
 		err = MuError_Generic;
 	}
+
+	fz_unlock(ctx, DOCLOCK);
+
+	return err;
+}
+
+/**
+ * Perform MuPDF native operations on a given document.
+ *
+ * The function is called with fz_context and fz_document
+ * values that can be safely used (i.e. the context is
+ * cloned/dropped appropriately around the function, and
+ * locking is used to ensure that no other threads are
+ * simultaneously using the document). Functions can
+ * signal errors by fz_throw-ing.
+ *
+ * Due to the locking, it is best to ensure that as little
+ * time is taken here as possible (i.e. if you fetch some
+ * data and then spend a long time processing it, it is
+ * probably best to fetch the data using MuOfficeDoc_run
+ * and then process it outside). This avoids potentially
+ * blocking the UI.
+ *
+ * @param doc          the document object.
+ * @param fn           the function to call with fz_context/fz_document
+ *                     values.
+ * @param arg          Opaque data pointer.
+ *
+ * @return             error indication - 0 for success
+ */
+MuError MuOfficeDoc_run(MuOfficeDoc *doc, void (*fn)(fz_context *ctx, fz_document *doc, void *arg), void *arg)
+{
+	fz_context *ctx;
+	MuError err = MuError_OK;
+
+	if (doc == NULL)
+		return MuError_BadNull;
+	if (fn == NULL)
+		return err;
+
+	ensure_doc_loaded(doc);
+
+	ctx = fz_clone_context(doc->mu->ctx);
+	if (ctx == NULL)
+		return MuError_OOM;
+
+	fz_lock(ctx, DOCLOCK);
+
+	fz_try(ctx)
+		fn(ctx, doc->doc, arg);
+	fz_catch(ctx)
+		err = MuError_Generic;
+
+	fz_unlock(ctx, DOCLOCK);
+
+	fz_drop_context(ctx);
 
 	return err;
 }
@@ -677,7 +777,6 @@ void MuOfficePage_destroy(MuOfficePage *page)
 	fz_drop_display_list(doc->ctx, page->list);
 	fz_free(doc->ctx, page);
 }
-
 
 /**
  * Get the size of a page in pixels
@@ -718,7 +817,6 @@ MuError MuOfficePage_getSize(	MuOfficePage *page,
 
 	return MuError_OK;
 }
-
 
 /**
  * Return the zoom factors necessary to render at to a given
@@ -762,7 +860,6 @@ MuError MuOfficePage_calculateZoom(	MuOfficePage *page,
 
 	return MuError_OK;
 }
-
 
 /**
  * Get the size of a page in pixels for a specified zoom factor
@@ -809,6 +906,58 @@ MuError MuOfficePage_getSizeForZoom(	MuOfficePage *page,
 	return MuError_OK;
 }
 
+/**
+ * Perform MuPDF native operations on a given page.
+ *
+ * The function is called with fz_context and fz_page
+ * values that can be safely used (i.e. the context is
+ * cloned/dropped appropriately around the function, and
+ * locking is used to ensure that no other threads are
+ * simultaneously using the document). Functions can
+ * signal errors by fz_throw-ing.
+ *
+ * Due to the locking, it is best to ensure that as little
+ * time is taken here as possible (i.e. if you fetch some
+ * data and then spend a long time processing it, it is
+ * probably best to fetch the data using MuOfficePage_run
+ * and then process it outside). This avoids potentially
+ * blocking the UI.
+ *
+ * @param page         the page object.
+ * @param fn           the function to call with fz_context/fz_document
+ *                     values.
+ * @param arg          Opaque data pointer.
+ *
+ * @return             error indication - 0 for success
+ */
+MuError MuOfficePage_run(MuOfficePage *page, void (*fn)(fz_context *ctx, fz_page *page, void *arg), void *arg)
+{
+	fz_context *ctx;
+	MuError err = MuError_OK;
+
+	if (page == NULL)
+		return MuError_BadNull;
+	if (fn == NULL)
+		return err;
+
+	ctx = fz_clone_context(page->doc->mu->ctx);
+	if (ctx == NULL)
+		return MuError_OOM;
+
+	fz_lock(ctx, DOCLOCK);
+
+	fz_try(ctx)
+		fn(ctx, page->page, arg);
+	fz_catch(ctx)
+		err = MuError_Generic;
+
+	fz_unlock(ctx, DOCLOCK);
+
+	fz_drop_context(ctx);
+
+	return err;
+}
+
 static void render_worker(void *arg)
 {
 	MuOfficeRender *render = (MuOfficeRender *)arg;
@@ -821,17 +970,25 @@ static void render_worker(void *arg)
 	float scaley;
 	fz_matrix matrix;
 	fz_rect page_bounds;
+	int locked = 0;
 
 	if (ctx == NULL)
 		return;
 
 	fz_var(pixmap);
 	fz_var(dev);
+	fz_var(locked);
 
 	fz_try(ctx)
 	{
 		if (page->list == NULL)
+		{
+			fz_lock(ctx, DOCLOCK);
+			locked = 1;
 			page->list = fz_new_display_list_from_page(ctx, page->page);
+			locked = 0;
+			fz_unlock(ctx, DOCLOCK);
+		}
 		/* Make a pixmap from the bitmap */
 		if (!render->area_valid)
 		{
@@ -871,6 +1028,8 @@ static void render_worker(void *arg)
 	}
 	fz_catch(ctx)
 	{
+		if (locked)
+			fz_unlock(ctx, DOCLOCK);
 		err = MuError_Generic;
 		goto fail;
 	}
@@ -882,7 +1041,6 @@ fail:
 
 	fz_drop_context(ctx);
 }
-
 
 /**
  * Schedule the rendering of an area of document page to
