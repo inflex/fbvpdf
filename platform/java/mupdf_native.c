@@ -588,6 +588,175 @@ static void lose_fids(JNIEnv *env)
 	(*env)->DeleteGlobalRef(env, cls_TryLaterException);
 }
 
+#ifdef HAVE_ANDROID
+
+static fz_font *load_noto(fz_context *ctx, const char *filename, int idx)
+{
+	fz_font *font;
+	fz_try(ctx)
+		font = fz_new_font_from_file(ctx, NULL, filename, idx, 0);
+	fz_catch(ctx)
+		return NULL;
+	return font;
+}
+
+static fz_font *load_noto_cjk(fz_context *ctx, int lang)
+{
+	fz_font *font = load_noto(ctx, "/system/fonts/NotoSansCJK-Regular.ttc", lang);
+	if (!font)
+		font = load_noto(ctx, "/system/fonts/DroidSansFallback.ttf", 0);
+	return font;
+}
+
+static fz_font *load_noto3(fz_context *ctx, const char *a, const char *b, const char *c)
+{
+	fz_font *font = load_noto(ctx, a, 0);
+	if (!font && b) font = load_noto(ctx, b, 0);
+	if (!font && c) font = load_noto(ctx, c, 0);
+	return font;
+}
+
+enum { JP, KR, SC, TC };
+
+#define NOTO3(NAME1, NAME2, NAME3) load_noto3(ctx, "/system/fonts/" NAME1 "-Regular.ttf", "/system/fonts/" NAME2 "-Regular.ttf", "/system/fonts/" NAME3 "-Regular.ttf")
+#define NOTO2(NAME1, NAME2) load_noto3(ctx, "/system/fonts/" NAME1 "-Regular.ttf", "/system/fonts/" NAME2 "-Regular.ttf", NULL)
+#define NOTO(NAME) load_noto3(ctx, "/system/fonts/" NAME "-Regular.ttf", NULL, NULL)
+
+fz_font *load_droid_fallback_font(fz_context *ctx, int script, int language, int serif, int bold, int italic)
+{
+	switch (script)
+	{
+	default:
+	case UCDN_SCRIPT_COMMON:
+	case UCDN_SCRIPT_INHERITED:
+	case UCDN_SCRIPT_UNKNOWN:
+		return NULL;
+
+	case UCDN_SCRIPT_HANGUL: return load_noto_cjk(ctx, KR);
+	case UCDN_SCRIPT_HIRAGANA: return load_noto_cjk(ctx, JP);
+	case UCDN_SCRIPT_KATAKANA: return load_noto_cjk(ctx, JP);
+	case UCDN_SCRIPT_BOPOMOFO: return load_noto_cjk(ctx, SC);
+	case UCDN_SCRIPT_HAN:
+		switch (language) {
+		case FZ_LANG_ja: return load_noto_cjk(ctx, JP);
+		case FZ_LANG_ko: return load_noto_cjk(ctx, KR);
+		case FZ_LANG_zh_Hant: return load_noto_cjk(ctx, TC);
+		default:
+		case FZ_LANG_zh_Hans: return load_noto_cjk(ctx, SC);
+		}
+
+	case UCDN_SCRIPT_LATIN: return NOTO2("NotoSans", "DroidSans");
+	case UCDN_SCRIPT_GREEK: return NOTO2("NotoSans", "DroidSans");
+	case UCDN_SCRIPT_CYRILLIC: return NOTO2("NotoSans", "DroidSans");
+	case UCDN_SCRIPT_ARABIC: return NOTO3("NotoNaskh", "NotoNaskhArabic", "DroidNaskh");
+
+	case UCDN_SCRIPT_ARMENIAN: return NOTO2("NotoSansArmenian", "DroidSansArmenian");
+	case UCDN_SCRIPT_BALINESE: return NOTO("NotoSansBalinese");
+	case UCDN_SCRIPT_BAMUM: return NOTO("NotoSansBamum");
+	case UCDN_SCRIPT_BATAK: return NOTO("NotoSansBatak");
+	case UCDN_SCRIPT_BENGALI: return NOTO("NotoSansBengali");
+	case UCDN_SCRIPT_CANADIAN_ABORIGINAL: return NOTO("NotoSansCanadianAboriginal");
+	case UCDN_SCRIPT_CHAM: return NOTO("NotoSansCham");
+	case UCDN_SCRIPT_CHEROKEE: return NOTO("NotoSansCherokee");
+	case UCDN_SCRIPT_DEVANAGARI: return NOTO2("NotoSansDevanagari", "DroidSansDevanagari");
+	case UCDN_SCRIPT_ETHIOPIC: return NOTO2("NotoSansEthiopic", "DroidSansEthiopic");
+	case UCDN_SCRIPT_GEORGIAN: return NOTO2("NotoSansGeorgian", "DroidSansGeorgian");
+	case UCDN_SCRIPT_GUJARATI: return NOTO("NotoSansGujarati");
+	case UCDN_SCRIPT_GURMUKHI: return NOTO("NotoSansGurmukhi");
+	case UCDN_SCRIPT_HEBREW: return NOTO2("NotoSansHebrew", "DroidSansHebrew");
+	case UCDN_SCRIPT_JAVANESE: return NOTO("NotoSansJavanese");
+	case UCDN_SCRIPT_KANNADA: return NOTO("NotoSansKannada");
+	case UCDN_SCRIPT_KAYAH_LI: return NOTO("NotoSansKayahLi");
+	case UCDN_SCRIPT_KHMER: return NOTO("NotoSansKhmer");
+	case UCDN_SCRIPT_LAO: return NOTO("NotoSansLao");
+	case UCDN_SCRIPT_LEPCHA: return NOTO("NotoSansLepcha");
+	case UCDN_SCRIPT_LIMBU: return NOTO("NotoSansLimbu");
+	case UCDN_SCRIPT_LISU: return NOTO("NotoSansLisu");
+	case UCDN_SCRIPT_MALAYALAM: return NOTO("NotoSansMalayalam");
+	case UCDN_SCRIPT_MANDAIC: return NOTO("NotoSansMandaic");
+	case UCDN_SCRIPT_MEETEI_MAYEK: return NOTO("NotoSansMeeteiMayek");
+	case UCDN_SCRIPT_MONGOLIAN: return NOTO("NotoSansMongolian");
+	case UCDN_SCRIPT_MYANMAR: return NOTO("NotoSansMyanmar");
+	case UCDN_SCRIPT_NEW_TAI_LUE: return NOTO("NotoSansNewTaiLue");
+	case UCDN_SCRIPT_NKO: return NOTO("NotoSansNKo");
+	case UCDN_SCRIPT_OL_CHIKI: return NOTO("NotoSansOlChiki");
+	case UCDN_SCRIPT_ORIYA: return NOTO("NotoSansOriya");
+	case UCDN_SCRIPT_SAURASHTRA: return NOTO("NotoSansSaurashtra");
+	case UCDN_SCRIPT_SINHALA: return NOTO("NotoSansSinhala");
+	case UCDN_SCRIPT_SUNDANESE: return NOTO("NotoSansSundanese");
+	case UCDN_SCRIPT_SYLOTI_NAGRI: return NOTO("NotoSansSylotiNagri");
+	case UCDN_SCRIPT_SYRIAC: return NOTO("NotoSansSyriacEastern");
+	case UCDN_SCRIPT_TAI_LE: return NOTO("NotoSansTaiLe");
+	case UCDN_SCRIPT_TAI_THAM: return NOTO("NotoSansTaiTham");
+	case UCDN_SCRIPT_TAI_VIET: return NOTO("NotoSansTaiViet");
+	case UCDN_SCRIPT_TAMIL: return NOTO2("NotoSansTamil", "DroidSansTamil");
+	case UCDN_SCRIPT_TELUGU: return NOTO("NotoSansTelugu");
+	case UCDN_SCRIPT_THAANA: return NOTO("NotoSansThaana");
+	case UCDN_SCRIPT_THAI: return NOTO2("NotoSansThai", "DroidSansThai");
+	case UCDN_SCRIPT_TIBETAN: return NOTO("NotoSansTibetan");
+	case UCDN_SCRIPT_TIFINAGH: return NOTO("NotoSansTifinagh");
+	case UCDN_SCRIPT_VAI: return NOTO("NotoSansVai");
+	case UCDN_SCRIPT_YI: return NOTO("NotoSansYi");
+
+	/* Historic */
+	case UCDN_SCRIPT_AVESTAN: return NOTO("NotoSansAvestan");
+	case UCDN_SCRIPT_BRAHMI: return NOTO("NotoSansBrahmi");
+	case UCDN_SCRIPT_BUGINESE: return NOTO("NotoSansBuginese");
+	case UCDN_SCRIPT_BUHID: return NOTO("NotoSansBuhid");
+	case UCDN_SCRIPT_CARIAN: return NOTO("NotoSansCarian");
+	case UCDN_SCRIPT_COPTIC: return NOTO("NotoSansCoptic");
+	case UCDN_SCRIPT_CUNEIFORM: return NOTO("NotoSansCuneiform");
+	case UCDN_SCRIPT_CYPRIOT: return NOTO("NotoSansCypriot");
+	case UCDN_SCRIPT_DESERET: return NOTO("NotoSansDeseret");
+	case UCDN_SCRIPT_EGYPTIAN_HIEROGLYPHS: return NOTO("NotoSansEgyptianHieroglyphs");
+	case UCDN_SCRIPT_GLAGOLITIC: return NOTO("NotoSansGlagolitic");
+	case UCDN_SCRIPT_GOTHIC: return NOTO("NotoSansGothic");
+	case UCDN_SCRIPT_HANUNOO: return NOTO("NotoSansHanunoo");
+	case UCDN_SCRIPT_IMPERIAL_ARAMAIC: return NOTO("NotoSansImperialAramaic");
+	case UCDN_SCRIPT_INSCRIPTIONAL_PAHLAVI: return NOTO("NotoSansInscriptionalPahlavi");
+	case UCDN_SCRIPT_INSCRIPTIONAL_PARTHIAN: return NOTO("NotoSansInscriptionalParthian");
+	case UCDN_SCRIPT_KAITHI: return NOTO("NotoSansKaithi");
+	case UCDN_SCRIPT_KHAROSHTHI: return NOTO("NotoSansKharoshthi");
+	case UCDN_SCRIPT_LINEAR_B: return NOTO("NotoSansLinearB");
+	case UCDN_SCRIPT_LYCIAN: return NOTO("NotoSansLycian");
+	case UCDN_SCRIPT_LYDIAN: return NOTO("NotoSansLydian");
+	case UCDN_SCRIPT_OGHAM: return NOTO("NotoSansOgham");
+	case UCDN_SCRIPT_OLD_ITALIC: return NOTO("NotoSansOldItalic");
+	case UCDN_SCRIPT_OLD_PERSIAN: return NOTO("NotoSansOldPersian");
+	case UCDN_SCRIPT_OLD_SOUTH_ARABIAN: return NOTO("NotoSansOldSouthArabian");
+	case UCDN_SCRIPT_OLD_TURKIC: return NOTO("NotoSansOldTurkic");
+	case UCDN_SCRIPT_OSMANYA: return NOTO("NotoSansOsmanya");
+	case UCDN_SCRIPT_PHAGS_PA: return NOTO("NotoSansPhagsPa");
+	case UCDN_SCRIPT_PHOENICIAN: return NOTO("NotoSansPhoenician");
+	case UCDN_SCRIPT_REJANG: return NOTO("NotoSansRejang");
+	case UCDN_SCRIPT_RUNIC: return NOTO("NotoSansRunic");
+	case UCDN_SCRIPT_SAMARITAN: return NOTO("NotoSansSamaritan");
+	case UCDN_SCRIPT_SHAVIAN: return NOTO("NotoSansShavian");
+	case UCDN_SCRIPT_TAGALOG: return NOTO("NotoSansTagalog");
+	case UCDN_SCRIPT_TAGBANWA: return NOTO("NotoSansTagbanwa");
+	case UCDN_SCRIPT_UGARITIC: return NOTO("NotoSansUgaritic");
+	}
+	return NULL;
+}
+
+fz_font *load_droid_cjk_font(fz_context *ctx, const char *name, int ros, int serif)
+{
+	switch (ros) {
+	case FZ_ADOBE_CNS_1: return load_noto_cjk(ctx, TC);
+	case FZ_ADOBE_GB_1: return load_noto_cjk(ctx, SC);
+	case FZ_ADOBE_JAPAN_1: return load_noto_cjk(ctx, JP);
+	case FZ_ADOBE_KOREA_1: return load_noto_cjk(ctx, KR);
+	}
+	return NULL;
+}
+
+fz_font *load_droid_font(fz_context *ctx, const char *name, int bold, int italic, int needs_exact_metrics)
+{
+	return NULL;
+}
+
+#endif
+
 /* Put the fz_context in thread-local storage */
 
 #ifdef _WIN32
@@ -674,6 +843,13 @@ static int init_base_context(JNIEnv *env)
 		return -1;
 
 	fz_register_document_handlers(base_context);
+
+#ifdef HAVE_ANDROID
+	fz_install_load_system_font_funcs(base_context,
+		load_droid_font,
+		load_droid_cjk_font,
+		load_droid_fallback_font);
+#endif
 
 	return 0;
 }
@@ -911,14 +1087,6 @@ static inline jobject to_ColorSpace_safe(fz_context *ctx, JNIEnv *env, fz_colors
 	return jcs;
 }
 
-static inline jobject to_Document_safe(fz_context *ctx, JNIEnv *env, fz_document *doc)
-{
-	if (!ctx || !doc) return NULL;
-
-	fz_keep_document(ctx, doc);
-	return (*env)->NewObject(env, cls_Document, mid_Document_init, jlong_cast(doc));
-}
-
 static inline jobject to_Font_safe(fz_context *ctx, JNIEnv *env, fz_font *font)
 {
 	jobject jfont;
@@ -1008,14 +1176,6 @@ static inline jobject to_Outline_safe(fz_context *ctx, JNIEnv *env, fz_document 
 	return jarr;
 }
 
-static inline jobject to_PDFDocument_safe(fz_context *ctx, JNIEnv *env, pdf_document *pdf)
-{
-	if (!ctx || !pdf) return NULL;
-
-	fz_keep_document(ctx, (fz_document *) pdf);
-	return (*env)->NewObject(env, cls_PDFDocument, mid_PDFDocument_init, jlong_cast(pdf));
-}
-
 static inline jobject to_PDFObject_safe(fz_context *ctx, JNIEnv *env, jobject pdf, pdf_obj *obj)
 {
 	if (!ctx || !pdf) return NULL;
@@ -1065,6 +1225,32 @@ static inline jobjectArray to_jRectArray_safe(fz_context *ctx, JNIEnv *env, cons
 }
 
 /* Conversion functions: C to Java. Take ownership of fitz object. None of these throw fitz exceptions. */
+
+static inline jobject to_Document_safe_own(fz_context *ctx, JNIEnv *env, fz_document *doc)
+{
+	jobject obj;
+
+	if (!ctx || !doc) return NULL;
+
+	obj = (*env)->NewObject(env, cls_Document, mid_Document_init, jlong_cast(doc));
+	if (!obj)
+		fz_drop_document(ctx, doc);
+
+	return obj;
+}
+
+static inline jobject to_PDFDocument_safe_own(fz_context *ctx, JNIEnv *env, pdf_document *pdf)
+{
+	jobject obj;
+
+	if (!ctx || !pdf) return NULL;
+
+	obj = (*env)->NewObject(env, cls_PDFDocument, mid_PDFDocument_init, jlong_cast(pdf));
+	if (!obj)
+		fz_drop_document(ctx, (fz_document*)pdf);
+
+	return obj;
+}
 
 static inline jobject to_Device_safe_own(fz_context *ctx, JNIEnv *env, fz_device *device)
 {
@@ -1922,15 +2108,14 @@ struct NativeDeviceInfo
 
 	/* Conceptually, we support drawing onto a 'plane' of pixels.
 	 * The plane is width/height in size. The page is positioned on this
-	 * at pageX0,pageY0 -> pageX1,PageY1. We want to redraw the given patch
-	 * of this.
+	 * at xOffset,yOffset. We want to redraw the given patch of this.
 	 *
 	 * The samples pointer in pixmap is updated on every lock/unlock, to
 	 * cope with the object moving in memory.
 	 */
 	fz_pixmap *pixmap;
-	int pageX0;
-	int pageY0;
+	int xOffset;
+	int yOffset;
 	int width;
 };
 
@@ -2478,67 +2663,48 @@ FUN(DisplayListDevice_newNative)(JNIEnv *env, jclass self, jobject jlist)
 #ifdef HAVE_ANDROID
 
 static jlong
-newNativeAndroidDrawDevice(JNIEnv *env, jobject self, fz_context *ctx, jobject obj, jint width, jint height, NativeDeviceLockFn *lock, NativeDeviceUnlockFn *unlock, jint pageX0, jint pageY0, jint pageX1, jint pageY1, jint patchX0, jint patchY0, jint patchX1, jint patchY1)
+newNativeAndroidDrawDevice(JNIEnv *env, jobject self, fz_context *ctx, jobject obj, jint width, jint height, NativeDeviceLockFn *lock, NativeDeviceUnlockFn *unlock, jint xOrigin, jint yOrigin, jint patchX0, jint patchY0, jint patchX1, jint patchY1)
 {
 	fz_device *device = NULL;
 	fz_pixmap *pixmap = NULL;
 	unsigned char dummy;
 	NativeDeviceInfo *ninfo = NULL;
-	fz_irect clip, pixbbox;
+	fz_irect bbox;
 
 	if (!ctx) return 0;
 
-//	LOGI("DrawDeviceNative: bitmap=%d,%d page=%d,%d->%d,%d patch=%d,%d->%d,%d", width, height, pageX0, pageY0, pageX1, pageY1, patchX0, patchY0, patchX1, patchY1);
-	/* Sanitise patch w.r.t page. */
-	if (patchX0 < pageX0)
-		patchX0 = pageX0;
-	if (patchY0 < pageY0)
-		patchY0 = pageY0;
-	if (patchX1 > pageX1)
-		patchX1 = pageX1;
-	if (patchY1 > pageY1)
-		patchY1 = pageY1;
+	/* Ensure patch fits inside bitmap. */
+	if (patchX0 < 0) patchX0 = 0;
+	if (patchY0 < 0) patchY0 = 0;
+	if (patchX1 > width) patchX1 = width;
+	if (patchY1 > height) patchY1 = height;
 
-	clip.x0 = patchX0;
-	clip.y0 = patchY0;
-	clip.x1 = patchX1;
-	clip.y1 = patchY1;
-
-	/* Check for sanity. */
-	//LOGI("clip = %d,%d->%d,%d", clip.x0, clip.y0, clip.x1, clip.y1);
-	if (clip.x0 < 0 || clip.y0 < 0 || clip.x1 > width || clip.y1 > height)
-		fz_throw(ctx, FZ_ERROR_GENERIC, "patch would draw out of bounds!");
-
-	clip.x0 -= pageX0;
-	clip.y0 -= pageY0;
-	clip.x1 -= pageX0;
-	clip.y1 -= pageY0;
-
-	/* pixmaps cannot handle right-edge padding, so the bbox must be expanded to
-	 * match the pixel's data */
-	pixbbox = clip;
-	pixbbox.x1 = pixbbox.x0 + width;
+	bbox.x0 = xOrigin + patchX0;
+	bbox.y0 = yOrigin + patchY0;
+	bbox.x1 = xOrigin + patchX1;
+	bbox.y1 = yOrigin + patchY1;
 
 	fz_var(pixmap);
 	fz_var(ninfo);
 
 	fz_try(ctx)
 	{
-		pixmap = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx), &pixbbox, 1, &dummy);
+		pixmap = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx), &bbox, 1, &dummy);
+		pixmap->stride = width * sizeof(int32_t);
 		ninfo = fz_malloc(ctx, sizeof(*ninfo));
 		ninfo->pixmap = pixmap;
 		ninfo->lock = lock;
 		ninfo->unlock = unlock;
-		ninfo->pageX0 = patchX0;
-		ninfo->pageY0 = patchY0;
+		ninfo->xOffset = patchX0;
+		ninfo->yOffset = patchY0;
 		ninfo->width = width;
 		ninfo->object = obj;
 		(*env)->SetLongField(env, self, fid_NativeDevice_nativeInfo, jlong_cast(ninfo));
 		(*env)->SetObjectField(env, self, fid_NativeDevice_nativeResource, obj);
 		lockNativeDevice(env,self);
-		fz_clear_pixmap_rect_with_value(ctx, pixmap, 0xff, &clip);
+		fz_clear_pixmap_with_value(ctx, pixmap, 0xff);
 		unlockNativeDevice(env,ninfo);
-		device = fz_new_draw_device_with_bbox(ctx, NULL, pixmap, &clip);
+		device = fz_new_draw_device(ctx, NULL, pixmap);
 	}
 	fz_catch(ctx)
 	{
@@ -2565,7 +2731,7 @@ static void androidDrawDevice_lock(JNIEnv *env, NativeDeviceInfo *info)
 	}
 
 	/* Now offset pixels to allow for the page offsets */
-	pixels += sizeof(int32_t) * (info->pageX0 + info->width * info->pageY0);
+	pixels += sizeof(int32_t) * (info->xOffset + info->width * info->yOffset);
 
 	info->pixmap->samples = pixels;
 }
@@ -2580,7 +2746,7 @@ static void androidDrawDevice_unlock(JNIEnv *env, NativeDeviceInfo *info)
 }
 
 JNIEXPORT jlong JNICALL
-FUN(android_AndroidDrawDevice_newNative)(JNIEnv *env, jclass self, jobject jbitmap, jint pageX0, jint pageY0, jint pageX1, jint pageY1, jint patchX0, jint patchY0, jint patchX1, jint patchY1)
+FUN(android_AndroidDrawDevice_newNative)(JNIEnv *env, jclass self, jobject jbitmap, jint xOrigin, jint yOrigin, jint pX0, jint pY0, jint pX1, jint pY1)
 {
 	fz_context *ctx = get_context(env);
 	AndroidBitmapInfo info;
@@ -2598,7 +2764,7 @@ FUN(android_AndroidDrawDevice_newNative)(JNIEnv *env, jclass self, jobject jbitm
 		jni_throw(env, FZ_ERROR_GENERIC, "new DrawDevice failed as bitmap width != stride");
 
 	fz_try(ctx)
-		device = newNativeAndroidDrawDevice(env, self, ctx, jbitmap, info.width, info.height, androidDrawDevice_lock, androidDrawDevice_unlock, pageX0, pageY0, pageX1, pageY1, patchX0, patchY0, patchX1, patchY1);
+		device = newNativeAndroidDrawDevice(env, self, ctx, jbitmap, info.width, info.height, androidDrawDevice_lock, androidDrawDevice_unlock, xOrigin, yOrigin, pX0, pY0, pX1, pY1);
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
@@ -3996,11 +4162,12 @@ FUN(Document_finalize)(JNIEnv *env, jobject self)
 	Memento_fin();
 }
 
-JNIEXPORT jlong JNICALL
-FUN(Document_newNativeWithPath)(JNIEnv *env, jobject self, jstring jfilename)
+JNIEXPORT jobject JNICALL
+FUN(Document_openNativeWithPath)(JNIEnv *env, jclass cls, jstring jfilename)
 {
 	fz_context *ctx = get_context(env);
 	fz_document *doc = NULL;
+	pdf_document *pdf = NULL;
 	const char *filename = NULL;
 
 	if (!ctx) return 0;
@@ -4011,17 +4178,24 @@ FUN(Document_newNativeWithPath)(JNIEnv *env, jobject self, jstring jfilename)
 	}
 
 	fz_try(ctx)
+	{
 		doc = fz_open_document(ctx, filename);
+		pdf = pdf_document_from_fz_document(ctx, doc);
+	}
 	fz_always(ctx)
+	{
 		if (filename)
 			(*env)->ReleaseStringUTFChars(env, jfilename, filename);
+	}
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
 		return 0;
 	}
 
-	return jlong_cast(doc);
+	if (pdf)
+		return to_PDFDocument_safe_own(ctx, env, pdf);
+	return to_Document_safe_own(ctx, env, doc);
 }
 
 JNIEXPORT jboolean JNICALL
@@ -4053,7 +4227,8 @@ FUN(Document_authenticatePassword)(JNIEnv *env, jobject self, jstring jpassword)
 	int okay = 0;
 
 	if (!ctx || !doc) return JNI_FALSE;
-	if (password)
+
+	if (jpassword)
 	{
 		password = (*env)->GetStringUTFChars(env, jpassword, NULL);
 		if (!password) return JNI_FALSE;
@@ -4222,24 +4397,40 @@ FUN(Document_loadOutline)(JNIEnv *env, jobject self)
 	return joutline;
 }
 
-JNIEXPORT jobject JNICALL
-FUN(Document_toPDFDocument)(JNIEnv *env, jobject self)
+JNIEXPORT jlong JNICALL
+FUN(Document_makeBookmark)(JNIEnv *env, jobject self, jint page)
 {
 	fz_context *ctx = get_context(env);
 	fz_document *doc = from_Document(env, self);
-	pdf_document *pdf = NULL;
-
-	if (!ctx || !doc) return NULL;
+	fz_bookmark mark = 0;
 
 	fz_try(ctx)
-		pdf = pdf_specifics(ctx, doc);
+		mark = fz_make_bookmark(ctx, doc, page);
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
-		return NULL;
+		return 0;
 	}
 
-	return to_PDFDocument_safe(ctx, env, pdf);
+	return mark;
+}
+
+JNIEXPORT jint JNICALL
+FUN(Document_findBookmark)(JNIEnv *env, jobject self, jlong mark)
+{
+	fz_context *ctx = get_context(env);
+	fz_document *doc = from_Document(env, self);
+	int page = -1;
+
+	fz_try(ctx)
+		page = fz_lookup_bookmark(ctx, doc, mark);
+	fz_catch(ctx)
+	{
+		jni_rethrow(env, ctx);
+		return -1;
+	}
+
+	return page;
 }
 
 /* Page interface */
@@ -5604,6 +5795,25 @@ FUN(StructuredText_getBlocks)(JNIEnv *env, jobject self)
 
 /* PDFDocument interface */
 
+JNIEXPORT jlong JNICALL
+FUN(PDFDocument_newNative)(JNIEnv *env, jclass cls)
+{
+	fz_context *ctx = get_context(env);
+	pdf_document *doc = NULL;
+
+	if (!ctx) return 0;
+
+	fz_try(ctx)
+		doc = pdf_create_document(ctx);
+	fz_catch(ctx)
+	{
+		jni_rethrow(env, ctx);
+		return 0;
+	}
+
+	return jlong_cast(doc);
+}
+
 JNIEXPORT void JNICALL
 FUN(PDFDocument_finalize)(JNIEnv *env, jobject self)
 {
@@ -5827,37 +6037,6 @@ FUN(PDFDocument_newDictionary)(JNIEnv *env, jobject self)
 	}
 
 	return (*env)->NewObject(env, cls_PDFObject, mid_PDFObject_init, jlong_cast(obj), self);
-}
-
-JNIEXPORT jobject JNICALL
-FUN(PDFDocument_toDocument)(JNIEnv *env, jobject self)
-{
-	fz_context *ctx = get_context(env);
-	pdf_document *pdf = from_PDFDocument(env, self);
-
-	if (!ctx || !pdf) return NULL;
-
-	return to_Document_safe(ctx, env, (fz_document *) pdf);
-}
-
-JNIEXPORT jint JNICALL
-FUN(PDFDocument_countPages)(JNIEnv *env, jobject self)
-{
-	fz_context *ctx = get_context(env);
-	pdf_document *pdf = from_PDFDocument(env, self);
-	int count = 0;
-
-	if (!ctx || !pdf) return 0;
-
-	fz_try(ctx)
-		count = pdf_count_pages(ctx, pdf);
-	fz_catch(ctx)
-	{
-		jni_rethrow(env, ctx);
-		return 0;
-	}
-
-	return count;
 }
 
 JNIEXPORT jobject JNICALL

@@ -37,10 +37,6 @@ static int justcopied = 0;
 
 static pdfapp_t gapp;
 
-#ifndef PATH_MAX
-#define PATH_MAX (1024)
-#endif
-
 static wchar_t wbuf[PATH_MAX];
 static char filename[PATH_MAX];
 
@@ -1211,6 +1207,7 @@ static void usage(void)
 	fprintf(stderr, "\t-C -\tRRGGBB (tint color in hexadecimal syntax)\n");
 	fprintf(stderr, "\t-W -\tpage width for EPUB layout\n");
 	fprintf(stderr, "\t-H -\tpage height for EPUB layout\n");
+	fprintf(stderr, "\t-I -\tinvert colors\n");
 	fprintf(stderr, "\t-S -\tfont size for EPUB layout\n");
 	fprintf(stderr, "\t-U -\tuser style sheet for EPUB layout\n");
 	fprintf(stderr, "\t-X\tdisable document styles for EPUB layout\n");
@@ -1241,7 +1238,7 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShow
 
 	argv = fz_argv_from_wargv(argc, wargv);
 
-	while ((c = fz_getopt(argc, argv, "p:r:A:C:W:H:S:U:Xb:")) != -1)
+	while ((c = fz_getopt(argc, argv, "Ip:r:A:C:W:H:S:U:Xb:")) != -1)
 	{
 		switch (c)
 		{
@@ -1254,6 +1251,7 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShow
 			break;
 		case 'p': password = fz_optarg; break;
 		case 'r': displayRes = fz_atoi(fz_optarg); break;
+		case 'I': gapp.invert = 1; break;
 		case 'A': fz_set_aa_level(ctx, fz_atoi(fz_optarg)); break;
 		case 'W': gapp.layout_w = fz_atoi(fz_optarg); break;
 		case 'H': gapp.layout_h = fz_atoi(fz_optarg); break;

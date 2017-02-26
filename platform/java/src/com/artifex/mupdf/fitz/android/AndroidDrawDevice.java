@@ -11,18 +11,19 @@ import com.artifex.mupdf.fitz.Matrix;
 
 public final class AndroidDrawDevice extends NativeDevice
 {
-	private native long newNative(Bitmap bitmap, int pageX0, int pageY0, int pageX1, int pageY1, int patchX0, int patchY0, int patchX1, int patchY1);
+	private native long newNative(Bitmap bitmap, int xOrigin, int yOrigin, int patchX0, int patchY0, int patchX1, int patchY1);
 
-	public AndroidDrawDevice(Bitmap bitmap,
-			int pageX0, int pageY0, int pageX1, int pageY1,
-			int patchX0, int patchY0, int patchX1, int patchY1) {
+	public AndroidDrawDevice (Bitmap bitmap, int xOrigin, int yOrigin, int patchX0, int patchY0, int patchX1, int patchY1) {
 		super(0);
-		pointer = newNative(bitmap, pageX0, pageY0, pageX1, pageY1, patchX0, patchY0, patchX1, patchY1);
+		pointer = newNative(bitmap, xOrigin, yOrigin, patchX0, patchY0, patchX1, patchY1);
 	}
 
-	public AndroidDrawDevice(Bitmap bitmap, RectI page, RectI patch) {
-		super(0);
-		pointer = newNative(bitmap, page.x0, page.y0, page.x1, page.y1, patch.x0, patch.y0, patch.x1, patch.y1);
+	public AndroidDrawDevice(Bitmap bitmap, int xOrigin, int yOrigin) {
+		this(bitmap, xOrigin, yOrigin, 0, 0, bitmap.getWidth(), bitmap.getHeight());
+	}
+
+	public AndroidDrawDevice(Bitmap bitmap) {
+		this(bitmap, 0, 0);
 	}
 
 	public static Bitmap drawPage(Page page, Matrix ctm) {
@@ -31,7 +32,7 @@ public final class AndroidDrawDevice extends NativeDevice
 		int w = ibox.x1 - ibox.x0;
 		int h = ibox.y1 - ibox.y0;
 		Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-		AndroidDrawDevice dev = new AndroidDrawDevice(bmp, ibox, ibox);
+		AndroidDrawDevice dev = new AndroidDrawDevice(bmp, ibox.x0, ibox.y0);
 		page.run(dev, ctm, null);
 		dev.close();
 		dev.destroy();
@@ -46,7 +47,7 @@ public final class AndroidDrawDevice extends NativeDevice
 		return drawPage(page, new Matrix(dpi / 72));
 	}
 
-	public static Bitmap drawPageFit(Page page, int fitW, int fitH) {
+	public static Matrix fitPage(Page page, int fitW, int fitH) {
 		Rect bbox = page.getBounds();
 		float pageW = bbox.x1 - bbox.x0;
 		float pageH = bbox.y1 - bbox.y0;
@@ -55,14 +56,22 @@ public final class AndroidDrawDevice extends NativeDevice
 		float scale = scaleH < scaleV ? scaleH : scaleV;
 		scaleH = (float)Math.floor(pageW * scale) / pageW;
 		scaleV = (float)Math.floor(pageH * scale) / pageH;
-		return drawPage(page, new Matrix(scaleH, scaleV));
+		return new Matrix(scaleH, scaleV);
 	}
 
-	public static Bitmap drawPageFitWidth(Page page, int fitW) {
+	public static Bitmap drawPageFit(Page page, int fitW, int fitH) {
+		return drawPage(page, fitPage(page, fitW, fitH));
+	}
+
+	public static Matrix fitPageWidth(Page page, int fitW) {
 		Rect bbox = page.getBounds();
 		float pageW = bbox.x1 - bbox.x0;
 		float scale = (float)fitW / pageW;
 		scale = (float)Math.floor(pageW * scale) / pageW;
-		return drawPage(page, new Matrix(scale));
+		return new Matrix(scale);
+	}
+
+	public static Bitmap drawPageFitWidth(Page page, int fitW) {
+		return drawPage(page, fitPageWidth(page, fitW));
 	}
 }

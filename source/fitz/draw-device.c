@@ -712,7 +712,7 @@ fz_draw_fill_text(fz_context *ctx, fz_device *devp, const fz_text *text, const f
 				fz_path *path = fz_outline_glyph(ctx, span->font, gid, &tm);
 				if (path)
 				{
-					fz_draw_fill_path(ctx, devp, path, 0, &ctm, colorspace, color, alpha);
+					fz_draw_fill_path(ctx, devp, path, 0, in_ctm, colorspace, color, alpha);
 					fz_drop_path(ctx, path);
 				}
 				else
@@ -791,7 +791,7 @@ fz_draw_stroke_text(fz_context *ctx, fz_device *devp, const fz_text *text, const
 				fz_path *path = fz_outline_glyph(ctx, span->font, gid, &tm);
 				if (path)
 				{
-					fz_draw_stroke_path(ctx, devp, path, stroke, &ctm, colorspace, color, alpha);
+					fz_draw_stroke_path(ctx, devp, path, stroke, in_ctm, colorspace, color, alpha);
 					fz_drop_path(ctx, path);
 				}
 				else
@@ -905,7 +905,7 @@ fz_draw_clip_text(fz_context *ctx, fz_device *devp, const fz_text *text, const f
 							state[1].mask = NULL;
 							fz_try(ctx)
 							{
-								fz_draw_fill_path(ctx, devp, path, 0, &ctm, fz_device_gray(ctx), &white, 1);
+								fz_draw_fill_path(ctx, devp, path, 0, in_ctm, fz_device_gray(ctx), &white, 1);
 							}
 							fz_always(ctx)
 							{
@@ -1028,7 +1028,7 @@ fz_draw_clip_stroke_text(fz_context *ctx, fz_device *devp, const fz_text *text, 
 							state[0].mask = NULL;
 							fz_try(ctx)
 							{
-								fz_draw_stroke_path(ctx, devp, path, stroke, &ctm, fz_device_gray(ctx), &white, 1);
+								fz_draw_stroke_path(ctx, devp, path, stroke, in_ctm, fz_device_gray(ctx), &white, 1);
 							}
 							fz_always(ctx)
 							{
@@ -2404,7 +2404,7 @@ fz_bound_path_accurate(fz_context *ctx, fz_irect *bbox, const fz_irect *scissor,
 const char *fz_draw_options_usage =
 	"Common raster format output options:\n"
 	"\trotate=N: rotate rendered pages N degrees counterclockwise\n"
-	"\tresolution=N: set both X and Y resolution of rendered pages in pixels per inch\n"
+	"\tresolution=N: set both X and Y resolution in pixels per inch\n"
 	"\tx-resolution=N: X resolution of rendered pages in pixels per inch\n"
 	"\ty-resolution=N: Y resolution of rendered pages in pixels per inch\n"
 	"\twidth=N: render pages to fit N pixels wide (ignore resolution option)\n"

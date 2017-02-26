@@ -383,12 +383,12 @@ public class Viewer extends Frame implements WindowListener, ActionListener, Ite
 		}
 
 		if (layoutEm != oldLayoutEm) {
-			float oldPos = (pageNumber + 0.5f) / (float)pageCount;
+			long mark = doc.makeBookmark(pageNumber);
 			doc.layout(layoutWidth, layoutHeight, layoutEm);
 			updateOutline();
 			pageCount = doc.countPages();
 			pageLabel.setText("/ " + pageCount);
-			pageNumber = (int)(oldPos * pageCount);
+			pageNumber = doc.findBookmark(mark);
 		}
 
 		if (zoomLevel != oldZoomLevel || pageNumber != oldPageNumber || layoutEm != oldLayoutEm || searchHits != oldSearchHits)
@@ -452,7 +452,7 @@ public class Viewer extends Frame implements WindowListener, ActionListener, Ite
 		}
 
 		try {
-			Document doc = new Document(selectedFile.getAbsolutePath());
+			Document doc = Document.openDocument(selectedFile.getAbsolutePath());
 			Viewer app = new Viewer(doc);
 			app.setVisible(true);
 			return;

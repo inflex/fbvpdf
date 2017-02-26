@@ -124,6 +124,10 @@ static __inline int signbit(double x)
 #define va_copy_end(a) va_end(a)
 #endif
 
+#ifndef PATH_MAX
+#define PATH_MAX (1024)
+#endif
+
 typedef signed char int8_t;
 typedef short int int16_t;
 typedef int int32_t;
@@ -228,7 +232,7 @@ typedef int fz_off_t;
 
 /* Portable way to format a size_t */
 #if defined(_WIN64)
-#define FMT_zu "%Iu"
+#define FMT_zu "%llu"
 #elif defined(_WIN32)
 #define FMT_zu "%u"
 #else
