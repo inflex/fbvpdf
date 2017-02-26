@@ -406,10 +406,7 @@ static fz_image *load_html_image(fz_context *ctx, fz_archive *zip, const char *b
 		buf = fz_read_archive_entry(ctx, zip, path);
 #if FZ_ENABLE_SVG
 		if (strstr(path, ".svg"))
-		{
-			fz_write_buffer_byte(ctx, buf, 0);
 			img = fz_new_image_from_svg(ctx, buf);
-		}
 		else
 #endif
 			img = fz_new_image_from_buffer(ctx, buf);
@@ -1253,6 +1250,7 @@ static void layout_flow(fz_context *ctx, fz_html_box *box, fz_html_box *top, flo
 
 	for (node = box->flow_head; node; node = node->next)
 	{
+		node->breaks_line = 0; /* reset line breaks from previous layout */
 		if (node->type == FLOW_IMAGE)
 		{
 			float w = 0, h = 0;
@@ -2551,8 +2549,6 @@ fz_parse_html(fz_context *ctx, fz_html_font_set *set, fz_archive *zip, const cha
 {
 	fz_xml *xml;
 	fz_html *html;
-	unsigned char *data;
-	size_t len = fz_buffer_storage(ctx, buf, &data);
 
 	fz_css_match match;
 	struct genstate g;
@@ -2565,7 +2561,7 @@ fz_parse_html(fz_context *ctx, fz_html_font_set *set, fz_archive *zip, const cha
 	g.emit_white = 0;
 	g.last_brk_cls = UCDN_LINEBREAK_CLASS_OP;
 
-	xml = fz_parse_xml(ctx, data, len, 1);
+	xml = fz_parse_xml(ctx, buf, 1);
 
 	g.css = fz_new_css(ctx);
 	fz_try(ctx)

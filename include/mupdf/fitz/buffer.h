@@ -39,7 +39,7 @@ void fz_drop_buffer(fz_context *ctx, fz_buffer *buf);
 size_t fz_buffer_storage(fz_context *ctx, fz_buffer *buf, unsigned char **data);
 
 /*
-	fz_string_from_buffer: Ensure that a buffers data ends in a
+	fz_string_from_buffer: Ensure that a buffer's data ends in a
 	0 byte, and return a pointer to it.
 
 	Returns pointer to data.
@@ -136,6 +136,14 @@ void fz_write_buffer_pad(fz_context *ctx, fz_buffer *buf);
 size_t fz_buffer_printf(fz_context *ctx, fz_buffer *buffer, const char *fmt, ...);
 size_t fz_buffer_vprintf(fz_context *ctx, fz_buffer *buffer, const char *fmt, va_list args);
 void fz_buffer_print_pdf_string(fz_context *ctx, fz_buffer *buffer, const char *text);
+
+/*
+	fz_terminate_buffer: zero-terminate buffer in order to use as a C string.
+
+	This byte is invisible and does not affect the length of the buffer as returned by fz_buffer_storage.
+	The zero byte is written *after* the data, and subsequent writes will overwrite the terminating byte.
+*/
+void fz_terminate_buffer(fz_context *ctx, fz_buffer *buf);
 
 /*
 	fz_md5_buffer: create MD5 digest of buffer contents.

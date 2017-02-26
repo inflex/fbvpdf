@@ -3,7 +3,7 @@
 
 #include "mupdf/fitz/version.h"
 #include "mupdf/fitz/system.h"
-#include "mupdf/fitz/math.h"
+#include "mupdf/fitz/geometry.h"
 
 /*
 	Contexts
@@ -87,7 +87,7 @@ void fz_rethrow_if(fz_context *ctx, int errcode);
 enum
 {
 	FZ_ERROR_NONE = 0,
-	FZ_ERROR_OOM = 1,
+	FZ_ERROR_MEMORY = 1,
 	FZ_ERROR_GENERIC = 2,
 	FZ_ERROR_SYNTAX = 3,
 	FZ_ERROR_TRYLATER = 4,
@@ -571,7 +571,7 @@ extern fz_alloc_context fz_alloc_default;
 /* Default locks */
 extern fz_locks_context fz_locks_default;
 
-#if defined(MEMENTO) || defined(DEBUG)
+#if defined(MEMENTO) || !defined(NDEBUG)
 #define FITZ_DEBUG_LOCKING
 #endif
 

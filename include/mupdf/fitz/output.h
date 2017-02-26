@@ -4,7 +4,7 @@
 #include "mupdf/fitz/system.h"
 #include "mupdf/fitz/context.h"
 #include "mupdf/fitz/buffer.h"
-#include "mupdf/fitz/string.h"
+#include "mupdf/fitz/string-util.h"
 
 /*
 	Generic output streams - generalise between outputting to a file,
@@ -149,7 +149,7 @@ size_t fz_snprintf(char *buffer, size_t space, const char *fmt, ...);
 
 	'hint' is the path of a file (normally the existing document file)
 	supplied to give the function an idea of what directory to use. This
-	may or may not be used depending on the implementations whim.
+	may or may not be used depending on the implementation's whim.
 
 	The returned path must be freed.
 */

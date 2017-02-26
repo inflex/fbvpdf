@@ -1,12 +1,23 @@
 #ifndef MUPDF_FITZ_SYSTEM_H
 #define MUPDF_FITZ_SYSTEM_H
 
+#if _MSC_VER >= 1400 /* MSVC 8 (Visual Studio 2005) or newer */
+#define FZ_LARGEFILE
+#endif
+
 /* The very first decision we need to make is, are we using the 64bit
  * file pointers code. This must happen before the stdio.h include. */
 #ifdef FZ_LARGEFILE
 /* Set _LARGEFILE64_SOURCE so that we know fopen64 et al will be declared. */
 #ifndef _LARGEFILE64_SOURCE
 #define _LARGEFILE64_SOURCE
+#endif
+#endif
+
+/* Turn on valgrind pacification in debug builds. */
+#ifndef NDEBUG
+#ifndef PACIFY_VALGRIND
+#define PACIFY_VALGRIND
 #endif
 #endif
 
@@ -227,7 +238,7 @@ typedef int fz_off_t;
 #ifdef __ANDROID__
 #include <android/log.h>
 int fz_android_fprintf(FILE *file, const char *fmt, ...);
-#ifdef DEBUG
+#ifndef NDEBUG
 /* Capture fprintf for stdout/stderr to the android logging
  * stream. Only do this in debug builds as this implies a
  * delay */

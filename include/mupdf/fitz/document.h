@@ -3,7 +3,7 @@
 
 #include "mupdf/fitz/system.h"
 #include "mupdf/fitz/context.h"
-#include "mupdf/fitz/math.h"
+#include "mupdf/fitz/geometry.h"
 #include "mupdf/fitz/device.h"
 #include "mupdf/fitz/transition.h"
 #include "mupdf/fitz/link.h"
@@ -355,7 +355,7 @@ void fz_drop_page(fz_context *ctx, fz_page *page);
 	duration: A pointer to a place to set the page duration in seconds.
 	Will be set to 0 if no transition is specified for the page.
 
-	Returns: a pointer to a the transition structure, or NULL if there is no
+	Returns: a pointer to the transition structure, or NULL if there is no
 	transition specified for the page.
 */
 fz_transition *fz_page_presentation(fz_context *ctx, fz_page *page, fz_transition *transition, float *duration);

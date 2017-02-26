@@ -593,7 +593,7 @@ static char *convert_to_utf8(fz_context *doc, unsigned char *s, size_t n, int *d
 
 	if (s[0] == 0xFE && s[1] == 0xFF) {
 		s += 2;
-		dst = d = fz_malloc(doc, n * 2);
+		dst = d = fz_malloc(doc, n * FZ_UTFMAX);
 		while (s + 1 < e) {
 			c = s[0] << 8 | s[1];
 			d += fz_runetochar(d, c);
@@ -606,7 +606,7 @@ static char *convert_to_utf8(fz_context *doc, unsigned char *s, size_t n, int *d
 
 	if (s[0] == 0xFF && s[1] == 0xFE) {
 		s += 2;
-		dst = d = fz_malloc(doc, n * 2);
+		dst = d = fz_malloc(doc, n * FZ_UTFMAX);
 		while (s + 1 < e) {
 			c = s[0] | s[1] << 8;
 			d += fz_runetochar(d, c);
@@ -626,14 +626,18 @@ static char *convert_to_utf8(fz_context *doc, unsigned char *s, size_t n, int *d
 }
 
 fz_xml *
-fz_parse_xml(fz_context *ctx, unsigned char *s, size_t n, int preserve_white)
+fz_parse_xml(fz_context *ctx, fz_buffer *buf, int preserve_white)
 {
 	struct parser parser;
 	fz_xml root, *node;
 	char *p, *error;
 	int dofree;
+	unsigned char *s;
+	size_t n;
 
-	/* s is already null-terminated (see xps_new_part) */
+	/* ensure we are zero-terminated */
+	fz_terminate_buffer(ctx, buf);
+	n = fz_buffer_storage(ctx, buf, &s);
 
 	memset(&root, 0, sizeof(root));
 	parser.head = &root;
