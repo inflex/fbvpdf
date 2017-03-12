@@ -140,14 +140,32 @@ file_close(fz_context *ctx, void *opaque)
 }
 
 fz_output *
+fz_new_output(fz_context *ctx, void *state, fz_output_write_fn *write, fz_output_close_fn *close)
+{
+	fz_output *out;
+
+	fz_try(ctx)
+	{
+		out = fz_malloc_struct(ctx, fz_output);
+		out->state = state;
+		out->write = write;
+		out->close = close;
+	}
+	fz_catch(ctx)
+	{
+		if (close)
+			close(ctx, state);
+		fz_rethrow(ctx);
+	}
+	return out;
+}
+
+fz_output *
 fz_new_output_with_file_ptr(fz_context *ctx, FILE *file, int close)
 {
-	fz_output *out = fz_malloc_struct(ctx, fz_output);
-	out->opaque = file;
-	out->write = file_write;
+	fz_output *out = fz_new_output(ctx, file, file_write, close ? file_close : NULL);
 	out->seek = file_seek;
 	out->tell = file_tell;
-	out->close = close ? file_close : NULL;
 	return out;
 }
 
@@ -214,12 +232,9 @@ buffer_close(fz_context *ctx, void *opaque)
 fz_output *
 fz_new_output_with_buffer(fz_context *ctx, fz_buffer *buf)
 {
-	fz_output *out = fz_malloc_struct(ctx, fz_output);
-	out->opaque = fz_keep_buffer(ctx, buf);
-	out->write = buffer_write;
+	fz_output *out = fz_new_output(ctx, fz_keep_buffer(ctx, buf), buffer_write, buffer_close);
 	out->seek = buffer_seek;
 	out->tell = buffer_tell;
-	out->close = buffer_close;
 	return out;
 }
 
@@ -228,8 +243,8 @@ fz_drop_output(fz_context *ctx, fz_output *out)
 {
 	if (!out) return;
 	if (out->close)
-		out->close(ctx, out->opaque);
-	if (out->opaque != &fz_stdout_global && out->opaque != &fz_stderr_global)
+		out->close(ctx, out->state);
+	if (out->state != &fz_stdout_global && out->state != &fz_stderr_global)
 		fz_free(ctx, out);
 }
 
@@ -237,14 +252,18 @@ void
 fz_seek_output(fz_context *ctx, fz_output *out, fz_off_t off, int whence)
 {
 	if (!out) return;
-	out->seek(ctx, out->opaque, off, whence);
+	if (out->seek == NULL)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Cannot seek in unseekable output stream\n");
+	out->seek(ctx, out->state, off, whence);
 }
 
 fz_off_t
 fz_tell_output(fz_context *ctx, fz_output *out)
 {
 	if (!out) return 0;
-	return out->tell(ctx, out->opaque);
+	if (out->tell == NULL)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Cannot tell in untellable output stream\n");
+	return out->tell(ctx, out->state);
 }
 
 void
@@ -271,7 +290,7 @@ fz_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list old_args)
 	}
 
 	fz_try(ctx)
-		out->write(ctx, out->opaque, p, len);
+		out->write(ctx, out->state, p, len);
 	fz_always(ctx)
 		if (p != buffer)
 			fz_free(ctx, p);
@@ -323,21 +342,28 @@ void fz_write_header(fz_context *ctx, fz_band_writer *writer, int w, int h, int 
 	writer->xres = xres;
 	writer->yres = yres;
 	writer->pagenum = pagenum;
+	writer->line = 0;
 	writer->header(ctx, writer);
 }
 
-void fz_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_start, int band_height, const unsigned char *samples)
+void fz_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_height, const unsigned char *samples)
 {
 	if (writer == NULL || writer->band == NULL)
 		return;
-	writer->band(ctx, writer, stride, band_start, band_height, samples);
-}
-
-void fz_write_trailer(fz_context *ctx, fz_band_writer *writer)
-{
-	if (writer == NULL || writer->trailer == NULL)
-		return;
-	writer->trailer(ctx, writer);
+	if (writer->line + band_height > writer->h)
+		band_height = writer->h - writer->line;
+	if (band_height < 0) {
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Too much band data!");
+	}
+	if (band_height > 0) {
+		writer->band(ctx, writer, stride, writer->line, band_height, samples);
+		writer->line += band_height;
+	}
+	if (writer->line == writer->h && writer->trailer) {
+		writer->trailer(ctx, writer);
+		/* Protect against more band_height == 0 calls */
+		writer->line++;
+	}
 }
 
 void fz_drop_band_writer(fz_context *ctx, fz_band_writer *writer)
