@@ -592,10 +592,13 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				y += fz_pixmap_height(moz->ctx, moz->pages[i].image);
 				i ++;
 
-				pad.top = y;
-				pad.bottom = y + PAD;
-				FillRect(hdc, &pad, moz->graybrush);
-				y += PAD;
+				if (i < moz->pagecount)
+				{
+					pad.top = y;
+					pad.bottom = y + PAD;
+					FillRect(hdc, &pad, moz->graybrush);
+					y += PAD;
+				}
 			}
 
 			if (y < h)
@@ -648,7 +651,9 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			for (i = 0; i < moz->pagecount; i++)
 			{
 				zoom = (rc.right - rc.left) / (float) moz->pages[i].w;
-				moz->pages[i].px = zoom * moz->pages[i].h + PAD;
+				moz->pages[i].px = zoom * moz->pages[i].h;
+				if (i < (moz->pagecount - 1))
+					moz->pages[i].px += PAD;
 
 				if (moz->scrollpage == i)
 				{
