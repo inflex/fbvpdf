@@ -150,6 +150,7 @@ static float layout_em = DEFAULT_LAYOUT_EM;
 static char *layout_css = NULL;
 static int layout_use_doc_css = 1;
 
+static const char *fix_title = "MuPDFGL";
 static const char *title = "MuPDF/GL";
 static fz_document *doc = NULL;
 static fz_page *page = NULL;
@@ -713,25 +714,24 @@ static void do_forms(float xofs, float yofs)
 
 static void toggle_fullscreen(void)
 {
-#if 0
-	static int oldw = 100, oldh = 100, oldx = 0, oldy = 0;
-
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	static int win_x = 0, win_y = 0;
+	static int win_w = 100, win_h = 100;
+	static int win_rr = 60;
 	if (!isfullscreen)
 	{
-		oldw = glutGet(GLUT_WINDOW_WIDTH);
-		oldh = glutGet(GLUT_WINDOW_HEIGHT);
-		oldx = glutGet(GLUT_WINDOW_X);
-		oldy = glutGet(GLUT_WINDOW_Y);
-		glutFullScreen();
+		glfwGetWindowPos(window, &win_x, &win_y);
+		glfwGetWindowSize(window, &win_w, &win_h);
+		const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+		win_rr = mode->refreshRate;
+		glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
 		isfullscreen = 1;
 	}
 	else
 	{
-		glutPositionWindow(oldx, oldy);
-		glutReshapeWindow(oldw, oldh);
+		glfwSetWindowMonitor(window, NULL, win_x, win_y, win_w, win_h, win_rr);
 		isfullscreen = 0;
 	}
-#endif
 }
 
 static void shrinkwrap(void)
@@ -1478,7 +1478,7 @@ int main(int argc, char **argv)
 	screen_w = video_mode->width;
 	screen_h = video_mode->height;
 
-	window = glfwCreateWindow(DEFAULT_WINDOW_W, DEFAULT_WINDOW_H, filename, NULL, NULL);
+	window = glfwCreateWindow(DEFAULT_WINDOW_W, DEFAULT_WINDOW_H, fix_title, NULL, NULL);
 	if (!window) {
 		fprintf(stderr, "cannot create glfw window\n");
 		exit(1);

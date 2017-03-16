@@ -196,28 +196,37 @@ svg_dev_stroke_state(fz_context *ctx, svg_device *sdev, const fz_stroke_state *s
 			(stroke_state->linejoin == FZ_LINEJOIN_ROUND ? "round" : "miter")));
 }
 
+static unsigned int
+svg_hex_color(fz_context *ctx, fz_colorspace *colorspace, const float *color)
+{
+	float rgb[3];
+	int r, g, b;
+
+	if (colorspace != fz_device_rgb(ctx))
+	{
+		fz_convert_color(ctx, fz_device_rgb(ctx), rgb, colorspace, color);
+		color = rgb;
+	}
+
+	r = fz_clampi(255 * color[0] + 0.5f, 0, 255);
+	g = fz_clampi(255 * color[1] + 0.5f, 0, 255);
+	b = fz_clampi(255 * color[2] + 0.5f, 0, 255);
+
+	return (r << 16) | (g << 8) | b;
+}
+
 static void
 svg_dev_fill_color(fz_context *ctx, svg_device *sdev, fz_colorspace *colorspace, const float *color, float alpha)
 {
 	fz_output *out = sdev->out;
-	float rgb[FZ_MAX_COLORS];
-
 	if (colorspace)
 	{
-		if (colorspace != fz_device_rgb(ctx))
-		{
-			/* If it's not rgb, make it rgb */
-			fz_convert_color(ctx, fz_device_rgb(ctx), rgb, colorspace, color);
-			color = rgb;
-		}
-
-		if (color[0] == 0 && color[1] == 0 && color[2] == 0)
-		{
-			/* don't send a fill, as it will be assumed to be black */
-		}
-		else
-			fz_printf(ctx, out, " fill=\"rgb(%d,%d,%d)\"", (int)(255*color[0] + 0.5), (int)(255*color[1] + 0.5), (int)(255*color[2]+0.5));
+		int rgb = svg_hex_color(ctx, colorspace, color);
+		if (rgb != 0) /* black is the default value */
+			fz_printf(ctx, out, " fill=\"#%06x\"", rgb);
 	}
+	else
+		fz_printf(ctx, out, " fill=\"none\"");
 	if (alpha != 1)
 		fz_printf(ctx, out, " fill-opacity=\"%g\"", alpha);
 }
@@ -226,23 +235,10 @@ static void
 svg_dev_stroke_color(fz_context *ctx, svg_device *sdev, fz_colorspace *colorspace, const float *color, float alpha)
 {
 	fz_output *out = sdev->out;
-	float rgb[FZ_MAX_COLORS];
-
 	if (colorspace)
-	{
-		if (colorspace != fz_device_rgb(ctx))
-		{
-			/* If it's not rgb, make it rgb */
-			fz_convert_color(ctx, fz_device_rgb(ctx), rgb, colorspace, color);
-			color = rgb;
-		}
-		fz_printf(ctx, out, " fill=\"none\" stroke=\"rgb(%d,%d,%d)\"", (int)(255*color[0] + 0.5), (int)(255*color[1] + 0.5), (int)(255*color[2]+0.5));
-	}
+		fz_printf(ctx, out, " fill=\"none\" stroke=\"#%06x\"", svg_hex_color(ctx, colorspace, color));
 	else
-	{
-		/* don't send a stroke, as the color will be assumed to be none */
-		fz_printf(ctx, out, " fill=\"none\"");
-	}
+		fz_printf(ctx, out, " fill=\"none\" stroke=\"none\"");
 	if (alpha != 1)
 		fz_printf(ctx, out, " stroke-opacity=\"%g\"", alpha);
 }
@@ -300,6 +296,17 @@ find_next_line_break(fz_context *ctx, const fz_text_span *span, const fz_matrix 
 	return i;
 }
 
+static float
+svg_cluster_advance(fz_context *ctx, const fz_text_span *span, int i, int end)
+{
+	int n = 1;
+	while (i + n < end && span->items[i + n].gid == -1)
+		++n;
+	if (n > 1)
+		return fz_advance_glyph(ctx, span->font, span->items[i].gid, span->wmode) / n;
+	return 0; /* this value is never used (since n==1) */
+}
+
 static void
 svg_dev_text_span(fz_context *ctx, svg_device *sdev, const fz_matrix *ctm, const fz_text_span *span)
 {
@@ -311,6 +318,7 @@ svg_dev_text_span(fz_context *ctx, svg_device *sdev, const fz_matrix *ctm, const
 	float font_size;
 	fz_text_item *it;
 	int start, end, i;
+	float cluster_advance = 0;
 
 	if (span->len == 0)
 	{
@@ -354,6 +362,8 @@ svg_dev_text_span(fz_context *ctx, svg_device *sdev, const fz_matrix *ctm, const
 		p.x = span->items[start].x;
 		p.y = span->items[start].y;
 		fz_transform_point(&p, &inv_tm);
+		if (span->items[start].gid >= 0)
+			cluster_advance = svg_cluster_advance(ctx, span, start, end);
 		if (span->wmode == 0)
 			fz_printf(ctx, out, "<tspan y=\"%g\" x=\"%g", p.y, p.x);
 		else
@@ -361,11 +371,24 @@ svg_dev_text_span(fz_context *ctx, svg_device *sdev, const fz_matrix *ctm, const
 		for (i = start + 1; i < end; ++i)
 		{
 			it = &span->items[i];
+			if (it->gid >= 0)
+				cluster_advance = svg_cluster_advance(ctx, span, i, end);
 			if (it->ucs >= 0)
 			{
-				p.x = it->x;
-				p.y = it->y;
-				fz_transform_point(&p, &inv_tm);
+				if (it->gid >= 0)
+				{
+					p.x = it->x;
+					p.y = it->y;
+					fz_transform_point(&p, &inv_tm);
+				}
+				else
+				{
+					/* we have no glyph (such as in a ligature) -- advance a bit */
+					if (span->wmode == 0)
+						p.x += font_size * cluster_advance;
+					else
+						p.y += font_size * cluster_advance;
+				}
 				fz_printf(ctx, out, " %g", span->wmode == 0 ? p.x : p.y);
 			}
 		}
