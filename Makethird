@@ -653,9 +653,11 @@ else ifeq "$(HAVE_WIN32)" "yes"
 
 GLFW_SRC := \
 	context.c \
+	egl_context.c \
 	init.c \
 	input.c \
 	monitor.c \
+	vulkan.c \
 	wgl_context.c \
 	win32_init.c \
 	win32_monitor.c \
