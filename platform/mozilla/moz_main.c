@@ -676,6 +676,7 @@ MozWinProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			si.nMax --;
 
 			SetScrollInfo(moz->hwnd, SB_VERT, &si, TRUE);
+			InvalidateRect(moz->hwnd, NULL, FALSE);
 
 			break;
 
