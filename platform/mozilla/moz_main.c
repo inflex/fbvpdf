@@ -28,7 +28,6 @@ struct pdfmoz_s
 	fz_context *ctx;
 	NPP inst;
 	HWND hwnd;
-	HWND sbar;
 	WNDPROC winproc;
 	HCURSOR arrow, hand, wait;
 	BITMAPINFO *dibinf;
