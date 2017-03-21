@@ -1445,6 +1445,7 @@ int mudraw_main(int argc, char **argv)
 
 	if (num_workers > 0)
 	{
+		int i;
 		int fail = 0;
 		int i;
 		workers = fz_calloc(ctx, num_workers, sizeof(*workers));
