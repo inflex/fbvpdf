@@ -98,11 +98,11 @@ main(int argc, char **argv)
 		fprintf(fo, "extern const char fz_%s[];\n", filename);
 		fprintf(fo, "asm(\".section .rodata\");\n");
 		fprintf(fo, "#ifdef __MINGW32__\n");
-		fprintf(fo, "asm(\".def _fz_font_%s\");\n", fontname);
+		fprintf(fo, "asm(\".def _fz_%s\");\n", filename);
 		fprintf(fo, "asm(\".size %d\");\n", size);
 		fprintf(fo, "asm(\".scl 2\");\n");
 		fprintf(fo, "asm(\".endef\");\n");
-		fprintf(fo, "asm(\"_fz_font_%s:\");\n", fontname);
+		fprintf(fo, "asm(\"_fz_%s:\");\n", filename);
 		fprintf(fo, "#else\n");
 		fprintf(fo, "asm(\".global fz_%s\");\n", filename);
 		fprintf(fo, "asm(\".type fz_%s STT_OBJECT\");\n", filename);
