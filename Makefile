@@ -14,7 +14,7 @@ include Makethird
 # Do not specify CFLAGS or LIBS on the make invocation line - specify
 # XCFLAGS or XLIBS instead. Make ignores any lines in the makefile that
 # set a variable that was set on the command line.
-CFLAGS += $(XCFLAGS) -Iinclude -Igenerated
+CFLAGS += $(XCFLAGS) -Iinclude -I$(OUT)/generated
 LIBS += $(XLIBS) -lm
 
 LIBS += $(FREETYPE_LIBS)
@@ -80,7 +80,7 @@ WINDRES_CMD = $(QUIET_WINDRES) $(WINDRES) $< $@
 
 # --- Rules ---
 
-$(ALL_DIR) $(OUT) generated :
+$(ALL_DIR) $(OUT) :
 	$(MKDIR_CMD)
 
 $(OUT)/%.a :
@@ -100,7 +100,7 @@ $(OUT)/%.o : %.cpp | $(ALL_DIR)
 $(OUT)/source/helpers/%.o : source/helpers/%.c | $(ALL_DIR)
 	$(CC_CMD) $(PTHREAD_CFLAGS) -DHAVE_PTHREAD
 
-$(OUT)/generated/%.o : generated/%.c | $(ALL_DIR)
+$(OUT)/generated/%.o : $(OUT)/generated/%.c | $(ALL_DIR)
 	$(CC_CMD) -O0
 
 $(OUT)/platform/x11/%.o : platform/x11/%.c | $(ALL_DIR)
@@ -138,7 +138,7 @@ GPRF_SRC := $(wildcard source/gprf/*.c)
 THREAD_SRC := $(wildcard source/helpers/mu-threads/*.c)
 
 FITZ_SRC_HDR := $(wildcard source/fitz/*.h)
-PDF_SRC_HDR := $(wildcard source/pdf/*.h) source/pdf/pdf-name-table.h
+PDF_SRC_HDR := $(wildcard source/pdf/*.h) $(OUT)/generated/pdf-name-table.h
 XPS_SRC_HDR := $(wildcard source/xps/*.h)
 SVG_SRC_HDR := $(wildcard source/svg/*.h)
 HTML_SRC_HDR := $(wildcard source/html/*.h)
@@ -167,7 +167,7 @@ $(THREAD_OBJ) : $(THREAD_HDR)
 NAMEDUMP_EXE := $(OUT)/scripts/namedump.exe
 
 include/mupdf/pdf.h : include/mupdf/pdf/name-table.h
-NAME_GEN := include/mupdf/pdf/name-table.h source/pdf/pdf-name-table.h
+NAME_GEN := include/mupdf/pdf/name-table.h $(OUT)/generated/pdf-name-table.h
 $(NAME_GEN) : resources/pdf/names.txt
 	$(QUIET_GEN) $(NAMEDUMP_EXE) resources/pdf/names.txt $(NAME_GEN)
 
@@ -175,7 +175,7 @@ ifneq "$(CROSSCOMPILE)" "yes"
 $(NAME_GEN) : $(NAMEDUMP_EXE)
 endif
 
-$(OUT)/source/pdf/pdf-object.o : source/pdf/pdf-name-table.h
+$(OUT)/source/pdf/pdf-object.o : $(OUT)/generated/pdf-name-table.h
 
 generate: $(NAME_GEN)
 
@@ -189,25 +189,25 @@ FONT_BIN_HAN := $(wildcard resources/fonts/han/*.otf)
 FONT_BIN_URW := $(wildcard resources/fonts/urw/*.cff)
 FONT_BIN_SIL := $(wildcard resources/fonts/sil/*.cff)
 
-FONT_GEN_DROID := $(subst resources/fonts/droid/, generated/, $(addsuffix .c, $(basename $(FONT_BIN_DROID))))
-FONT_GEN_NOTO := $(subst resources/fonts/noto/, generated/, $(addsuffix .c, $(basename $(FONT_BIN_NOTO))))
-FONT_GEN_HAN := $(subst resources/fonts/han/, generated/, $(addsuffix .c, $(basename $(FONT_BIN_HAN))))
-FONT_GEN_URW := $(subst resources/fonts/urw/, generated/, $(addsuffix .c, $(basename $(FONT_BIN_URW))))
-FONT_GEN_SIL := $(subst resources/fonts/sil/, generated/, $(addsuffix .c, $(basename $(FONT_BIN_SIL))))
+FONT_GEN_DROID := $(subst resources/fonts/droid/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_DROID))))
+FONT_GEN_NOTO := $(subst resources/fonts/noto/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_NOTO))))
+FONT_GEN_HAN := $(subst resources/fonts/han/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_HAN))))
+FONT_GEN_URW := $(subst resources/fonts/urw/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_URW))))
+FONT_GEN_SIL := $(subst resources/fonts/sil/,$(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_SIL))))
 
 FONT_BIN := $(FONT_BIN_DROID) $(FONT_BIN_NOTO) $(FONT_BIN_HAN) $(FONT_BIN_URW) $(FONT_BIN_SIL)
 FONT_GEN := $(FONT_GEN_DROID) $(FONT_GEN_NOTO) $(FONT_GEN_HAN) $(FONT_GEN_URW) $(FONT_GEN_SIL)
-FONT_OBJ := $(FONT_GEN:%.c=$(OUT)/%.o)
+FONT_OBJ := $(FONT_GEN:%.c=%.o)
 
-generated/%.c : resources/fonts/droid/%.ttf $(HEXDUMP_EXE) | generated
+$(OUT)/generated/%.c : resources/fonts/droid/%.ttf $(HEXDUMP_EXE) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
-generated/%.c : resources/fonts/noto/%.ttf $(HEXDUMP_EXE) | generated
+$(OUT)/generated/%.c : resources/fonts/noto/%.ttf $(HEXDUMP_EXE) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
-generated/%.c : resources/fonts/han/%.otf $(HEXDUMP_EXE) | generated
+$(OUT)/generated/%.c : resources/fonts/han/%.otf $(HEXDUMP_EXE) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
-generated/%.c : resources/fonts/urw/%.cff $(HEXDUMP_EXE) | generated
+$(OUT)/generated/%.c : resources/fonts/urw/%.cff $(HEXDUMP_EXE) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
-generated/%.c : resources/fonts/sil/%.cff $(HEXDUMP_EXE) | generated
+$(OUT)/generated/%.c : resources/fonts/sil/%.cff $(HEXDUMP_EXE) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
 
 $(FONT_OBJ) : $(FONT_GEN)
@@ -232,16 +232,16 @@ CMAP_EXTRA_SRC := $(wildcard resources/cmaps/extra/*)
 CMAP_UTF8_SRC := $(wildcard resources/cmaps/utf8/*)
 CMAP_UTF32_SRC := $(wildcard resources/cmaps/utf32/*)
 
-generated/gen_cmap_cjk.h : $(CMAP_CJK_SRC) | generated
+$(OUT)/generated/gen_cmap_cjk.h : $(CMAP_CJK_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_CJK_SRC)
-generated/gen_cmap_extra.h : $(CMAP_EXTRA_SRC) | generated
+$(OUT)/generated/gen_cmap_extra.h : $(CMAP_EXTRA_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_EXTRA_SRC)
-generated/gen_cmap_utf8.h : $(CMAP_UTF8_SRC) | generated
+$(OUT)/generated/gen_cmap_utf8.h : $(CMAP_UTF8_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_UTF8_SRC)
-generated/gen_cmap_utf32.h : $(CMAP_UTF32_SRC) | generated
+$(OUT)/generated/gen_cmap_utf32.h : $(CMAP_UTF32_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_UTF32_SRC)
 
-CMAP_GEN := $(addprefix generated/, gen_cmap_cjk.h gen_cmap_extra.h gen_cmap_utf8.h gen_cmap_utf32.h)
+CMAP_GEN := $(addprefix $(OUT)/generated/, gen_cmap_cjk.h gen_cmap_extra.h gen_cmap_utf8.h gen_cmap_utf32.h)
 
 ifneq "$(CROSSCOMPILE)" "yes"
 $(CMAP_GEN) : $(CMAPDUMP_EXE)
@@ -274,8 +274,8 @@ generate: $(CMAP_GEN)
 # --- Generated embedded certificate files ---
 
 ADOBECA_SRC := resources/certs/AdobeCA.p7c
-ADOBECA_GEN := generated/gen_adobe_ca.h
-$(ADOBECA_GEN) : $(ADOBECA_SRC) | generated
+ADOBECA_GEN := $(OUT)/generated/gen_adobe_ca.h
+$(ADOBECA_GEN) : $(ADOBECA_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(ADOBECA_SRC)
 
 ifneq "$(CROSSCOMPILE)" "yes"
@@ -289,8 +289,8 @@ generate: $(ADOBECA_GEN)
 # --- Generated embedded javascript files ---
 
 JAVASCRIPT_SRC := source/pdf/pdf-js-util.js
-JAVASCRIPT_GEN := generated/gen_js_util.h
-$(JAVASCRIPT_GEN) : $(JAVASCRIPT_SRC) | generated
+JAVASCRIPT_GEN := $(OUT)/generated/gen_js_util.h
+$(JAVASCRIPT_GEN) : $(JAVASCRIPT_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(JAVASCRIPT_SRC)
 
 ifneq "$(CROSSCOMPILE)" "yes"
@@ -474,7 +474,7 @@ all: libs apps
 clean:
 	rm -rf $(OUT)
 nuke:
-	rm -rf build/* generated $(NAME_GEN)
+	rm -rf build/* $(NAME_GEN)
 
 release:
 	$(MAKE) build=release
