@@ -206,7 +206,7 @@ static void
 buffer_write(fz_context *ctx, void *opaque, const void *data, size_t len)
 {
 	fz_buffer *buffer = opaque;
-	fz_write_buffer(ctx, buffer, data, len);
+	fz_append_data(ctx, buffer, data, len);
 }
 
 static void
@@ -266,45 +266,26 @@ fz_tell_output(fz_context *ctx, fz_output *out)
 	return out->tell(ctx, out->state);
 }
 
-void
-fz_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list old_args)
+static void
+fz_write_emit(fz_context *ctx, void *out, int c)
 {
-	char buffer[256], *p = buffer;
-	size_t len;
-	va_list args;
-
-	if (!out) return;
-
-	/* First try using our fixed size buffer */
-	va_copy(args, old_args);
-	len = fz_vsnprintf(buffer, sizeof buffer, fmt, args);
-	va_copy_end(args);
-
-	/* If that failed, allocate a big enough buffer */
-	if (len > sizeof buffer)
-	{
-		p = fz_malloc(ctx, len);
-		va_copy(args, old_args);
-		fz_vsnprintf(p, len, fmt, args);
-		va_copy_end(args);
-	}
-
-	fz_try(ctx)
-		out->write(ctx, out->state, p, len);
-	fz_always(ctx)
-		if (p != buffer)
-			fz_free(ctx, p);
-	fz_catch(ctx)
-		fz_rethrow(ctx);
+	fz_write_byte(ctx, out, c);
 }
 
 void
-fz_printf(fz_context *ctx, fz_output *out, const char *fmt, ...)
+fz_write_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list args)
+{
+	if (!out) return;
+	fz_format_string(ctx, out, fz_write_emit, fmt, args);
+}
+
+void
+fz_write_printf(fz_context *ctx, fz_output *out, const char *fmt, ...)
 {
 	va_list args;
 	if (!out) return;
 	va_start(args, fmt);
-	fz_vprintf(ctx, out, fmt, args);
+	fz_format_string(ctx, out, fz_write_emit, fmt, args);
 	va_end(args);
 }
 
@@ -313,7 +294,7 @@ fz_save_buffer(fz_context *ctx, fz_buffer *buf, const char *filename)
 {
 	fz_output *out = fz_new_output_with_path(ctx, filename, 0);
 	fz_try(ctx)
-		fz_write(ctx, out, buf->data, buf->len);
+		fz_write_data(ctx, out, buf->data, buf->len);
 	fz_always(ctx)
 		fz_drop_output(ctx, out);
 	fz_catch(ctx)

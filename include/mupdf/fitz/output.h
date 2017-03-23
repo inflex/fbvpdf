@@ -140,41 +140,28 @@ void fz_set_stdout(fz_context *ctx, fz_output *out);
 void fz_set_stderr(fz_context *ctx, fz_output *err);
 
 /*
-	fz_printf: fprintf equivalent for output streams. See fz_snprintf.
+	fz_write_printf: Format and write data to an output stream.
+	See fz_vsnprintf for formatting details.
 */
-void fz_printf(fz_context *ctx, fz_output *out, const char *fmt, ...);
+void fz_write_printf(fz_context *ctx, fz_output *out, const char *fmt, ...);
 
 /*
-	fz_vprintf: vfprintf equivalent for output streams. See fz_vsnprintf.
+	fz_write_vprintf: va_list version of fz_write_printf.
 */
-void fz_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list ap);
+void fz_write_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list ap);
 
 /*
-	fz_putc: fputc equivalent for output streams.
-*/
-#define fz_putc(C,O,B) fz_write_byte(C, O, B)
-
-/*
-	fz_puts: fputs equivalent for output streams.
-*/
-#define fz_puts(C,O,S) fz_write(C, O, (S), strlen(S))
-
-/*
-	fz_putrune: fz_putc equivalent for utf-8 output.
-*/
-#define fz_putrune(C,O,R) fz_write_rune(C, O, R)
-
-/*
-	fz_seek_output: Seek to the specified file position. See fseek
-	for arguments.
+	fz_seek_output: Seek to the specified file position.
+	See fseek for arguments.
 
 	Throw an error on unseekable outputs.
 */
 void fz_seek_output(fz_context *ctx, fz_output *out, fz_off_t off, int whence);
 
 /*
-	fz_tell_output: Return the current file position. Throw an error
-	on untellable outputs.
+	fz_tell_output: Return the current file position.
+
+	Throw an error on untellable outputs.
 */
 fz_off_t fz_tell_output(fz_context *ctx, fz_output *out);
 
@@ -184,19 +171,24 @@ fz_off_t fz_tell_output(fz_context *ctx, fz_output *out);
 void fz_drop_output(fz_context *, fz_output *);
 
 /*
-	fz_write: Write data to output. Designed to parallel
-	fwrite.
-
-	out: Output stream to write to.
+	fz_write_data: Write data to output.
 
 	data: Pointer to data to write.
-
-	size: Length of data to write.
+	size: Size of data to write in bytes.
 */
-static inline void fz_write(fz_context *ctx, fz_output *out, const void *data, size_t size)
+static inline void fz_write_data(fz_context *ctx, fz_output *out, const void *data, size_t size)
 {
 	if (out)
 		out->write(ctx, out->state, data, size);
+}
+
+/*
+	fz_write_string: Write a string. Does not write zero terminator.
+*/
+static inline void fz_write_string(fz_context *ctx, fz_output *out, const char *s)
+{
+	if (out)
+		out->write(ctx, out->state, s, strlen(s));
 }
 
 /*
@@ -211,7 +203,8 @@ static inline void fz_write_int32_be(fz_context *ctx, fz_output *out, int x)
 	data[2] = x>>8;
 	data[3] = x;
 
-	fz_write(ctx, out, data, 4);
+	if (out)
+		out->write(ctx, out->state, data, 4);
 }
 
 /*
@@ -226,7 +219,8 @@ static inline void fz_write_int32_le(fz_context *ctx, fz_output *out, int x)
 	data[2] = x>>16;
 	data[3] = x>>24;
 
-	fz_write(ctx, out, data, 4);
+	if (out)
+		out->write(ctx, out->state, data, 4);
 }
 
 /*
@@ -239,7 +233,8 @@ static inline void fz_write_int16_be(fz_context *ctx, fz_output *out, int x)
 	data[0] = x>>8;
 	data[1] = x;
 
-	fz_write(ctx, out, data, 2);
+	if (out)
+		out->write(ctx, out->state, data, 2);
 }
 
 /*
@@ -252,45 +247,51 @@ static inline void fz_write_int16_le(fz_context *ctx, fz_output *out, int x)
 	data[0] = x;
 	data[1] = x>>8;
 
-	fz_write(ctx, out, data, 2);
+	if (out)
+		out->write(ctx, out->state, data, 2);
 }
 
 /*
 	fz_write_byte: Write a single byte.
-
-	out: stream to write to.
-
-	x: value to write
 */
 static inline void fz_write_byte(fz_context *ctx, fz_output *out, unsigned char x)
 {
-	fz_write(ctx, out, &x, 1);
+	if (out)
+		out->write(ctx, out->state, &x, 1);
 }
 
 /*
 	fz_write_rune: Write a UTF-8 encoded unicode character.
-
-	out: stream to write to.
-
-	x: value to write
 */
 static inline void fz_write_rune(fz_context *ctx, fz_output *out, int rune)
 {
 	char data[10];
-	fz_write(ctx, out, data, fz_runetochar(data, rune));
+	if (out)
+		out->write(ctx, out->state, data, fz_runetochar(data, rune));
 }
 
 /*
-	fz_vsnprintf: Our customised vsnprintf routine. Takes %c, %d, %o, %s, %u, %x, as usual.
+	fz_format_string: Our customised 'printf'-like string formatter.
+	Takes %c, %d, %o, %s, %u, %x, as usual.
 	Modifiers are not supported except for zero-padding ints (e.g. %02d, %03o, %04x, etc).
-	%f and %g both output in "as short as possible hopefully lossless non-exponent" form,
+	%g output in "as short as possible hopefully lossless non-exponent" form,
 	see fz_ftoa for specifics.
+	%f and %e output as usual.
 	%C outputs a utf8 encoded int.
 	%M outputs a fz_matrix*. %R outputs a fz_rect*. %P outputs a fz_point*.
 	%q and %( output escaped strings in C/PDF syntax.
 	%ll{d,u,x} indicates that the values are 64bit.
 	%z{d,u,x} indicates that the value is a size_t.
 	%Z{d,u,x} indicates that the value is a fz_off_t.
+
+	user: An opaque pointer that is passed to the emit function.
+	emit: A function pointer called to emit output bytes as the string is being formatted.
+*/
+void
+fz_format_string(fz_context *ctx, void *user, void (*emit)(fz_context *ctx, void *user, int c), const char *fmt, va_list args);
+
+/*
+	fz_vsnprintf: A vsnprintf work-alike, using our custom formatter.
 */
 size_t fz_vsnprintf(char *buffer, size_t space, const char *fmt, va_list args);
 
