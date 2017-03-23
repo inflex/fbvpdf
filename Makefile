@@ -115,7 +115,7 @@ $(OUT)/platform/x11/curl/%.o : platform/x11/%.c | $(ALL_DIR)
 $(OUT)/platform/gl/%.o : platform/gl/%.c | $(ALL_DIR)
 	$(CC_CMD) $(GLFW_CFLAGS)
  
-$(OUT)/platform/gl/%.o: platform/gl/%.rc | $(OUT)
+$(OUT)/platform/gl/%.o: platform/gl/%.rc | $(ALL_DIR)
 	$(WINDRES_CMD)
 
 .PRECIOUS : $(OUT)/%.o # Keep intermediates from chained rules
