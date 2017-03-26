@@ -48,6 +48,19 @@ fz_option_eq(const char *a, const char *b)
 	return !strncmp(a, b, n) && (a[n] == ',' || a[n] == 0);
 }
 
+fz_document_writer *fz_new_document_writer_of_size(fz_context *ctx, size_t size, fz_document_writer_begin_page_fn *begin_page,
+	fz_document_writer_end_page_fn *end_page, fz_document_writer_close_writer_fn *close, fz_document_writer_drop_writer_fn *drop)
+{
+	fz_document_writer *wri = Memento_label(fz_calloc(ctx, 1, size), "fz_document_writer");
+
+	wri->begin_page = begin_page;
+	wri->end_page = end_page;
+	wri->close_writer = close;
+	wri->drop_writer = drop;
+
+	return wri;
+}
+
 fz_document_writer *
 fz_new_document_writer(fz_context *ctx, const char *path, const char *format, const char *options)
 {
@@ -65,10 +78,25 @@ fz_new_document_writer(fz_context *ctx, const char *path, const char *format, co
 	if (!fz_strcasecmp(format, "pdf"))
 		return fz_new_pdf_writer(ctx, path, options);
 #endif
-	if (!fz_strcasecmp(format, "png"))
-		return fz_new_png_writer(ctx, path, options);
 	if (!fz_strcasecmp(format, "svg"))
 		return fz_new_svg_writer(ctx, path, options);
+
+	if (!fz_strcasecmp(format, "png"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.png", 0, fz_save_pixmap_as_png);
+	if (!fz_strcasecmp(format, "tga"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.tga", 0, fz_save_pixmap_as_tga);
+	if (!fz_strcasecmp(format, "pam"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.pam", 0, fz_save_pixmap_as_pam);
+	if (!fz_strcasecmp(format, "pnm"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.pnm", 0, fz_save_pixmap_as_pnm);
+	if (!fz_strcasecmp(format, "pgm"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.pgm", 1, fz_save_pixmap_as_pnm);
+	if (!fz_strcasecmp(format, "ppm"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.ppm", 3, fz_save_pixmap_as_pnm);
+	if (!fz_strcasecmp(format, "pbm"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.pbm", 1, fz_save_pixmap_as_pbm);
+	if (!fz_strcasecmp(format, "pkm"))
+		return fz_new_pixmap_writer(ctx, path, options, "out-%04.pkm", 4, fz_save_pixmap_as_pkm);
 
 	fz_throw(ctx, FZ_ERROR_GENERIC, "unknown output document format: %s", format);
 }
