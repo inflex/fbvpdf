@@ -2036,7 +2036,7 @@ static fz_device *fz_new_java_device(fz_context *ctx, JNIEnv *env, jobject self)
 
 	fz_try(ctx)
 	{
-		dev = fz_new_device(ctx, sizeof(fz_java_device));
+		dev = fz_new_derived_device(ctx, fz_java_device);
 		dev->env = env;
 		dev->self = jself;
 
@@ -5338,7 +5338,7 @@ FUN(Buffer_writeRune)(JNIEnv *env, jobject self, jint rune)
 	if (!ctx || !buf) return;
 
 	fz_try(ctx)
-		fz_write_buffer_rune(ctx, buf, rune);
+		fz_append_rune(ctx, buf, rune);
 	fz_catch(ctx)
 		jni_rethrow(env, ctx);
 }
