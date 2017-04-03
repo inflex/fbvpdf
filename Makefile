@@ -113,7 +113,7 @@ $(OUT)/platform/x11/curl/%.o : platform/x11/%.c | $(ALL_DIR)
 	$(CC_CMD) $(X11_CFLAGS) $(CURL_CFLAGS) -DHAVE_CURL
 
 $(OUT)/platform/gl/%.o : platform/gl/%.c | $(ALL_DIR)
-	$(CC_CMD) $(GLFW_CFLAGS)
+	$(CC_CMD)
  
 $(OUT)/platform/gl/%.o: platform/gl/%.rc | $(ALL_DIR)
 	$(WINDRES_CMD)
@@ -362,6 +362,7 @@ endif
 endif
 
 ifeq "$(HAVE_GLFW)" "yes"
+CFLAGS += $(GLFW_CFLAGS)
 MUVIEW_GLFW_EXE := $(OUT)/mupdf-gl
 MUVIEW_GLFW_OBJ := $(addprefix $(OUT)/platform/gl/, gl-font.o gl-input.o gl-main.o)
 ifeq "$(HAVE_WIN32)" "yes"
