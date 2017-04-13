@@ -11,6 +11,7 @@ static float layout_w = 450;
 static float layout_h = 600;
 static float layout_em = 12;
 static char *layout_css = NULL;
+static int layout_use_doc_css = 1;
 
 /* output options */
 static const char *output = NULL;
@@ -34,10 +35,12 @@ static void usage(void)
 		"\t-H -\tpage height for EPUB layout\n"
 		"\t-S -\tfont size for EPUB layout\n"
 		"\t-U -\tfile name of user stylesheet for EPUB layout\n"
+		"\t-X\tdisable document styles for EPUB layout\n"
 		"\n"
 		"\t-o -\toutput file name (%%d for page number)\n"
 		"\t-F -\toutput format (default inferred from output file name)\n"
-		"\t\tcbz, pdf, png\n"
+		"\t\t\tpng, pnm, pgm, ppm, pam, tga, pbm, pkm,\n"
+		"\t\t\tpdf, svg, cbz\n"
 		"\t-O -\tcomma separated list of options for output format\n"
 		"\n"
 		"\tpages\tcomma separated list of page ranges (N=last page)\n"
@@ -46,10 +49,10 @@ static void usage(void)
 	fputs(fz_draw_options_usage, stderr);
 	fputs(fz_stext_options_usage, stderr);
 	fputs(fz_cbz_write_options_usage, stderr);
-	fputs(fz_png_write_options_usage, stderr);
 #if FZ_ENABLE_PDF
 	fputs(fz_pdf_write_options_usage, stderr);
 #endif
+	fputs(fz_svg_write_options_usage, stderr);
 	exit(1);
 }
 
@@ -63,7 +66,7 @@ static void runpage(int number)
 	fz_bound_page(ctx, page, &mediabox);
 	dev = fz_begin_page(ctx, out, &mediabox);
 	fz_run_page(ctx, page, dev, &fz_identity, NULL);
-	fz_end_page(ctx, out, dev);
+	fz_end_page(ctx, out);
 	fz_drop_page(ctx, page);
 }
 
@@ -86,7 +89,7 @@ int muconvert_main(int argc, char **argv)
 {
 	int i, c;
 
-	while ((c = fz_getopt(argc, argv, "p:A:W:H:S:U:o:F:O:")) != -1)
+	while ((c = fz_getopt(argc, argv, "p:A:W:H:S:U:Xo:F:O:")) != -1)
 	{
 		switch (c)
 		{
@@ -98,6 +101,7 @@ int muconvert_main(int argc, char **argv)
 		case 'H': layout_h = fz_atof(fz_optarg); break;
 		case 'S': layout_em = fz_atof(fz_optarg); break;
 		case 'U': layout_css = fz_optarg; break;
+		case 'X': layout_use_doc_css = 0; break;
 
 		case 'o': output = fz_optarg; break;
 		case 'F': format = fz_optarg; break;
@@ -134,6 +138,8 @@ int muconvert_main(int argc, char **argv)
 		fz_set_user_css(ctx, fz_string_from_buffer(ctx, buf));
 		fz_drop_buffer(ctx, buf);
 	}
+
+	fz_set_use_document_css(ctx, layout_use_doc_css);
 
 	/* Open the output document. */
 	fz_try(ctx)

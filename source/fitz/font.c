@@ -194,8 +194,9 @@ struct fz_font_context_s
 	int ctx_refs;
 	FT_Library ftlib;
 	int ftlib_refs;
-	fz_load_system_font_func load_font;
-	fz_load_system_cjk_font_func load_cjk_font;
+	fz_load_system_font_fn load_font;
+	fz_load_system_cjk_font_fn load_cjk_font;
+	fz_load_system_fallback_font_fn load_fallback_font;
 
 	/* Cached fallback fonts */
 	struct { fz_font *serif, *sans; } fallback[256];
@@ -252,10 +253,14 @@ void fz_drop_font_context(fz_context *ctx)
 	}
 }
 
-void fz_install_load_system_font_funcs(fz_context *ctx, fz_load_system_font_func f, fz_load_system_cjk_font_func f_cjk)
+void fz_install_load_system_font_funcs(fz_context *ctx,
+		fz_load_system_font_fn f,
+		fz_load_system_cjk_font_fn f_cjk,
+		fz_load_system_fallback_font_fn f_back)
 {
 	ctx->font->load_font = f;
 	ctx->font->load_cjk_font = f_cjk;
+	ctx->font->load_fallback_font = f_back;
 }
 
 fz_font *fz_load_system_font(fz_context *ctx, const char *name, int bold, int italic, int needs_exact_metrics)
@@ -265,13 +270,9 @@ fz_font *fz_load_system_font(fz_context *ctx, const char *name, int bold, int it
 	if (ctx->font->load_font)
 	{
 		fz_try(ctx)
-		{
 			font = ctx->font->load_font(ctx, name, bold, italic, needs_exact_metrics);
-		}
 		fz_catch(ctx)
-		{
 			font = NULL;
-		}
 	}
 
 	return font;
@@ -284,13 +285,24 @@ fz_font *fz_load_system_cjk_font(fz_context *ctx, const char *name, int ros, int
 	if (ctx->font->load_cjk_font)
 	{
 		fz_try(ctx)
-		{
 			font = ctx->font->load_cjk_font(ctx, name, ros, serif);
-		}
 		fz_catch(ctx)
-		{
 			font = NULL;
-		}
+	}
+
+	return font;
+}
+
+fz_font *fz_load_system_fallback_font(fz_context *ctx, int script, int language, int serif, int bold, int italic)
+{
+	fz_font *font = NULL;
+
+	if (ctx->font->load_fallback_font)
+	{
+		fz_try(ctx)
+			font = ctx->font->load_fallback_font(ctx, script, language, serif, bold, italic);
+		fz_catch(ctx)
+			font = NULL;
 	}
 
 	return font;
@@ -298,6 +310,7 @@ fz_font *fz_load_system_cjk_font(fz_context *ctx, const char *name, int ros, int
 
 fz_font *fz_load_fallback_font(fz_context *ctx, int script, int language, int serif, int bold, int italic)
 {
+	fz_font **fontp;
 	const char *data;
 	int index;
 	int size;
@@ -325,27 +338,22 @@ fz_font *fz_load_fallback_font(fz_context *ctx, int script, int language, int se
 	}
 
 	if (serif)
+		fontp = &ctx->font->fallback[index].serif;
+	else
+		fontp = &ctx->font->fallback[index].sans;
+
+	if (!*fontp)
 	{
-		if (ctx->font->fallback[index].serif)
-			return ctx->font->fallback[index].serif;
-		data = fz_lookup_noto_font(ctx, script, language, 1, &size);
-		if (data)
+		*fontp = fz_load_system_fallback_font(ctx, script, language, serif, bold, italic);
+		if (!*fontp)
 		{
-			ctx->font->fallback[index].serif = fz_new_font_from_memory(ctx, NULL, data, size, 0, 0);
-			return ctx->font->fallback[index].serif;
+			data = fz_lookup_noto_font(ctx, script, language, serif, &size);
+			if (data)
+				*fontp = fz_new_font_from_memory(ctx, NULL, data, size, 0, 0);
 		}
 	}
 
-	if (ctx->font->fallback[index].sans)
-		return ctx->font->fallback[index].sans;
-	data = fz_lookup_noto_font(ctx, script, language, 0, &size);
-	if (data)
-	{
-		ctx->font->fallback[index].sans = fz_new_font_from_memory(ctx, NULL, data, size, 0, 0);
-		return ctx->font->fallback[index].sans;
-	}
-
-	return NULL;
+	return *fontp;
 }
 
 fz_font *fz_load_fallback_symbol_font(fz_context *ctx)
@@ -1348,27 +1356,27 @@ fz_render_t3_glyph_direct(fz_context *ctx, fz_device *dev, fz_font *font, int gi
 void
 fz_print_font(fz_context *ctx, fz_output *out, fz_font *font)
 {
-	fz_printf(ctx, out, "font '%s' {\n", font->name);
+	fz_write_printf(ctx, out, "font '%s' {\n", font->name);
 
 	if (font->ft_face)
 	{
-		fz_printf(ctx, out, "\tfreetype face %p\n", font->ft_face);
+		fz_write_printf(ctx, out, "\tfreetype face %p\n", font->ft_face);
 		if (font->flags.ft_substitute)
-			fz_printf(ctx, out, "\tsubstitute font\n");
+			fz_write_printf(ctx, out, "\tsubstitute font\n");
 	}
 
 	if (font->t3procs)
 	{
-		fz_printf(ctx, out, "\ttype3 matrix [%g %g %g %g]\n",
+		fz_write_printf(ctx, out, "\ttype3 matrix [%g %g %g %g]\n",
 			font->t3matrix.a, font->t3matrix.b,
 			font->t3matrix.c, font->t3matrix.d);
 
-		fz_printf(ctx, out, "\ttype3 bbox [%g %g %g %g]\n",
+		fz_write_printf(ctx, out, "\ttype3 bbox [%g %g %g %g]\n",
 			font->bbox.x0, font->bbox.y0,
 			font->bbox.x1, font->bbox.y1);
 	}
 
-	fz_printf(ctx, out, "}\n");
+	fz_write_printf(ctx, out, "}\n");
 }
 
 fz_rect *
@@ -1560,6 +1568,26 @@ fz_encode_character_with_fallback(fz_context *ctx, fz_font *user_font, int unico
 	}
 
 	return *out_font = user_font, 0;
+}
+
+int fz_font_is_bold(fz_context *ctx, fz_font *font)
+{
+	return font ? font->flags.is_bold : 0;
+}
+
+int fz_font_is_italic(fz_context *ctx, fz_font *font)
+{
+	return font ? font->flags.is_italic : 0;
+}
+
+int fz_font_is_serif(fz_context *ctx, fz_font *font)
+{
+	return font ? font->flags.is_serif : 0;
+}
+
+int fz_font_is_monospaced(fz_context *ctx, fz_font *font)
+{
+	return font ? font->flags.is_mono : 0;
 }
 
 const char *fz_font_name(fz_context *ctx, fz_font *font)

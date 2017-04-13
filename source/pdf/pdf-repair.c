@@ -1,4 +1,4 @@
-#include "mupdf/pdf.h"
+#include "pdf-imp.h"
 
 /* Scan file for objects and reconstruct xref table */
 
@@ -319,13 +319,16 @@ pdf_repair_xref(fz_context *ctx, pdf_document *doc)
 	fz_var(list);
 	fz_var(obj);
 
+	fz_warn(ctx, "repairing PDF document");
+
 	if (doc->repair_attempted)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "Repair failed already - not trying again");
 	doc->repair_attempted = 1;
 
 	doc->dirty = 1;
-	/* Can't support incremental update after repair */
-	doc->freeze_updates = 1;
+	doc->freeze_updates = 1; /* Can't support incremental update after repair */
+
+	pdf_forget_xref(ctx, doc);
 
 	fz_seek(ctx, doc->file, 0, 0);
 
@@ -507,7 +510,6 @@ pdf_repair_xref(fz_context *ctx, pdf_document *doc)
 				num = 0;
 				gen = 0;
 			}
-
 		}
 
 		if (listlen == 0)

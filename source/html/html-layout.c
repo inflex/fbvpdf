@@ -406,10 +406,7 @@ static fz_image *load_html_image(fz_context *ctx, fz_archive *zip, const char *b
 		buf = fz_read_archive_entry(ctx, zip, path);
 #if FZ_ENABLE_SVG
 		if (strstr(path, ".svg"))
-		{
-			fz_write_buffer_byte(ctx, buf, 0);
 			img = fz_new_image_from_svg(ctx, buf);
-		}
 		else
 #endif
 			img = fz_new_image_from_buffer(ctx, buf);
@@ -734,7 +731,6 @@ static void generate_boxes(fz_context *ctx, fz_xml *node, fz_html_box *top,
 						if (href)
 							box->href = fz_pool_strdup(ctx, g->pool, href);
 					}
-
 				}
 				else
 				{
@@ -1254,6 +1250,7 @@ static void layout_flow(fz_context *ctx, fz_html_box *box, fz_html_box *top, flo
 
 	for (node = box->flow_head; node; node = node->next)
 	{
+		node->breaks_line = 0; /* reset line breaks from previous layout */
 		if (node->type == FLOW_IMAGE)
 		{
 			float w = 0, h = 0;
@@ -1552,7 +1549,7 @@ static void draw_flow_box(fz_context *ctx, fz_html_box *box, float page_top, flo
 			trm.c = 0;
 			trm.d = -node->box->em;
 			trm.e = x;
-			trm.f = y;
+			trm.f = y - page_top;
 
 			s = get_node_text(ctx, node);
 			init_string_walker(ctx, &walker, hb_buf, node->bidi_level & 1, style->font, node->script, node->markup_lang, s);
@@ -1587,7 +1584,7 @@ static void draw_flow_box(fz_context *ctx, fz_html_box *box, float page_top, flo
 						if (walker.glyph_info[i].cluster == k)
 						{
 							trm.e = x + walker.glyph_pos[i].x_offset * node_scale;
-							trm.f = y - walker.glyph_pos[i].y_offset * node_scale;
+							trm.f = y - walker.glyph_pos[i].y_offset * node_scale - page_top;
 							fz_show_glyph(ctx, text, walker.font, &trm,
 									walker.glyph_info[i].codepoint, c,
 									0, node->bidi_level, box->markup_dir, node->markup_lang);
@@ -1623,7 +1620,7 @@ static void draw_flow_box(fz_context *ctx, fz_html_box *box, float page_top, flo
 			if (style->visibility == V_VISIBLE)
 			{
 				fz_matrix local_ctm = *ctm;
-				fz_pre_translate(&local_ctm, node->x, node->y);
+				fz_pre_translate(&local_ctm, node->x, node->y - page_top);
 				fz_pre_scale(&local_ctm, node->w, node->h);
 				fz_fill_image(ctx, dev, node->content.image, &local_ctm, 1);
 			}
@@ -1638,7 +1635,7 @@ static void draw_flow_box(fz_context *ctx, fz_html_box *box, float page_top, flo
 	}
 }
 
-static void draw_rect(fz_context *ctx, fz_device *dev, const fz_matrix *ctm, fz_css_color color, float x0, float y0, float x1, float y1)
+static void draw_rect(fz_context *ctx, fz_device *dev, const fz_matrix *ctm, float page_top, fz_css_color color, float x0, float y0, float x1, float y1)
 {
 	if (color.a > 0)
 	{
@@ -1646,10 +1643,10 @@ static void draw_rect(fz_context *ctx, fz_device *dev, const fz_matrix *ctm, fz_
 
 		fz_path *path = fz_new_path(ctx);
 
-		fz_moveto(ctx, path, x0, y0);
-		fz_lineto(ctx, path, x1, y0);
-		fz_lineto(ctx, path, x1, y1);
-		fz_lineto(ctx, path, x0, y1);
+		fz_moveto(ctx, path, x0, y0 - page_top);
+		fz_lineto(ctx, path, x1, y0 - page_top);
+		fz_lineto(ctx, path, x1, y1 - page_top);
+		fz_lineto(ctx, path, x0, y1 - page_top);
 		fz_closepath(ctx, path);
 
 		rgb[0] = color.r / 255.0f;
@@ -1801,7 +1798,7 @@ static void draw_list_mark(fz_context *ctx, fz_html_box *box, float page_top, fl
 	{
 		s = buf;
 		trm.e = box->x - w;
-		trm.f = y;
+		trm.f = y - page_top;
 		while (*s)
 		{
 			s += fz_chartorune(&c, s);
@@ -1839,16 +1836,16 @@ static void draw_block_box(fz_context *ctx, fz_html_box *box, float page_top, fl
 
 	if (box->style.visibility == V_VISIBLE)
 	{
-		draw_rect(ctx, dev, ctm, box->style.background_color, x0, y0, x1, y1);
+		draw_rect(ctx, dev, ctm, page_top, box->style.background_color, x0, y0, x1, y1);
 
 		if (border[T] > 0)
-			draw_rect(ctx, dev, ctm, box->style.border_color[T], x0 - border[L], y0 - border[T], x1 + border[R], y0);
+			draw_rect(ctx, dev, ctm, page_top, box->style.border_color[T], x0 - border[L], y0 - border[T], x1 + border[R], y0);
 		if (border[B] > 0)
-			draw_rect(ctx, dev, ctm, box->style.border_color[B], x0 - border[L], y1, x1 + border[R], y1 + border[B]);
+			draw_rect(ctx, dev, ctm, page_top, box->style.border_color[B], x0 - border[L], y1, x1 + border[R], y1 + border[B]);
 		if (border[L] > 0)
-			draw_rect(ctx, dev, ctm, box->style.border_color[L], x0 - border[L], y0 - border[T], x0, y1 + border[B]);
+			draw_rect(ctx, dev, ctm, page_top, box->style.border_color[L], x0 - border[L], y0 - border[T], x0, y1 + border[B]);
 		if (border[R] > 0)
-			draw_rect(ctx, dev, ctm, box->style.border_color[R], x1, y0 - border[T], x1 + border[R], y1 + border[B]);
+			draw_rect(ctx, dev, ctm, page_top, box->style.border_color[R], x1, y0 - border[T], x1 + border[R], y1 + border[B]);
 
 		if (box->list_item)
 			draw_list_mark(ctx, box, page_top, page_bot, dev, ctm, box->list_item);
@@ -1865,24 +1862,34 @@ static void draw_block_box(fz_context *ctx, fz_html_box *box, float page_top, fl
 }
 
 void
-fz_draw_html(fz_context *ctx, fz_device *dev, const fz_matrix *ctm, fz_html *html, float page_top, float page_bot)
+fz_draw_html(fz_context *ctx, fz_device *dev, const fz_matrix *ctm, fz_html *html, int page)
 {
 	fz_matrix local_ctm = *ctm;
 	hb_buffer_t *hb_buf = NULL;
+	fz_html_box *box;
 	int unlocked = 0;
+	float page_top = page * html->page_h;
+	float page_bot = (page + 1) * html->page_h;
 
 	fz_var(hb_buf);
 	fz_var(unlocked);
 
-	hb_lock(ctx);
+	draw_rect(ctx, dev, ctm, 0, html->root->style.background_color,
+			0, 0,
+			html->page_w + html->page_margin[L] + html->page_margin[R],
+			html->page_h + html->page_margin[T] + html->page_margin[B]);
 
+	fz_pre_translate(&local_ctm, html->page_margin[L], html->page_margin[T]);
+
+	hb_lock(ctx);
 	fz_try(ctx)
 	{
 		hb_buf = hb_buffer_create();
 		hb_unlock(ctx);
 		unlocked = 1;
-		fz_pre_translate(&local_ctm, 0, -page_top);
-		draw_block_box(ctx, html->root, page_top, page_bot, dev, &local_ctm, hb_buf);
+
+		for (box = html->root->down; box; box = box->next)
+			draw_block_box(ctx, box, page_top, page_bot, dev, &local_ctm, hb_buf);
 	}
 	fz_always(ctx)
 	{
@@ -1930,7 +1937,7 @@ static int has_same_href(fz_html_box *box, const char *old_href)
 	return 0;
 }
 
-static fz_link *load_link_flow(fz_context *ctx, fz_html_flow *flow, fz_link *head, int page, int page_h, const char *dir, const char *file)
+static fz_link *load_link_flow(fz_context *ctx, fz_html_flow *flow, fz_link *head, int page, float page_h, const char *dir, const char *file)
 {
 	fz_link *link;
 	fz_html_flow *next;
@@ -2000,7 +2007,7 @@ static fz_link *load_link_flow(fz_context *ctx, fz_html_flow *flow, fz_link *hea
 	return head;
 }
 
-static fz_link *load_link_box(fz_context *ctx, fz_html_box *box, fz_link *head, int page, int page_h, const char *dir, const char *file)
+static fz_link *load_link_box(fz_context *ctx, fz_html_box *box, fz_link *head, int page, float page_h, const char *dir, const char *file)
 {
 	while (box)
 	{
@@ -2014,11 +2021,27 @@ static fz_link *load_link_box(fz_context *ctx, fz_html_box *box, fz_link *head, 
 }
 
 fz_link *
-fz_load_html_links(fz_context *ctx, fz_html *html, int page, int page_h, const char *file)
+fz_load_html_links(fz_context *ctx, fz_html *html, int page, const char *file, void *doc)
 {
+	fz_link *link, *head;
 	char dir[2048];
 	fz_dirname(dir, file, sizeof dir);
-	return load_link_box(ctx, html->root, NULL, page, page_h, dir, file);
+
+	head = load_link_box(ctx, html->root, NULL, page, html->page_h, dir, file);
+
+	for (link = head; link; link = link->next)
+	{
+		/* Adjust for page margins */
+		link->rect.x0 += html->page_margin[L];
+		link->rect.x1 += html->page_margin[L];
+		link->rect.y0 += html->page_margin[T];
+		link->rect.y1 += html->page_margin[T];
+
+		/* Set document pointer */
+		link->doc = doc;
+	}
+
+	return head;
 }
 
 static fz_html_flow *
@@ -2079,6 +2102,91 @@ float
 fz_find_html_target(fz_context *ctx, fz_html *html, const char *id)
 {
 	return find_box_target(html->root, id);
+}
+
+static fz_html_flow *
+make_flow_bookmark(fz_context *ctx, fz_html_flow *flow, float y)
+{
+	while (flow)
+	{
+		if (flow->y >= y)
+			return flow;
+		flow = flow->next;
+	}
+	return NULL;
+}
+
+static fz_html_flow *
+make_box_bookmark(fz_context *ctx, fz_html_box *box, float y)
+{
+	fz_html_flow *mark;
+	while (box)
+	{
+		if (box->type == BOX_FLOW)
+		{
+			if (box->y >= y)
+			{
+				mark = make_flow_bookmark(ctx, box->flow_head, y);
+				if (mark)
+					return mark;
+			}
+		}
+		else
+		{
+			mark = make_box_bookmark(ctx, box->down, y);
+			if (mark)
+				return mark;
+		}
+		box = box->next;
+	}
+	return NULL;
+}
+
+fz_bookmark
+fz_make_html_bookmark(fz_context *ctx, fz_html *html, int page)
+{
+	return (fz_bookmark)make_box_bookmark(ctx, html->root, page * html->page_h);
+}
+
+static int
+lookup_flow_bookmark(fz_context *ctx, fz_html_flow *flow, fz_html_flow *mark)
+{
+	while (flow)
+	{
+		if (flow == mark)
+			return 1;
+		flow = flow->next;
+	}
+	return 0;
+}
+
+static int
+lookup_box_bookmark(fz_context *ctx, fz_html_box *box, fz_html_flow *mark)
+{
+	while (box)
+	{
+		if (box->type == BOX_FLOW)
+		{
+			if (lookup_flow_bookmark(ctx, box->flow_head, mark))
+				return 1;
+		}
+		else
+		{
+			if (lookup_box_bookmark(ctx, box->down, mark))
+				return 1;
+		}
+		box = box->next;
+	}
+	return 0;
+}
+
+int
+fz_lookup_html_bookmark(fz_context *ctx, fz_html *html, fz_bookmark mark)
+{
+	fz_html_flow *flow = (fz_html_flow*)mark;
+	if (flow && lookup_box_bookmark(ctx, html->root, flow))
+		return (int)(flow->y / html->page_h);
+	return -1;
 }
 
 static char *concat_text(fz_context *ctx, fz_xml *root)
@@ -2328,6 +2436,14 @@ fz_layout_html(fz_context *ctx, fz_html *html, float w, float h, float em)
 	fz_var(hb_buf);
 	fz_var(unlocked);
 
+	html->page_margin[T] = fz_from_css_number(html->root->style.margin[T], em, em);
+	html->page_margin[B] = fz_from_css_number(html->root->style.margin[B], em, em);
+	html->page_margin[L] = fz_from_css_number(html->root->style.margin[L], em, em);
+	html->page_margin[R] = fz_from_css_number(html->root->style.margin[R], em, em);
+
+	html->page_w = w - html->page_margin[L] - html->page_margin[R];
+	html->page_h = h - html->page_margin[T] - html->page_margin[B];
+
 	hb_lock(ctx);
 
 	fz_try(ctx)
@@ -2337,12 +2453,12 @@ fz_layout_html(fz_context *ctx, fz_html *html, float w, float h, float em)
 		hb_unlock(ctx);
 
 		box->em = em;
-		box->w = w;
+		box->w = html->page_w;
 		box->h = 0;
 
 		if (box->down)
 		{
-			layout_block(ctx, box->down, box, h, 0, hb_buf);
+			layout_block(ctx, box->down, box, html->page_h, 0, hb_buf);
 			box->h = box->down->h;
 		}
 	}
@@ -2392,7 +2508,6 @@ static void fragment_cb(const uint32_t *fragment,
 		if (data->flow->type == FLOW_SPACE)
 		{
 			len = 1;
-
 		}
 		else if (data->flow->type == FLOW_BREAK || data->flow->type == FLOW_SBREAK ||
 				data->flow->type == FLOW_SHYPHEN || data->flow->type == FLOW_ANCHOR)
@@ -2522,8 +2637,6 @@ fz_parse_html(fz_context *ctx, fz_html_font_set *set, fz_archive *zip, const cha
 {
 	fz_xml *xml;
 	fz_html *html;
-	unsigned char *data;
-	size_t len = fz_buffer_storage(ctx, buf, &data);
 
 	fz_css_match match;
 	struct genstate g;
@@ -2536,7 +2649,7 @@ fz_parse_html(fz_context *ctx, fz_html_font_set *set, fz_archive *zip, const cha
 	g.emit_white = 0;
 	g.last_brk_cls = UCDN_LINEBREAK_CLASS_OP;
 
-	xml = fz_parse_xml(ctx, data, len, 1);
+	xml = fz_parse_xml(ctx, buf, 1);
 
 	g.css = fz_new_css(ctx);
 	fz_try(ctx)
@@ -2545,14 +2658,16 @@ fz_parse_html(fz_context *ctx, fz_html_font_set *set, fz_archive *zip, const cha
 		{
 			g.is_fb2 = 1;
 			fz_parse_css(ctx, g.css, fb2_default_css, "<default:fb2>");
-			fb2_load_css(ctx, g.zip, g.base_uri, g.css, xml);
+			if (fz_use_document_css(ctx))
+				fb2_load_css(ctx, g.zip, g.base_uri, g.css, xml);
 			g.images = load_fb2_images(ctx, xml);
 		}
 		else
 		{
 			g.is_fb2 = 0;
 			fz_parse_css(ctx, g.css, html_default_css, "<default:html>");
-			html_load_css(ctx, g.zip, g.base_uri, g.css, xml);
+			if (fz_use_document_css(ctx))
+				html_load_css(ctx, g.zip, g.base_uri, g.css, xml);
 			g.images = NULL;
 		}
 

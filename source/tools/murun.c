@@ -20,9 +20,7 @@ static void *alloc(void *actx, void *ptr, int n)
 		fz_free(ctx, ptr);
 		return NULL;
 	}
-	if (ptr)
-		return fz_resize_array(ctx, ptr, n, 1);
-	return fz_malloc_array(ctx, n, 1);
+	return fz_resize_array_no_throw(ctx, ptr, n, 1);
 }
 
 static int eval_print(js_State *J, const char *source)
@@ -1075,7 +1073,7 @@ js_dev_end_tile(fz_context *ctx, fz_device *dev)
 
 static fz_device *new_js_device(fz_context *ctx, js_State *J)
 {
-	js_device *dev = fz_new_device(ctx, sizeof *dev);
+	js_device *dev = fz_new_derived_device(ctx, js_device);
 
 	dev->super.fill_path = js_dev_fill_path;
 	dev->super.stroke_path = js_dev_stroke_path;
@@ -1388,6 +1386,18 @@ static void ffi_readFile(js_State *J)
 	ffi_pushbuffer(J, buf);
 }
 
+static void ffi_setUserCSS(js_State *J)
+{
+	fz_context *ctx = js_getcontext(J);
+	const char *user_css = js_tostring(J, 1);
+	int use_doc_css = js_iscoercible(J, 2) ? js_toboolean(J, 2) : 1;
+	fz_try(ctx) {
+		fz_set_user_css(ctx, user_css);
+		fz_set_use_document_css(ctx, use_doc_css);
+	} fz_catch(ctx)
+		rethrow(J);
+}
+
 static void ffi_new_Buffer(js_State *J)
 {
 	fz_context *ctx = js_getcontext(J);
@@ -1406,7 +1416,7 @@ static void ffi_Buffer_writeByte(js_State *J)
 	fz_buffer *buf = js_touserdata(J, 0, "fz_buffer");
 	unsigned char val = js_tonumber(J, 1);
 	fz_try(ctx)
-		fz_write_buffer_byte(ctx, buf, val);
+		fz_append_byte(ctx, buf, val);
 	fz_catch(ctx)
 		rethrow(J);
 }
@@ -1417,7 +1427,7 @@ static void ffi_Buffer_writeRune(js_State *J)
 	fz_buffer *buf = js_touserdata(J, 0, "fz_buffer");
 	int val = js_tonumber(J, 1);
 	fz_try(ctx)
-		fz_write_buffer_rune(ctx, buf, val);
+		fz_append_rune(ctx, buf, val);
 	fz_catch(ctx)
 		rethrow(J);
 }
@@ -1432,8 +1442,8 @@ static void ffi_Buffer_write(js_State *J)
 		const char *s = js_tostring(J, i);
 		fz_try(ctx) {
 			if (i > 1)
-				fz_write_buffer_byte(ctx, buf, ' ');
-			fz_write_buffer(ctx, buf, s, strlen(s));
+				fz_append_byte(ctx, buf, ' ');
+			fz_append_string(ctx, buf, s);
 		} fz_catch(ctx)
 			rethrow(J);
 	}
@@ -1445,7 +1455,7 @@ static void ffi_Buffer_writeLine(js_State *J)
 	fz_buffer *buf = js_touserdata(J, 0, "fz_buffer");
 	ffi_Buffer_write(J);
 	fz_try(ctx)
-		fz_write_buffer_byte(ctx, buf, '\n');
+		fz_append_byte(ctx, buf, '\n');
 	fz_catch(ctx)
 		rethrow(J);
 }
@@ -2745,9 +2755,8 @@ static void ffi_DocumentWriter_endPage(js_State *J)
 {
 	fz_context *ctx = js_getcontext(J);
 	fz_document_writer *wri = js_touserdata(J, 0, "fz_document_writer");
-	fz_device *device = js_touserdata(J, 1, "fz_device");
 	fz_try(ctx)
-		fz_end_page(ctx, wri, device);
+		fz_end_page(ctx, wri);
 	fz_catch(ctx)
 		rethrow(J);
 }
@@ -2917,10 +2926,7 @@ static int ffi_pdf_obj_put(js_State *J, void *obj, const char *key)
 
 	if (is_number(key, &idx)) {
 		fz_try(ctx)
-			if (idx == pdf_array_len(ctx, obj))
-				pdf_array_push(ctx, obj, val);
-			else
-				pdf_array_put(ctx, obj, idx, val);
+			pdf_array_put(ctx, obj, idx, val);
 		fz_always(ctx)
 			pdf_drop_obj(ctx, val);
 		fz_catch(ctx)
@@ -3932,7 +3938,7 @@ static void ffi_PDFAnnotation_setColor(js_State *J)
 	if (n != 0 && n != 1 && n != 3 && n != 4)
 		js_error(J, "color must be 0, 1, 3, or 4 components");
 	for (i = 0; i < n; ++i) {
-		js_getindex(J, 1, 0);
+		js_getindex(J, 1, i);
 		color[i] = js_tonumber(J, -1);
 		js_pop(J, 1);
 	}
@@ -3987,7 +3993,7 @@ static void ffi_PDFAnnotation_setQuadPoints(js_State *J)
 		js_getindex(J, 1, i);
 		for (k = 0; k < 8; ++k) {
 			js_getindex(J, -1, k);
-			qp[n * 8 + k] = js_tonumber(J, -1);
+			qp[i * 8 + k] = js_tonumber(J, -1);
 			js_pop(J, 1);
 		}
 		js_pop(J, 1);
@@ -4052,13 +4058,13 @@ static void ffi_PDFAnnotation_setInkList(js_State *J)
 	nv = 0;
 	for (i = 0; i < n; ++i) {
 		js_getindex(J, 1, i);
-		nv += js_getlength(J, -1);
+		nv += js_getlength(J, -1) / 2;
 		js_pop(J, 1);
 	}
 
 	fz_try(ctx) {
 		counts = fz_malloc(ctx, n * sizeof(int));
-		points = fz_malloc(ctx, nv * sizeof(float));
+		points = fz_malloc(ctx, nv * 2 * sizeof(float));
 	} fz_catch(ctx) {
 		fz_free(ctx, counts);
 		fz_free(ctx, points);
@@ -4072,11 +4078,10 @@ static void ffi_PDFAnnotation_setInkList(js_State *J)
 	}
 	for (i = v = 0; i < n; ++i) {
 		js_getindex(J, 1, i);
-		counts[i] = js_getlength(J, -1);
-		for (k = 0; k < counts[i]; ++k) {
+		counts[i] = js_getlength(J, -1) / 2;
+		for (k = 0; k < counts[i] * 2; ++k) {
 			js_getindex(J, -1, k);
-			if (v < nv)
-				points[v++] = js_tonumber(J, -1);
+			points[v++] = js_tonumber(J, -1);
 			js_pop(J, 1);
 		}
 		js_pop(J, 1);
@@ -4354,8 +4359,8 @@ int murun_main(int argc, char **argv)
 	js_newobject(J);
 	{
 		jsB_propfun(J, "DocumentWriter.beginPage", ffi_DocumentWriter_beginPage, 1);
-		jsB_propfun(J, "DocumentWriter.endPage", ffi_DocumentWriter_endPage, 1);
-		jsB_propfun(J, "DocumentWriter.close", ffi_DocumentWriter_close, 1);
+		jsB_propfun(J, "DocumentWriter.endPage", ffi_DocumentWriter_endPage, 0);
+		jsB_propfun(J, "DocumentWriter.close", ffi_DocumentWriter_close, 0);
 	}
 	js_setregistry(J, "fz_document_writer");
 
@@ -4494,7 +4499,7 @@ int murun_main(int argc, char **argv)
 		js_getregistry(J, "DeviceCMYK");
 		js_defproperty(J, -2, "DeviceCMYK", JS_DONTENUM | JS_READONLY | JS_DONTCONF);
 
-		// Set user CSS
+		jsB_propfun(J, "setUserCSS", ffi_setUserCSS, 2);
 	}
 
 	/* re-implement matrix math in javascript */

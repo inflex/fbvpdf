@@ -10,9 +10,10 @@ struct fz_item_s
 	fz_item *next;
 	fz_item *prev;
 	fz_store *store;
-	fz_store_type *type;
+	const fz_store_type *type;
 };
 
+/* Every entry in fz_store is protected by the alloc lock */
 struct fz_store_s
 {
 	int refs;
@@ -30,7 +31,6 @@ struct fz_store_s
 	size_t max;
 	size_t size;
 
-	/* Protected by the reap lock */
 	int defer_reap_count;
 	int needs_reaping;
 };
@@ -42,7 +42,7 @@ fz_new_store_context(fz_context *ctx, size_t max)
 	store = fz_malloc_struct(ctx, fz_store);
 	fz_try(ctx)
 	{
-		store->hash = fz_new_hash_table(ctx, 4096, sizeof(fz_store_hash), FZ_LOCK_ALLOC);
+		store->hash = fz_new_hash_table(ctx, 4096, sizeof(fz_store_hash), FZ_LOCK_ALLOC, NULL);
 	}
 	fz_catch(ctx)
 	{
@@ -93,7 +93,7 @@ void *fz_keep_key_storable(fz_context *ctx, const fz_key_storable *sc)
 }
 
 /*
-	Entered with FZ_LOCK_ALLOC and FZ_LOCK_REAP held.
+	Entered with FZ_LOCK_ALLOC held.
 	Drops FZ_LOCK_ALLOC.
 */
 static void
@@ -109,7 +109,6 @@ do_reap(fz_context *ctx)
 	}
 
 	fz_assert_lock_held(ctx, FZ_LOCK_ALLOC);
-	fz_assert_lock_held(ctx, FZ_LOCK_REAP);
 
 	ctx->store->needs_reaping = 0;
 
@@ -166,10 +165,9 @@ do_reap(fz_context *ctx)
 		item->type->drop_key(ctx, item->key);
 		fz_free(ctx, item);
 	}
-
 }
 
-void fz_drop_key_storable(fz_context *ctx, const fz_key_storable *sc)
+int fz_drop_key_storable(fz_context *ctx, const fz_key_storable *sc)
 {
 	/* Explicitly drop const to allow us to use const
 	 * sanely throughout the code. */
@@ -178,7 +176,7 @@ void fz_drop_key_storable(fz_context *ctx, const fz_key_storable *sc)
 	int unlock = 1;
 
 	if (s == NULL)
-		return;
+		return 0;
 
 	if (s->storable.refs > 0)
 		(void)Memento_dropRef(s);
@@ -188,15 +186,15 @@ void fz_drop_key_storable(fz_context *ctx, const fz_key_storable *sc)
 		drop = --s->storable.refs == 0;
 		if (!drop && s->storable.refs == s->store_key_refs)
 		{
-			fz_lock(ctx, FZ_LOCK_REAP);
 			if (ctx->store->defer_reap_count > 0)
+			{
 				ctx->store->needs_reaping = 1;
+			}
 			else
 			{
 				do_reap(ctx);
 				unlock = 0;
 			}
-			fz_unlock(ctx, FZ_LOCK_REAP);
 		}
 	}
 	else
@@ -212,6 +210,7 @@ void fz_drop_key_storable(fz_context *ctx, const fz_key_storable *sc)
 	 */
 	if (drop)
 		s->storable.drop(ctx, &s->storable);
+	return drop;
 }
 
 void *fz_keep_key_storable_key(fz_context *ctx, const fz_key_storable *sc)
@@ -235,7 +234,7 @@ void *fz_keep_key_storable_key(fz_context *ctx, const fz_key_storable *sc)
 	return s;
 }
 
-void fz_drop_key_storable_key(fz_context *ctx, const fz_key_storable *sc)
+int fz_drop_key_storable_key(fz_context *ctx, const fz_key_storable *sc)
 {
 	/* Explicitly drop const to allow us to use const
 	 * sanely throughout the code. */
@@ -243,7 +242,7 @@ void fz_drop_key_storable_key(fz_context *ctx, const fz_key_storable *sc)
 	int drop;
 
 	if (s == NULL)
-		return;
+		return 0;
 
 	if (s->storable.refs > 0)
 		(void)Memento_dropRef(s);
@@ -261,6 +260,7 @@ void fz_drop_key_storable_key(fz_context *ctx, const fz_key_storable *sc)
 	 */
 	if (drop)
 		s->storable.drop(ctx, &s->storable);
+	return drop;
 }
 
 static void
@@ -389,7 +389,7 @@ touch(fz_store *store, fz_item *item)
 }
 
 void *
-fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, fz_store_type *type)
+fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, const fz_store_type *type)
 {
 	fz_item *item = NULL;
 	size_t size;
@@ -397,7 +397,6 @@ fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, fz_store_
 	fz_store *store = ctx->store;
 	fz_store_hash hash = { NULL };
 	int use_hash = 0;
-	unsigned pos;
 
 	if (!store)
 		return NULL;
@@ -445,7 +444,7 @@ fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, fz_store_
 		fz_try(ctx)
 		{
 			/* May drop and retake the lock */
-			existing = fz_hash_insert_with_pos(ctx, store->hash, &hash, item, &pos);
+			existing = fz_hash_insert(ctx, store->hash, &hash, item);
 		}
 		fz_catch(ctx)
 		{
@@ -469,9 +468,11 @@ fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, fz_store_
 			return existing->val;
 		}
 	}
+
 	/* Now bump the ref */
 	if (val->refs > 0)
 		val->refs++;
+
 	/* If we haven't got an infinite store, check for space within it */
 	if (store->max != FZ_STORE_UNLIMITED)
 	{
@@ -479,18 +480,13 @@ fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, fz_store_
 		while (size > store->max)
 		{
 			size_t saved;
-			int relock = 0;
 
 			/* First, do any outstanding reaping, even if defer_reap_count > 0 */
-			fz_lock(ctx, FZ_LOCK_REAP);
 			if (store->needs_reaping)
 			{
 				do_reap(ctx); /* Drops alloc lock */
-				relock = 1;
-			}
-			fz_unlock(ctx, FZ_LOCK_REAP);
-			if (relock)
 				fz_lock(ctx, FZ_LOCK_ALLOC);
+			}
 			size = store->size + itemsize;
 			if (size <= store->max)
 				break;
@@ -524,7 +520,7 @@ fz_store_item(fz_context *ctx, void *key, void *val_, size_t itemsize, fz_store_
 }
 
 void *
-fz_find_item(fz_context *ctx, fz_store_drop_fn *drop, void *key, fz_store_type *type)
+fz_find_item(fz_context *ctx, fz_store_drop_fn *drop, void *key, const fz_store_type *type)
 {
 	fz_item *item;
 	fz_store *store = ctx->store;
@@ -577,7 +573,7 @@ fz_find_item(fz_context *ctx, fz_store_drop_fn *drop, void *key, fz_store_type *
 }
 
 void
-fz_remove_item(fz_context *ctx, fz_store_drop_fn *drop, void *key, fz_store_type *type)
+fz_remove_item(fz_context *ctx, fz_store_drop_fn *drop, void *key, const fz_store_type *type)
 {
 	fz_item *item;
 	fz_store *store = ctx->store;
@@ -666,7 +662,7 @@ fz_drop_store_context(fz_context *ctx)
 	if (fz_drop_imp(ctx, ctx->store, &ctx->store->refs))
 	{
 		fz_empty_store(ctx);
-		fz_drop_hash(ctx, ctx->store->hash);
+		fz_drop_hash_table(ctx, ctx->store->hash);
 		fz_free(ctx, ctx->store);
 		ctx->store = NULL;
 	}
@@ -676,7 +672,7 @@ static void
 print_item(fz_context *ctx, fz_output *out, void *item_)
 {
 	fz_item *item = (fz_item *)item_;
-	fz_printf(ctx, out, " val=%p item=%p\n", item->val, item);
+	fz_write_printf(ctx, out, " val=%p item=%p\n", item->val, item);
 }
 
 void
@@ -685,24 +681,24 @@ fz_print_store_locked(fz_context *ctx, fz_output *out)
 	fz_item *item, *next;
 	fz_store *store = ctx->store;
 
-	fz_printf(ctx, out, "-- resource store contents --\n");
+	fz_write_printf(ctx, out, "-- resource store contents --\n");
 
 	for (item = store->head; item; item = next)
 	{
 		next = item->next;
 		if (next)
 			next->val->refs++;
-		fz_printf(ctx, out, "store[*][refs=%d][size=%d] ", item->val->refs, item->size);
+		fz_write_printf(ctx, out, "store[*][refs=%d][size=%d] ", item->val->refs, item->size);
 		fz_unlock(ctx, FZ_LOCK_ALLOC);
 		item->type->print(ctx, out, item->key);
-		fz_printf(ctx, out, " = %p\n", item->val);
+		fz_write_printf(ctx, out, " = %p\n", item->val);
 		fz_lock(ctx, FZ_LOCK_ALLOC);
 		if (next)
 			next->val->refs--;
 	}
-	fz_printf(ctx, out, "-- resource store hash contents --\n");
+	fz_write_printf(ctx, out, "-- resource store hash contents --\n");
 	fz_print_hash_details(ctx, out, store->hash, print_item, 1);
-	fz_printf(ctx, out, "-- end --\n");
+	fz_write_printf(ctx, out, "-- end --\n");
 }
 
 void
@@ -831,7 +827,7 @@ fz_shrink_store(fz_context *ctx, unsigned int percent)
 	return success;
 }
 
-void fz_filter_store(fz_context *ctx, fz_store_filter_fn *fn, void *arg, fz_store_type *type)
+void fz_filter_store(fz_context *ctx, fz_store_filter_fn *fn, void *arg, const fz_store_type *type)
 {
 	fz_store *store;
 	fz_item *item, *prev, *remove;
@@ -904,9 +900,9 @@ void fz_defer_reap_start(fz_context *ctx)
 	if (ctx->store == NULL)
 		return;
 
-	fz_lock(ctx, FZ_LOCK_REAP);
+	fz_lock(ctx, FZ_LOCK_ALLOC);
 	ctx->store->defer_reap_count++;
-	fz_unlock(ctx, FZ_LOCK_REAP);
+	fz_unlock(ctx, FZ_LOCK_ALLOC);
 }
 
 void fz_defer_reap_end(fz_context *ctx)
@@ -917,12 +913,10 @@ void fz_defer_reap_end(fz_context *ctx)
 		return;
 
 	fz_lock(ctx, FZ_LOCK_ALLOC);
-	fz_lock(ctx, FZ_LOCK_REAP);
 	--ctx->store->defer_reap_count;
 	reap = ctx->store->defer_reap_count == 0 && ctx->store->needs_reaping;
 	if (reap)
 		do_reap(ctx); /* Drops FZ_LOCK_ALLOC */
-	fz_unlock(ctx, FZ_LOCK_REAP);
-	if (!reap)
+	else
 		fz_unlock(ctx, FZ_LOCK_ALLOC);
 }

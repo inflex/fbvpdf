@@ -549,6 +549,8 @@ static void declare_dom(pdf_js *js)
 	js_setglobal(J, "MuPDF_Doc"); /* for pdf-util.js use */
 }
 
+#include "gen_js_util.h"
+
 static void preload_helpers(pdf_js *js)
 {
 	/* When testing on the cluster:
@@ -567,9 +569,7 @@ static void preload_helpers(pdf_js *js)
 	);
 #endif
 
-	js_dostring(js->imp,
-#include "gen_js_util.h"
-	);
+	js_dostring(js->imp, fz_source_pdf_pdf_js_util_js);
 }
 
 void pdf_drop_js(fz_context *ctx, pdf_js *js)
@@ -589,9 +589,7 @@ static void *pdf_js_alloc(void *actx, void *ptr, int n)
 		fz_free(ctx, ptr);
 		return NULL;
 	}
-	if (ptr)
-		return fz_resize_array(ctx, ptr, n, 1);
-	return fz_malloc_array(ctx, n, 1);
+	return fz_resize_array_no_throw(ctx, ptr, n, 1);
 }
 
 static pdf_js *pdf_new_js(fz_context *ctx, pdf_document *doc)

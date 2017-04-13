@@ -182,6 +182,20 @@ fz_is_document_reflowable(fz_context *ctx, fz_document *doc)
 	return doc ? doc->is_reflowable : 0;
 }
 
+fz_bookmark fz_make_bookmark(fz_context *ctx, fz_document *doc, int page)
+{
+	if (doc && doc->make_bookmark)
+		return doc->make_bookmark(ctx, doc, page);
+	return (fz_bookmark)page;
+}
+
+int fz_lookup_bookmark(fz_context *ctx, fz_document *doc, fz_bookmark mark)
+{
+	if (doc && doc->lookup_bookmark)
+		return doc->lookup_bookmark(ctx, doc, mark);
+	return (int)mark;
+}
+
 int
 fz_needs_password(fz_context *ctx, fz_document *doc)
 {
@@ -371,8 +385,8 @@ fz_run_page(fz_context *ctx, fz_page *page, fz_device *dev, const fz_matrix *tra
 	}
 }
 
-void *
-fz_new_annot(fz_context *ctx, int size)
+fz_annot *
+fz_new_annot_of_size(fz_context *ctx, int size)
 {
 	fz_annot *annot = Memento_label(fz_calloc(ctx, 1, size), "fz_annot");
 	annot->refs = 1;
@@ -396,8 +410,8 @@ fz_drop_annot(fz_context *ctx, fz_annot *annot)
 	}
 }
 
-void *
-fz_new_page(fz_context *ctx, int size)
+fz_page *
+fz_new_page_of_size(fz_context *ctx, int size)
 {
 	fz_page *page = Memento_label(fz_calloc(ctx, 1, size), "fz_page");
 	page->refs = 1;

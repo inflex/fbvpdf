@@ -175,7 +175,6 @@ fz_drop_image_gprf_imp(fz_context *ctx, fz_storable *image_)
 
 	fz_drop_gprf_file(ctx, image->file);
 	fz_drop_separations(ctx, image->separations);
-	fz_drop_image_base(ctx, &image->super);
 }
 
 static inline unsigned char *cmyk_to_rgba(unsigned char *out, uint32_t c, uint32_t m, uint32_t y, uint32_t k)
@@ -865,7 +864,7 @@ static fz_page *
 gprf_load_page(fz_context *ctx, fz_document *doc_, int number)
 {
 	gprf_document *doc = (gprf_document*)doc_;
-	gprf_page *page = fz_new_page(ctx, sizeof *page);
+	gprf_page *page = fz_new_page(ctx, gprf_page);
 
 	fz_try(ctx)
 	{
@@ -1005,8 +1004,8 @@ gprf_recognize(fz_context *doc, const char *magic)
 
 fz_document_handler gprf_document_handler =
 {
-	&gprf_recognize,
-	&gprf_open_document,
-	&gprf_open_document_with_stream
+	gprf_recognize,
+	gprf_open_document,
+	gprf_open_document_with_stream
 };
 #endif

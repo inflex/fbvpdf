@@ -276,7 +276,7 @@ xps_parse_metadata(fz_context *ctx, xps_document *doc, xps_part *part, xps_fixdo
 	doc->base_uri = buf;
 	doc->part_uri = part->name;
 
-	root = fz_parse_xml(ctx, part->data, part->size, 0);
+	root = fz_parse_xml(ctx, part->data, 0);
 	xps_parse_metadata_imp(ctx, doc, root, fixdoc);
 	fz_drop_xml(ctx, root);
 
@@ -353,7 +353,7 @@ xps_load_fixed_page(fz_context *ctx, xps_document *doc, xps_fixpage *page)
 	part = xps_read_part(ctx, doc, page->name);
 	fz_try(ctx)
 	{
-		root = fz_parse_xml(ctx, part->data, part->size, 0);
+		root = fz_parse_xml(ctx, part->data, 0);
 	}
 	fz_always(ctx)
 	{
@@ -439,7 +439,7 @@ xps_load_page(fz_context *ctx, xps_document *doc, int number)
 			root = xps_load_fixed_page(ctx, doc, fix);
 			fz_try(ctx)
 			{
-				page = fz_new_page(ctx, sizeof *page);
+				page = fz_new_derived_page(ctx, xps_page);
 				page->super.load_links = (fz_page_load_links_fn *)xps_load_links;
 				page->super.bound_page = (fz_page_bound_page_fn *)xps_bound_page;
 				page->super.run_page_contents = (fz_page_run_page_contents_fn *)xps_run_page;
@@ -484,7 +484,7 @@ xps_recognize(fz_context *ctx, const char *magic)
 
 fz_document_handler xps_document_handler =
 {
-	(fz_document_recognize_fn *)&xps_recognize,
-	(fz_document_open_fn *)&xps_open_document,
-	(fz_document_open_with_stream_fn *)&xps_open_document_with_stream
+	xps_recognize,
+	(fz_document_open_fn *) xps_open_document,
+	(fz_document_open_with_stream_fn *) xps_open_document_with_stream
 };

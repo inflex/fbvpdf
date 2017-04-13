@@ -62,7 +62,7 @@ int pdf_annot_type_from_string(const char *subtype)
 	if (!strcmp("TrapNet", subtype)) return PDF_ANNOT_TRAP_NET;
 	if (!strcmp("Watermark", subtype)) return PDF_ANNOT_WATERMARK;
 	if (!strcmp("3D", subtype)) return PDF_ANNOT_3D;
-	return -1;
+	return PDF_ANNOT_UNKNOWN;
 }
 
 pdf_annot *
@@ -173,11 +173,6 @@ pdf_delete_annot(fz_context *ctx, pdf_page *page, pdf_annot *annot)
 	i = pdf_array_find(ctx, annot_arr, annot->obj);
 	if (i >= 0)
 		pdf_array_delete(ctx, annot_arr, i);
-
-	if (pdf_is_indirect(ctx, annot_arr))
-		pdf_update_object(ctx, doc, pdf_to_num(ctx, annot_arr), annot_arr);
-	else
-		pdf_dict_put(ctx, page->obj, PDF_NAME_Annots, annot_arr);
 
 	/* The garbage collection pass when saving will remove the annot object,
 	 * removing it here may break files if multiple pages use the same annot. */
@@ -362,7 +357,6 @@ pdf_set_annot_interior_color(fz_context *ctx, pdf_annot *annot, int n, const flo
 	// TODO: check annot type
 	pdf_set_annot_color_imp(ctx, annot, PDF_NAME_IC, n, color);
 }
-
 
 int pdf_annot_quad_point_count(fz_context *ctx, pdf_annot *annot)
 {

@@ -69,7 +69,7 @@ img_load_page(fz_context *ctx, img_document *doc, int number)
 	if (number != 0)
 		return NULL;
 
-	page = fz_new_page(ctx, sizeof *page);
+	page = fz_new_derived_page(ctx, img_page);
 
 	page->super.bound_page = (fz_page_bound_page_fn *)img_bound_page;
 	page->super.run_page_contents = (fz_page_run_page_contents_fn *)img_run_page;
@@ -91,7 +91,7 @@ img_lookup_metadata(fz_context *ctx, img_document *doc, const char *key, char *b
 static img_document *
 img_new_document(fz_context *ctx, fz_image *image)
 {
-	img_document *doc = fz_new_document(ctx, img_document);
+	img_document *doc = fz_new_derived_document(ctx, img_document);
 
 	doc->super.drop_document = (fz_document_drop_fn *)img_drop_document;
 	doc->super.count_pages = (fz_document_count_pages_fn *)img_count_pages;
@@ -103,7 +103,7 @@ img_new_document(fz_context *ctx, fz_image *image)
 	return doc;
 }
 
-static img_document *
+static fz_document *
 img_open_document_with_stream(fz_context *ctx, fz_stream *stm)
 {
 	fz_buffer *buffer = NULL;
@@ -127,7 +127,7 @@ img_open_document_with_stream(fz_context *ctx, fz_stream *stm)
 	fz_catch(ctx)
 		fz_rethrow(ctx);
 
-	return doc;
+	return &doc->super;
 }
 
 static int
@@ -172,7 +172,7 @@ img_recognize(fz_context *doc, const char *magic)
 
 fz_document_handler img_document_handler =
 {
-	(fz_document_recognize_fn *)&img_recognize,
-	(fz_document_open_fn *)NULL,
-	(fz_document_open_with_stream_fn *)&img_open_document_with_stream
+	img_recognize,
+	NULL,
+	img_open_document_with_stream
 };

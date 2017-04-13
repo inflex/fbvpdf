@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2016 Artifex Software, Inc.
+/* Copyright (C) 2009-2017 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -831,7 +831,7 @@ void Memento_breakpoint(void)
 {
     /* A handy externally visible function for breakpointing */
 #if 0 /* Enable this to force automatic breakpointing */
-#ifdef DEBUG
+#ifndef NDEBUG
 #ifdef _MSC_VER
     __asm int 3;
 #endif

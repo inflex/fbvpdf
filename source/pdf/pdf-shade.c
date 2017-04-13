@@ -252,7 +252,6 @@ pdf_load_mesh_params(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_ob
 static void
 pdf_load_type4_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_obj *dict, int funcs, fz_function **func)
 {
-
 	pdf_load_mesh_params(ctx, doc, shade, dict);
 
 	if (funcs > 0)
@@ -264,7 +263,6 @@ pdf_load_type4_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_ob
 static void
 pdf_load_type5_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_obj *dict, int funcs, fz_function **func)
 {
-
 	pdf_load_mesh_params(ctx, doc, shade, dict);
 
 	if (funcs > 0)
@@ -278,7 +276,6 @@ pdf_load_type5_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_ob
 static void
 pdf_load_type6_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_obj *dict, int funcs, fz_function **func)
 {
-
 	pdf_load_mesh_params(ctx, doc, shade, dict);
 
 	if (funcs > 0)
@@ -290,7 +287,6 @@ pdf_load_type6_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_ob
 static void
 pdf_load_type7_shade(fz_context *ctx, pdf_document *doc, fz_shade *shade, pdf_obj *dict, int funcs, fz_function **func)
 {
-
 	pdf_load_mesh_params(ctx, doc, shade, dict);
 
 	if (funcs > 0)
@@ -335,7 +331,7 @@ pdf_load_shading_dict(fz_context *ctx, pdf_document *doc, pdf_obj *dict, const f
 
 		obj = pdf_dict_get(ctx, dict, PDF_NAME_ColorSpace);
 		if (!obj)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "shading colorspace is missing");
+			fz_throw(ctx, FZ_ERROR_SYNTAX, "shading colorspace is missing");
 		shade->colorspace = pdf_load_colorspace(ctx, doc, obj);
 		n = fz_colorspace_n(ctx, shade->colorspace);
 
@@ -364,7 +360,7 @@ pdf_load_shading_dict(fz_context *ctx, pdf_document *doc, pdf_obj *dict, const f
 
 			func[0] = pdf_load_function(ctx, doc, obj, in, out);
 			if (!func[0])
-				fz_throw(ctx, FZ_ERROR_GENERIC, "cannot load shading function (%d 0 R)", pdf_to_num(ctx, obj));
+				fz_throw(ctx, FZ_ERROR_SYNTAX, "cannot load shading function (%d 0 R)", pdf_to_num(ctx, obj));
 		}
 		else if (pdf_is_array(ctx, obj))
 		{
@@ -372,12 +368,12 @@ pdf_load_shading_dict(fz_context *ctx, pdf_document *doc, pdf_obj *dict, const f
 			if (funcs != 1 && funcs != n)
 			{
 				funcs = 0;
-				fz_throw(ctx, FZ_ERROR_GENERIC, "incorrect number of shading functions");
+				fz_throw(ctx, FZ_ERROR_SYNTAX, "incorrect number of shading functions");
 			}
 			if (funcs > FZ_MAX_COLORS)
 			{
 				funcs = 0;
-				fz_throw(ctx, FZ_ERROR_GENERIC, "too many shading functions");
+				fz_throw(ctx, FZ_ERROR_SYNTAX, "too many shading functions");
 			}
 
 			if (type == 1)
@@ -390,13 +386,13 @@ pdf_load_shading_dict(fz_context *ctx, pdf_document *doc, pdf_obj *dict, const f
 			{
 				func[i] = pdf_load_function(ctx, doc, pdf_array_get(ctx, obj, i), in, out);
 				if (!func[i])
-					fz_throw(ctx, FZ_ERROR_GENERIC, "cannot load shading function (%d 0 R)", pdf_to_num(ctx, obj));
+					fz_throw(ctx, FZ_ERROR_SYNTAX, "cannot load shading function (%d 0 R)", pdf_to_num(ctx, obj));
 			}
 		}
 		else if (type < 4)
 		{
 			/* Functions are compulsory for types 1,2,3 */
-			fz_throw(ctx, FZ_ERROR_GENERIC, "cannot load shading function (%d 0 R)", pdf_to_num(ctx, obj));
+			fz_throw(ctx, FZ_ERROR_SYNTAX, "cannot load shading function (%d 0 R)", pdf_to_num(ctx, obj));
 		}
 
 		shade->type = type;
@@ -410,7 +406,7 @@ pdf_load_shading_dict(fz_context *ctx, pdf_document *doc, pdf_obj *dict, const f
 		case 6: pdf_load_type6_shade(ctx, doc, shade, dict, funcs, func); break;
 		case 7: pdf_load_type7_shade(ctx, doc, shade, dict, funcs, func); break;
 		default:
-			fz_throw(ctx, FZ_ERROR_GENERIC, "unknown shading type: %d", type);
+			fz_throw(ctx, FZ_ERROR_SYNTAX, "unknown shading type: %d", type);
 		}
 	}
 	fz_always(ctx)
@@ -468,7 +464,7 @@ pdf_load_shading(fz_context *ctx, pdf_document *doc, pdf_obj *dict)
 
 		obj = pdf_dict_get(ctx, dict, PDF_NAME_Shading);
 		if (!obj)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "syntaxerror: missing shading dictionary");
+			fz_throw(ctx, FZ_ERROR_SYNTAX, "missing shading dictionary");
 
 		shade = pdf_load_shading_dict(ctx, doc, obj, &mat);
 	}

@@ -140,14 +140,32 @@ file_close(fz_context *ctx, void *opaque)
 }
 
 fz_output *
+fz_new_output(fz_context *ctx, void *state, fz_output_write_fn *write, fz_output_close_fn *close)
+{
+	fz_output *out;
+
+	fz_try(ctx)
+	{
+		out = fz_malloc_struct(ctx, fz_output);
+		out->state = state;
+		out->write = write;
+		out->close = close;
+	}
+	fz_catch(ctx)
+	{
+		if (close)
+			close(ctx, state);
+		fz_rethrow(ctx);
+	}
+	return out;
+}
+
+fz_output *
 fz_new_output_with_file_ptr(fz_context *ctx, FILE *file, int close)
 {
-	fz_output *out = fz_malloc_struct(ctx, fz_output);
-	out->opaque = file;
-	out->write = file_write;
+	fz_output *out = fz_new_output(ctx, file, file_write, close ? file_close : NULL);
 	out->seek = file_seek;
 	out->tell = file_tell;
-	out->close = close ? file_close : NULL;
 	return out;
 }
 
@@ -159,6 +177,14 @@ fz_new_output_with_path(fz_context *ctx, const char *filename, int append)
 
 	if (!strcmp(filename, "/dev/null") || !fz_strcasecmp(filename, "nul:"))
 		return NULL;
+
+	/* Ensure we create a brand new file. We don't want to clobber our old file. */
+	if (!append)
+	{
+		if (fz_remove(filename) < 0)
+			if (errno != ENOENT)
+				fz_throw(ctx, FZ_ERROR_GENERIC, "cannot remove file '%s': %s", filename, strerror(errno));
+	}
 
 	file = fz_fopen(filename, append ? "ab" : "wb");
 	if (!file)
@@ -180,7 +206,7 @@ static void
 buffer_write(fz_context *ctx, void *opaque, const void *data, size_t len)
 {
 	fz_buffer *buffer = opaque;
-	fz_write_buffer(ctx, buffer, data, len);
+	fz_append_data(ctx, buffer, data, len);
 }
 
 static void
@@ -206,12 +232,9 @@ buffer_close(fz_context *ctx, void *opaque)
 fz_output *
 fz_new_output_with_buffer(fz_context *ctx, fz_buffer *buf)
 {
-	fz_output *out = fz_malloc_struct(ctx, fz_output);
-	out->opaque = fz_keep_buffer(ctx, buf);
-	out->write = buffer_write;
+	fz_output *out = fz_new_output(ctx, fz_keep_buffer(ctx, buf), buffer_write, buffer_close);
 	out->seek = buffer_seek;
 	out->tell = buffer_tell;
-	out->close = buffer_close;
 	return out;
 }
 
@@ -220,8 +243,8 @@ fz_drop_output(fz_context *ctx, fz_output *out)
 {
 	if (!out) return;
 	if (out->close)
-		out->close(ctx, out->opaque);
-	if (out->opaque != &fz_stdout_global && out->opaque != &fz_stderr_global)
+		out->close(ctx, out->state);
+	if (out->state != &fz_stdout_global && out->state != &fz_stderr_global)
 		fz_free(ctx, out);
 }
 
@@ -229,55 +252,40 @@ void
 fz_seek_output(fz_context *ctx, fz_output *out, fz_off_t off, int whence)
 {
 	if (!out) return;
-	out->seek(ctx, out->opaque, off, whence);
+	if (out->seek == NULL)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Cannot seek in unseekable output stream\n");
+	out->seek(ctx, out->state, off, whence);
 }
 
 fz_off_t
 fz_tell_output(fz_context *ctx, fz_output *out)
 {
 	if (!out) return 0;
-	return out->tell(ctx, out->opaque);
+	if (out->tell == NULL)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Cannot tell in untellable output stream\n");
+	return out->tell(ctx, out->state);
 }
 
-void
-fz_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list old_args)
+static void
+fz_write_emit(fz_context *ctx, void *out, int c)
 {
-	char buffer[256], *p = buffer;
-	size_t len;
-	va_list args;
-
-	if (!out) return;
-
-	/* First try using our fixed size buffer */
-	va_copy(args, old_args);
-	len = fz_vsnprintf(buffer, sizeof buffer, fmt, args);
-	va_copy_end(args);
-
-	/* If that failed, allocate a big enough buffer */
-	if (len > sizeof buffer)
-	{
-		p = fz_malloc(ctx, len);
-		va_copy(args, old_args);
-		fz_vsnprintf(p, len, fmt, args);
-		va_copy_end(args);
-	}
-
-	fz_try(ctx)
-		out->write(ctx, out->opaque, p, len);
-	fz_always(ctx)
-		if (p != buffer)
-			fz_free(ctx, p);
-	fz_catch(ctx)
-		fz_rethrow(ctx);
+	fz_write_byte(ctx, out, c);
 }
 
 void
-fz_printf(fz_context *ctx, fz_output *out, const char *fmt, ...)
+fz_write_vprintf(fz_context *ctx, fz_output *out, const char *fmt, va_list args)
+{
+	if (!out) return;
+	fz_format_string(ctx, out, fz_write_emit, fmt, args);
+}
+
+void
+fz_write_printf(fz_context *ctx, fz_output *out, const char *fmt, ...)
 {
 	va_list args;
 	if (!out) return;
 	va_start(args, fmt);
-	fz_vprintf(ctx, out, fmt, args);
+	fz_format_string(ctx, out, fz_write_emit, fmt, args);
 	va_end(args);
 }
 
@@ -286,7 +294,7 @@ fz_save_buffer(fz_context *ctx, fz_buffer *buf, const char *filename)
 {
 	fz_output *out = fz_new_output_with_path(ctx, filename, 0);
 	fz_try(ctx)
-		fz_write(ctx, out, buf->data, buf->len);
+		fz_write_data(ctx, out, buf->data, buf->len);
 	fz_always(ctx)
 		fz_drop_output(ctx, out);
 	fz_catch(ctx)
@@ -315,21 +323,28 @@ void fz_write_header(fz_context *ctx, fz_band_writer *writer, int w, int h, int 
 	writer->xres = xres;
 	writer->yres = yres;
 	writer->pagenum = pagenum;
+	writer->line = 0;
 	writer->header(ctx, writer);
 }
 
-void fz_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_start, int band_height, const unsigned char *samples)
+void fz_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_height, const unsigned char *samples)
 {
 	if (writer == NULL || writer->band == NULL)
 		return;
-	writer->band(ctx, writer, stride, band_start, band_height, samples);
-}
-
-void fz_write_trailer(fz_context *ctx, fz_band_writer *writer)
-{
-	if (writer == NULL || writer->trailer == NULL)
-		return;
-	writer->trailer(ctx, writer);
+	if (writer->line + band_height > writer->h)
+		band_height = writer->h - writer->line;
+	if (band_height < 0) {
+		fz_throw(ctx, FZ_ERROR_GENERIC, "Too much band data!");
+	}
+	if (band_height > 0) {
+		writer->band(ctx, writer, stride, writer->line, band_height, samples);
+		writer->line += band_height;
+	}
+	if (writer->line == writer->h && writer->trailer) {
+		writer->trailer(ctx, writer);
+		/* Protect against more band_height == 0 calls */
+		writer->line++;
+	}
 }
 
 void fz_drop_band_writer(fz_context *ctx, fz_band_writer *writer)

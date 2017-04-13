@@ -3,9 +3,34 @@
 static fz_image *pdf_load_jpx(fz_context *ctx, pdf_document *doc, pdf_obj *dict, int forcemask);
 
 static fz_image *
+pdf_load_jpx_imp(fz_context *ctx, pdf_document *doc, pdf_obj *rdb, pdf_obj *dict, fz_stream *cstm, int forcemask)
+{
+	fz_image *image = pdf_load_jpx(ctx, doc, dict, forcemask);
+
+	if (forcemask)
+	{
+		fz_pixmap_image *cimg = (fz_pixmap_image *)image;
+		fz_pixmap *mask_pixmap;
+		fz_pixmap *tile = fz_pixmap_image_tile(ctx, cimg);
+
+		if (tile->n != 1)
+		{
+			fz_pixmap *gray = fz_convert_pixmap(ctx, tile, fz_device_gray(ctx), 0);
+			fz_drop_pixmap(ctx, tile);
+			tile = gray;
+		}
+
+		mask_pixmap = fz_alpha_from_gray(ctx, tile);
+		fz_drop_pixmap(ctx, tile);
+		fz_set_pixmap_image_tile(ctx, cimg, mask_pixmap);
+	}
+
+	return image;
+}
+
+static fz_image *
 pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_obj *rdb, pdf_obj *dict, fz_stream *cstm, int forcemask)
 {
-	fz_stream *stm = NULL;
 	fz_image *image = NULL;
 	pdf_obj *obj, *res;
 
@@ -23,68 +48,43 @@ pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_obj *rdb, pdf_obj *di
 	int i;
 	fz_compressed_buffer *buffer;
 
-	fz_var(stm);
+	/* special case for JPEG2000 images */
+	if (pdf_is_jpx_image(ctx, dict))
+		return pdf_load_jpx_imp(ctx, doc, rdb, dict, cstm, forcemask);
+
+	w = pdf_to_int(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_Width, PDF_NAME_W));
+	h = pdf_to_int(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_Height, PDF_NAME_H));
+	bpc = pdf_to_int(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_BitsPerComponent, PDF_NAME_BPC));
+	if (bpc == 0)
+		bpc = 8;
+	imagemask = pdf_to_bool(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_ImageMask, PDF_NAME_IM));
+	interpolate = pdf_to_bool(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_Interpolate, PDF_NAME_I));
+
+	indexed = 0;
+	use_colorkey = 0;
+
+	if (imagemask)
+		bpc = 1;
+
+	if (w <= 0)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "image width is zero (or less)");
+	if (h <= 0)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "image height is zero (or less)");
+	if (bpc <= 0)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "image depth is zero (or less)");
+	if (bpc > 16)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "image depth is too large: %d", bpc);
+	if (w > (1 << 16))
+		fz_throw(ctx, FZ_ERROR_GENERIC, "image is too wide");
+	if (h > (1 << 16))
+		fz_throw(ctx, FZ_ERROR_GENERIC, "image is too high");
+
 	fz_var(mask);
 	fz_var(image);
 	fz_var(colorspace);
 
 	fz_try(ctx)
 	{
-		/* special case for JPEG2000 images */
-		if (pdf_is_jpx_image(ctx, dict))
-		{
-			image = pdf_load_jpx(ctx, doc, dict, forcemask);
-
-			if (forcemask)
-			{
-				fz_pixmap_image *cimg = (fz_pixmap_image *)image;
-				fz_pixmap *mask_pixmap;
-				fz_pixmap *tile = fz_pixmap_image_tile(ctx, cimg);
-				if (tile->n != 1)
-				{
-					fz_pixmap *gray;
-					fz_irect bbox;
-					if (tile->n != 2)
-						fz_warn(ctx, "soft mask should be grayscale");
-					gray = fz_new_pixmap_with_bbox(ctx, fz_device_gray(ctx), fz_pixmap_bbox(ctx, tile, &bbox), 0);
-					fz_convert_pixmap(ctx, gray, tile);
-					fz_drop_pixmap(ctx, tile);
-					tile = gray;
-				}
-				mask_pixmap = fz_alpha_from_gray(ctx, tile);
-				fz_drop_pixmap(ctx, tile);
-				fz_set_pixmap_image_tile(ctx, cimg, mask_pixmap);
-			}
-			break; /* Out of fz_try */
-		}
-
-		w = pdf_to_int(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_Width, PDF_NAME_W));
-		h = pdf_to_int(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_Height, PDF_NAME_H));
-		bpc = pdf_to_int(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_BitsPerComponent, PDF_NAME_BPC));
-		if (bpc == 0)
-			bpc = 8;
-		imagemask = pdf_to_bool(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_ImageMask, PDF_NAME_IM));
-		interpolate = pdf_to_bool(ctx, pdf_dict_geta(ctx, dict, PDF_NAME_Interpolate, PDF_NAME_I));
-
-		indexed = 0;
-		use_colorkey = 0;
-
-		if (imagemask)
-			bpc = 1;
-
-		if (w <= 0)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "image width is zero (or less)");
-		if (h <= 0)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "image height is zero (or less)");
-		if (bpc <= 0)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "image depth is zero (or less)");
-		if (bpc > 16)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "image depth is too large: %d", bpc);
-		if (w > (1 << 16))
-			fz_throw(ctx, FZ_ERROR_GENERIC, "image is too wide");
-		if (h > (1 << 16))
-			fz_throw(ctx, FZ_ERROR_GENERIC, "image is too high");
-
 		obj = pdf_dict_geta(ctx, dict, PDF_NAME_ColorSpace, PDF_NAME_CS);
 		if (obj && !imagemask && !forcemask)
 		{
@@ -173,10 +173,10 @@ pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_obj *rdb, pdf_obj *di
 	fz_always(ctx)
 	{
 		fz_drop_colorspace(ctx, colorspace);
+		fz_drop_image(ctx, mask);
 	}
 	fz_catch(ctx)
 	{
-		fz_drop_image(ctx, mask);
 		fz_drop_image(ctx, image);
 		fz_rethrow(ctx);
 	}
@@ -212,7 +212,6 @@ pdf_load_jpx(fz_context *ctx, pdf_document *doc, pdf_obj *dict, int forcemask)
 	fz_colorspace *colorspace = NULL;
 	fz_pixmap *pix = NULL;
 	pdf_obj *obj;
-	int indexed = 0;
 	fz_image *mask = NULL;
 	fz_image *img = NULL;
 
@@ -231,13 +230,10 @@ pdf_load_jpx(fz_context *ctx, pdf_document *doc, pdf_obj *dict, int forcemask)
 
 		obj = pdf_dict_get(ctx, dict, PDF_NAME_ColorSpace);
 		if (obj)
-		{
 			colorspace = pdf_load_colorspace(ctx, doc, obj);
-			indexed = fz_colorspace_is_indexed(ctx, colorspace);
-		}
 
 		len = fz_buffer_storage(ctx, buf, &data);
-		pix = fz_load_jpx(ctx, data, len, colorspace, indexed);
+		pix = fz_load_jpx(ctx, data, len, colorspace);
 
 		obj = pdf_dict_geta(ctx, dict, PDF_NAME_SMask, PDF_NAME_Mask);
 		if (pdf_is_dict(ctx, obj))
@@ -249,7 +245,7 @@ pdf_load_jpx(fz_context *ctx, pdf_document *doc, pdf_obj *dict, int forcemask)
 		}
 
 		obj = pdf_dict_geta(ctx, dict, PDF_NAME_Decode, PDF_NAME_D);
-		if (obj && !indexed)
+		if (obj && !fz_colorspace_is_indexed(ctx, colorspace))
 		{
 			float decode[FZ_MAX_COLORS * 2];
 			int i;
@@ -264,9 +260,10 @@ pdf_load_jpx(fz_context *ctx, pdf_document *doc, pdf_obj *dict, int forcemask)
 	}
 	fz_always(ctx)
 	{
+		fz_drop_image(ctx, mask);
+		fz_drop_pixmap(ctx, pix);
 		fz_drop_colorspace(ctx, colorspace);
 		fz_drop_buffer(ctx, buf);
-		fz_drop_pixmap(ctx, pix);
 	}
 	fz_catch(ctx)
 	{

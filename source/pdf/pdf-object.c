@@ -385,12 +385,6 @@ void pdf_set_str_len(fz_context *ctx, pdf_obj *obj, int newlen)
 	STRING(obj)->len = newlen;
 }
 
-pdf_obj *pdf_to_dict(fz_context *ctx, pdf_obj *obj)
-{
-	RESOLVE(obj);
-	return (obj >= PDF_OBJ__LIMIT && obj->kind == PDF_DICT ? obj : NULL);
-}
-
 int pdf_to_num(fz_context *ctx, pdf_obj *obj)
 {
 	if (!OBJ_IS_INDIRECT(obj))
@@ -523,7 +517,6 @@ pdf_objcmp(fz_context *ctx, pdf_obj *a, pdf_obj *b)
 				return 1;
 		}
 		return 0;
-
 	}
 	return 1;
 }
@@ -694,7 +687,12 @@ pdf_array_put(fz_context *ctx, pdf_obj *obj, int i, pdf_obj *item)
 	RESOLVE(obj);
 	if (!OBJ_IS_ARRAY(obj))
 		fz_throw(ctx, FZ_ERROR_GENERIC, "not an array (%s)", pdf_objkindstr(obj));
-	if (i < 0 || i >= ARRAY(obj)->len)
+	if (i == ARRAY(obj)->len)
+	{
+		pdf_array_push(ctx, obj, item);
+		return;
+	}
+	if (i < 0 || i > ARRAY(obj)->len)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "index out of bounds");
 
 	if (!item)
@@ -708,8 +706,12 @@ pdf_array_put(fz_context *ctx, pdf_obj *obj, int i, pdf_obj *item)
 void
 pdf_array_put_drop(fz_context *ctx, pdf_obj *obj, int i, pdf_obj *item)
 {
-	pdf_array_put(ctx, obj, i, item);
-	pdf_drop_obj(ctx, item);
+	fz_try(ctx)
+		pdf_array_put(ctx, obj, i, item);
+	fz_always(ctx)
+		pdf_drop_obj(ctx, item);
+	fz_catch(ctx)
+		fz_rethrow(ctx);
 }
 
 void
@@ -788,6 +790,7 @@ pdf_array_delete(fz_context *ctx, pdf_obj *obj, int i)
 	if (i < 0 || i >= ARRAY(obj)->len)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "index out of bounds");
 
+	prepare_object_for_alteration(ctx, obj, NULL);
 	pdf_drop_obj(ctx, ARRAY(obj)->items[i]);
 	ARRAY(obj)->items[i] = 0;
 	ARRAY(obj)->len--;
@@ -1042,26 +1045,17 @@ pdf_dict_get_val(fz_context *ctx, pdf_obj *obj, int i)
 }
 
 void
-pdf_dict_put_val_drop(fz_context *ctx, pdf_obj *obj, int i, pdf_obj *val)
+pdf_dict_put_val_null(fz_context *ctx, pdf_obj *obj, int idx)
 {
 	RESOLVE(obj);
 	if (!OBJ_IS_DICT(obj))
-	{
-		pdf_drop_obj(ctx, val);
 		fz_throw(ctx, FZ_ERROR_GENERIC, "not a dict (%s)", pdf_objkindstr(obj));
-	}
-	if (i < 0 || i >= DICT(obj)->len)
-	{
-		/* FIXME: Should probably extend the dict here */
-		pdf_drop_obj(ctx, val);
+	if (idx < 0 || idx >= DICT(obj)->len)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "index out of bounds");
-	}
 
-	if (!val)
-		val = PDF_OBJ_NULL;
-
-	pdf_drop_obj(ctx, DICT(obj)->items[i].v);
-	DICT(obj)->items[i].v = val;
+	prepare_object_for_alteration(ctx, obj, NULL);
+	pdf_drop_obj(ctx, DICT(obj)->items[idx].v);
+	DICT(obj)->items[idx].v = PDF_OBJ_NULL;
 }
 
 /* Returns 0 <= i < len for key found. Returns -1-len < i <= -1 for key
@@ -1583,7 +1577,7 @@ void
 pdf_sort_dict(fz_context *ctx, pdf_obj *obj)
 {
 	RESOLVE(obj);
-	if (OBJ_IS_DICT(obj))
+	if (!OBJ_IS_DICT(obj))
 		return;
 	if (!(obj->flags & PDF_FLAGS_SORTED))
 	{
@@ -2138,13 +2132,13 @@ int pdf_print_obj(fz_context *ctx, fz_output *out, pdf_obj *obj, int tight)
 	if ((n + 1) < sizeof buf)
 	{
 		pdf_sprint_obj(ctx, buf, sizeof buf, obj, tight);
-		fz_write(ctx, out, buf, n);
+		fz_write_data(ctx, out, buf, n);
 	}
 	else
 	{
 		ptr = fz_malloc(ctx, n + 1);
 		pdf_sprint_obj(ctx, ptr, n + 1, obj, tight);
-		fz_write(ctx, out, ptr, n);
+		fz_write_data(ctx, out, ptr, n);
 		fz_free(ctx, ptr);
 	}
 	return n;

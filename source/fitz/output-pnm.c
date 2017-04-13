@@ -17,11 +17,11 @@ pnm_write_header(fz_context *ctx, fz_band_writer *writer)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "pixmap must be grayscale or rgb to write as pnm");
 
 	if (n == 1)
-		fz_printf(ctx, out, "P5\n");
+		fz_write_printf(ctx, out, "P5\n");
 	if (n == 3)
-		fz_printf(ctx, out, "P6\n");
-	fz_printf(ctx, out, "%d %d\n", w, h);
-	fz_printf(ctx, out, "255\n");
+		fz_write_printf(ctx, out, "P6\n");
+	fz_write_printf(ctx, out, "%d %d\n", w, h);
+	fz_write_printf(ctx, out, "255\n");
 }
 
 static void
@@ -38,6 +38,9 @@ pnm_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_sta
 
 	if (n-alpha != 1 && n-alpha != 3)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "pixmap must be grayscale or rgb to write as pnm");
+
+	if (!out)
+		return;
 
 	if (end > h)
 		end = h;
@@ -58,7 +61,7 @@ pnm_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_sta
 			{
 			case 1:
 				/* No collation required */
-				fz_write(ctx, out, p, num_written);
+				fz_write_data(ctx, out, p, num_written);
 				p += num_written;
 				break;
 			case 2:
@@ -74,10 +77,13 @@ pnm_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_sta
 					*o++ = *p;
 					p += 2;
 				}
-				fz_write(ctx, out, buffer, num_written);
+				fz_write_data(ctx, out, buffer, num_written);
 				break;
 			}
 			case 3:
+				fz_write_data(ctx, out, p, num_written*3);
+				p += num_written*3;
+				break;
 			case 4:
 			{
 				char *o = buffer;
@@ -93,7 +99,7 @@ pnm_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_sta
 					*o++ = p[2];
 					p += n;
 				}
-				fz_write(ctx, out, buffer, num_written * 3);
+				fz_write_data(ctx, out, buffer, num_written * 3);
 				break;
 			}
 			}
@@ -117,14 +123,13 @@ void
 fz_write_pixmap_as_pnm(fz_context *ctx, fz_output *out, fz_pixmap *pixmap)
 {
 	fz_band_writer *writer = fz_new_pnm_band_writer(ctx, out);
-	fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 1);
-	fz_write_band(ctx, writer, pixmap->stride, 0, pixmap->h, pixmap->samples);
-	fz_write_trailer(ctx, writer);
+	fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 0);
+	fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	fz_drop_band_writer(ctx, writer);
 }
 
 void
-fz_save_pixmap_as_pnm(fz_context *ctx, fz_pixmap *pixmap, char *filename)
+fz_save_pixmap_as_pnm(fz_context *ctx, fz_pixmap *pixmap, const char *filename)
 {
 	fz_band_writer *writer = NULL;
 	fz_output *out = fz_new_output_with_path(ctx, filename, 0);
@@ -134,9 +139,8 @@ fz_save_pixmap_as_pnm(fz_context *ctx, fz_pixmap *pixmap, char *filename)
 	fz_try(ctx)
 	{
 		writer = fz_new_pnm_band_writer(ctx, out);
-		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 1);
-		fz_write_band(ctx, writer, pixmap->stride, 0, pixmap->h, pixmap->samples);
-		fz_write_trailer(ctx, writer);
+		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 0);
+		fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	}
 	fz_always(ctx)
 	{
@@ -160,22 +164,22 @@ pam_write_header(fz_context *ctx, fz_band_writer *writer)
 	int n = writer->n;
 	int alpha = writer->alpha;
 
-	fz_printf(ctx, out, "P7\n");
-	fz_printf(ctx, out, "WIDTH %d\n", w);
-	fz_printf(ctx, out, "HEIGHT %d\n", h);
-	fz_printf(ctx, out, "DEPTH %d\n", n);
-	fz_printf(ctx, out, "MAXVAL 255\n");
+	fz_write_printf(ctx, out, "P7\n");
+	fz_write_printf(ctx, out, "WIDTH %d\n", w);
+	fz_write_printf(ctx, out, "HEIGHT %d\n", h);
+	fz_write_printf(ctx, out, "DEPTH %d\n", n);
+	fz_write_printf(ctx, out, "MAXVAL 255\n");
 
 	n -= alpha;
 
-	if (n == 0 && alpha) fz_printf(ctx, out, "TUPLTYPE GRAYSCALE\n");
-	else if (n == 1 && !alpha) fz_printf(ctx, out, "TUPLTYPE GRAYSCALE\n");
-	else if (n == 1 && alpha) fz_printf(ctx, out, "TUPLTYPE GRAYSCALE_ALPHA\n");
-	else if (n == 3 && !alpha) fz_printf(ctx, out, "TUPLTYPE RGB\n");
-	else if (n == 3 && alpha) fz_printf(ctx, out, "TUPLTYPE RGB_ALPHA\n");
-	else if (n == 4 && !alpha) fz_printf(ctx, out, "TUPLTYPE CMYK\n");
-	else if (n == 5) fz_printf(ctx, out, "TUPLTYPE CMYK_ALPHA\n");
-	fz_printf(ctx, out, "ENDHDR\n");
+	if (n == 0 && alpha) fz_write_printf(ctx, out, "TUPLTYPE GRAYSCALE\n");
+	else if (n == 1 && !alpha) fz_write_printf(ctx, out, "TUPLTYPE GRAYSCALE\n");
+	else if (n == 1 && alpha) fz_write_printf(ctx, out, "TUPLTYPE GRAYSCALE_ALPHA\n");
+	else if (n == 3 && !alpha) fz_write_printf(ctx, out, "TUPLTYPE RGB\n");
+	else if (n == 3 && alpha) fz_write_printf(ctx, out, "TUPLTYPE RGB_ALPHA\n");
+	else if (n == 4 && !alpha) fz_write_printf(ctx, out, "TUPLTYPE CMYK\n");
+	else if (n == 5) fz_write_printf(ctx, out, "TUPLTYPE CMYK_ALPHA\n");
+	fz_write_printf(ctx, out, "ENDHDR\n");
 }
 
 static void
@@ -188,13 +192,16 @@ pam_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_sta
 	int y;
 	int end = band_start + band_height;
 
+	if (!out)
+		return;
+
 	if (end > h)
 		end = h;
 	end -= band_start;
 
 	for (y = 0; y < end; y++)
 	{
-		fz_write(ctx, out, sp, w * n);
+		fz_write_data(ctx, out, sp, w * n);
 		sp += stride;
 	}
 }
@@ -213,14 +220,13 @@ void
 fz_write_pixmap_as_pam(fz_context *ctx, fz_output *out, fz_pixmap *pixmap)
 {
 	fz_band_writer *writer = fz_new_pam_band_writer(ctx, out);
-	fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 1);
-	fz_write_band(ctx, writer, pixmap->stride, 0, pixmap->h, pixmap->samples);
-	fz_write_trailer(ctx, writer);
+	fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 0);
+	fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	fz_drop_band_writer(ctx, writer);
 }
 
 void
-fz_save_pixmap_as_pam(fz_context *ctx, fz_pixmap *pixmap, char *filename)
+fz_save_pixmap_as_pam(fz_context *ctx, fz_pixmap *pixmap, const char *filename)
 {
 	fz_band_writer *writer = NULL;
 	fz_output *out = fz_new_output_with_path(ctx, filename, 0);
@@ -230,9 +236,8 @@ fz_save_pixmap_as_pam(fz_context *ctx, fz_pixmap *pixmap, char *filename)
 	fz_try(ctx)
 	{
 		writer = fz_new_pam_band_writer(ctx, out);
-		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 1);
-		fz_write_band(ctx, writer, pixmap->stride, 0, pixmap->h, pixmap->samples);
-		fz_write_trailer(ctx, writer);
+		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, 0, 0, 0);
+		fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	}
 	fz_always(ctx)
 	{

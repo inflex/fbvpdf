@@ -42,7 +42,8 @@ fz_keep_image_store_key(fz_context *ctx, fz_image *image)
 void
 fz_drop_image_store_key(fz_context *ctx, fz_image *image)
 {
-	fz_drop_key_storable_key(ctx, &image->key_storable);
+	if (fz_drop_key_storable_key(ctx, &image->key_storable))
+		fz_free(ctx, image);
 }
 
 static int
@@ -85,7 +86,7 @@ static void
 fz_print_image_key(fz_context *ctx, fz_output *out, void *key_)
 {
 	fz_image_key *key = (fz_image_key *)key_;
-	fz_printf(ctx, out, "(image %d x %d sf=%d) ", key->image->w, key->image->h, key->l2factor);
+	fz_write_printf(ctx, out, "(image %d x %d sf=%d) ", key->image->w, key->image->h, key->l2factor);
 }
 
 static int
@@ -93,10 +94,10 @@ fz_needs_reap_image_key(fz_context *ctx, void *key_)
 {
 	fz_image_key *key = (fz_image_key *)key_;
 
-	return (key->image->key_storable.needs_reaping);
+	return fz_key_storable_needs_reaping(ctx, &key->image->key_storable);
 }
 
-static fz_store_type fz_image_store_type =
+static const fz_store_type fz_image_store_type =
 {
 	fz_make_hash_image_key,
 	fz_keep_image_key,
@@ -109,7 +110,12 @@ static fz_store_type fz_image_store_type =
 void
 fz_drop_image(fz_context *ctx, fz_image *image)
 {
-	fz_drop_key_storable(ctx, &image->key_storable);
+	if (fz_drop_key_storable(ctx, &image->key_storable))
+	{
+		fz_drop_colorspace(ctx, image->colorspace);
+		fz_drop_image(ctx, image->mask);
+		fz_free(ctx, image);
+	}
 }
 
 static void
@@ -373,17 +379,6 @@ fz_drop_image_imp(fz_context *ctx, fz_storable *image_)
 	image->drop_image(ctx, image);
 }
 
-void
-fz_drop_image_base(fz_context *ctx, fz_image *image)
-{
-	if (!image)
-		return;
-
-	fz_drop_colorspace(ctx, image->colorspace);
-	fz_drop_image(ctx, image->mask);
-	fz_free(ctx, image);
-}
-
 static void
 drop_compressed_image(fz_context *ctx, fz_image *image_)
 {
@@ -391,7 +386,6 @@ drop_compressed_image(fz_context *ctx, fz_image *image_)
 
 	fz_drop_pixmap(ctx, image->tile);
 	fz_drop_compressed_buffer(ctx, image->buffer);
-	fz_drop_image_base(ctx, &image->super);
 }
 
 static void
@@ -400,7 +394,6 @@ drop_pixmap_image(fz_context *ctx, fz_image *image_)
 	fz_pixmap_image *image = (fz_pixmap_image *)image_;
 
 	fz_drop_pixmap(ctx, image->tile);
-	fz_drop_image_base(ctx, &image->super);
 }
 
 static fz_pixmap *
@@ -436,7 +429,7 @@ compressed_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea
 		tile = fz_load_jxr(ctx, image->buffer->buffer->data, image->buffer->buffer->len);
 		break;
 	case FZ_IMAGE_JPX:
-		tile = fz_load_jpx(ctx, image->buffer->buffer->data, image->buffer->buffer->len, NULL, 0);
+		tile = fz_load_jpx(ctx, image->buffer->buffer->data, image->buffer->buffer->len, NULL);
 		break;
 	case FZ_IMAGE_JPEG:
 		/* Scan JPEG stream and patch missing height values in header */
@@ -500,7 +493,6 @@ pixmap_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea, in
 	 * a pointer to the original 'tile'.
 	 */
 	return fz_keep_pixmap(ctx, image->tile); /* That's all we can give you! */
-
 }
 
 static void
@@ -743,31 +735,20 @@ fz_new_image_from_pixmap(fz_context *ctx, fz_pixmap *pixmap, fz_image *mask)
 {
 	fz_pixmap_image *image;
 
-	assert(mask == NULL || mask->mask == NULL);
+	image = fz_new_derived_image(ctx, pixmap->w, pixmap->h, 8, pixmap->colorspace,
+				pixmap->xres, pixmap->yres, 0, 0,
+				NULL, NULL, mask, fz_pixmap_image,
+				pixmap_image_get_pixmap,
+				pixmap_image_get_size,
+				drop_pixmap_image);
+	image->tile = fz_keep_pixmap(ctx, pixmap);
+	image->super.decoded = 1;
 
-	fz_try(ctx)
-	{
-		image = (fz_pixmap_image *)
-				fz_new_image(ctx, pixmap->w, pixmap->h, 8, pixmap->colorspace,
-						pixmap->xres, pixmap->yres, 0, 0,
-						NULL, NULL, mask,
-						sizeof(fz_pixmap_image),
-						pixmap_image_get_pixmap,
-						pixmap_image_get_size,
-						drop_pixmap_image);
-		image->tile = fz_keep_pixmap(ctx, pixmap);
-		image->super.decoded = 1;
-	}
-	fz_catch(ctx)
-	{
-		fz_drop_image(ctx, mask);
-		fz_rethrow(ctx);
-	}
 	return &image->super;
 }
 
 fz_image *
-fz_new_image(fz_context *ctx, int w, int h, int bpc, fz_colorspace *colorspace,
+fz_new_image_of_size(fz_context *ctx, int w, int h, int bpc, fz_colorspace *colorspace,
 		int xres, int yres, int interpolate, int imagemask, float *decode,
 		int *colorkey, fz_image *mask, int size, fz_image_get_pixmap_fn *get,
 		fz_image_get_size_fn *get_size, fz_drop_image_fn *drop)
@@ -817,7 +798,7 @@ fz_new_image(fz_context *ctx, int w, int h, int bpc, fz_colorspace *colorspace,
 	}
 	if (i != image->n)
 		image->use_decode = 1;
-	image->mask = mask;
+	image->mask = fz_keep_image(ctx, mask);
 
 	return image;
 }
@@ -843,15 +824,13 @@ fz_new_image_from_compressed_buffer(fz_context *ctx, int w, int h,
 
 	fz_try(ctx)
 	{
-		image = (fz_compressed_image *)
-				fz_new_image(ctx, w, h, bpc,
-						colorspace, xres, yres,
-						interpolate, imagemask, decode,
-						colorkey, mask,
-						sizeof(fz_compressed_image),
-						compressed_image_get_pixmap,
-						compressed_image_get_size,
-						drop_compressed_image);
+		image = fz_new_derived_image(ctx, w, h, bpc,
+					colorspace, xres, yres,
+					interpolate, imagemask, decode,
+					colorkey, mask, fz_compressed_image,
+					compressed_image_get_pixmap,
+					compressed_image_get_size,
+					drop_compressed_image);
 		image->buffer = buffer;
 	}
 	fz_catch(ctx)
@@ -900,34 +879,6 @@ void fz_set_pixmap_image_tile(fz_context *ctx, fz_pixmap_image *image, fz_pixmap
 {
 	assert(image != NULL && image->super.get_pixmap == pixmap_image_get_pixmap);
 	((fz_pixmap_image *)image)->tile = pix;
-}
-
-fz_image *
-fz_new_image_from_data(fz_context *ctx, unsigned char *data, size_t len)
-{
-	fz_buffer *buffer = NULL;
-	fz_image *image;
-
-	fz_var(buffer);
-	fz_var(data);
-
-	fz_try(ctx)
-	{
-		buffer = fz_new_buffer_from_data(ctx, data, len);
-		data = NULL;
-		image = fz_new_image_from_buffer(ctx, buffer);
-	}
-	fz_always(ctx)
-	{
-		fz_drop_buffer(ctx, buffer);
-	}
-	fz_catch(ctx)
-	{
-		fz_free(ctx, data);
-		fz_rethrow(ctx);
-	}
-
-	return image;
 }
 
 fz_image *
@@ -1131,7 +1082,6 @@ static void drop_display_list_image(fz_context *ctx, fz_image *image_)
 	if (image == NULL)
 		return;
 	fz_drop_display_list(ctx, image->list);
-	fz_drop_image_base(ctx, &image->super);
 }
 
 static size_t
@@ -1153,10 +1103,9 @@ fz_image *fz_new_image_from_display_list(fz_context *ctx, float w, float h, fz_d
 	iw = w * SCALABLE_IMAGE_DPI / 72;
 	ih = h * SCALABLE_IMAGE_DPI / 72;
 
-	image = (fz_display_list_image *)
-		fz_new_image(ctx, iw, ih, 8, fz_device_rgb(ctx),
+	image = fz_new_derived_image(ctx, iw, ih, 8, fz_device_rgb(ctx),
 				SCALABLE_IMAGE_DPI, SCALABLE_IMAGE_DPI, 0, 0,
-				NULL, NULL, NULL, sizeof(fz_display_list_image),
+				NULL, NULL, NULL, fz_display_list_image,
 				display_list_image_get_pixmap,
 				display_list_image_get_size,
 				drop_display_list_image);

@@ -540,7 +540,7 @@ fz_draw_clip_stroke_path(fz_context *ctx, fz_device *devp, const fz_path *path, 
 		/* When there is no alpha in the current destination (state[0].dest->alpha == 0)
 		 * we have a choice. We can either create the new destination WITH alpha, or
 		 * we can copy the old pixmap contents in. We opt for the latter here, but
-		 * may want to revisit this decision in future. */
+		 * may want to revisit this decision in the future. */
 		state[1].dest = fz_new_pixmap_with_bbox(ctx, model, &bbox, state[0].dest->alpha);
 		if (state[0].dest->alpha)
 			fz_clear_pixmap(ctx, state[1].dest);
@@ -712,7 +712,7 @@ fz_draw_fill_text(fz_context *ctx, fz_device *devp, const fz_text *text, const f
 				fz_path *path = fz_outline_glyph(ctx, span->font, gid, &tm);
 				if (path)
 				{
-					fz_draw_fill_path(ctx, devp, path, 0, &ctm, colorspace, color, alpha);
+					fz_draw_fill_path(ctx, devp, path, 0, in_ctm, colorspace, color, alpha);
 					fz_drop_path(ctx, path);
 				}
 				else
@@ -791,7 +791,7 @@ fz_draw_stroke_text(fz_context *ctx, fz_device *devp, const fz_text *text, const
 				fz_path *path = fz_outline_glyph(ctx, span->font, gid, &tm);
 				if (path)
 				{
-					fz_draw_stroke_path(ctx, devp, path, stroke, &ctm, colorspace, color, alpha);
+					fz_draw_stroke_path(ctx, devp, path, stroke, in_ctm, colorspace, color, alpha);
 					fz_drop_path(ctx, path);
 				}
 				else
@@ -843,7 +843,7 @@ fz_draw_clip_text(fz_context *ctx, fz_device *devp, const fz_text *text, const f
 		/* When there is no alpha in the current destination (state[0].dest->alpha == 0)
 		 * we have a choice. We can either create the new destination WITH alpha, or
 		 * we can copy the old pixmap contents in. We opt for the latter here, but
-		 * may want to revisit this decision in future. */
+		 * may want to revisit this decision in the future. */
 		dest = fz_new_pixmap_with_bbox(ctx, model, &bbox, state[0].dest->alpha);
 		if (state[0].dest->alpha)
 			fz_clear_pixmap(ctx, dest);
@@ -905,7 +905,7 @@ fz_draw_clip_text(fz_context *ctx, fz_device *devp, const fz_text *text, const f
 							state[1].mask = NULL;
 							fz_try(ctx)
 							{
-								fz_draw_fill_path(ctx, devp, path, 0, &ctm, fz_device_gray(ctx), &white, 1);
+								fz_draw_fill_path(ctx, devp, path, 0, in_ctm, fz_device_gray(ctx), &white, 1);
 							}
 							fz_always(ctx)
 							{
@@ -968,7 +968,7 @@ fz_draw_clip_stroke_text(fz_context *ctx, fz_device *devp, const fz_text *text, 
 		/* When there is no alpha in the current destination (state[0].dest->alpha == 0)
 		 * we have a choice. We can either create the new destination WITH alpha, or
 		 * we can copy the old pixmap contents in. We opt for the latter here, but
-		 * may want to revisit this decision in future. */
+		 * may want to revisit this decision in the future. */
 		state[1].dest = dest = fz_new_pixmap_with_bbox(ctx, model, &bbox, state[0].dest->alpha);
 		if (state[0].dest->alpha)
 			fz_clear_pixmap(ctx, state[1].dest);
@@ -1028,7 +1028,7 @@ fz_draw_clip_stroke_text(fz_context *ctx, fz_device *devp, const fz_text *text, 
 							state[0].mask = NULL;
 							fz_try(ctx)
 							{
-								fz_draw_stroke_path(ctx, devp, path, stroke, &ctm, fz_device_gray(ctx), &white, 1);
+								fz_draw_stroke_path(ctx, devp, path, stroke, in_ctm, fz_device_gray(ctx), &white, 1);
 							}
 							fz_always(ctx)
 							{
@@ -1235,10 +1235,7 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 {
 	fz_draw_device *dev = (fz_draw_device*)devp;
 	fz_matrix local_ctm = concat(in_ctm, &dev->transform);
-	fz_pixmap *converted = NULL;
-	fz_pixmap *scaled = NULL;
 	fz_pixmap *pixmap;
-	fz_pixmap *orig_pixmap;
 	int after;
 	int dx, dy;
 	fz_draw_state *state = &dev->stack[dev->top];
@@ -1249,8 +1246,6 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 
 	fz_intersect_irect(fz_pixmap_bbox(ctx, state->dest, &clip), &state->scissor);
 
-	fz_var(scaled);
-
 	if (image->w == 0 || image->h == 0)
 		return;
 
@@ -1259,7 +1254,7 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 	 * the destination device to the source pixels. */
 	if (fz_try_invert_matrix(&inverse, &local_ctm))
 	{
-		/* Not invertible. Could just bale? Use the whole image
+		/* Not invertible. Could just bail? Use the whole image
 		 * for now. */
 		src_area.x0 = 0;
 		src_area.x1 = image->w;
@@ -1290,11 +1285,12 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 	}
 
 	pixmap = fz_get_pixmap_from_image(ctx, image, &src_area, &local_ctm, &dx, &dy);
-	orig_pixmap = pixmap;
 
 	/* convert images with more components (cmyk->rgb) before scaling */
 	/* convert images with fewer components (gray->rgb) after scaling */
 	/* convert images with expensive colorspace transforms after scaling */
+
+	fz_var(pixmap);
 
 	fz_try(ctx)
 	{
@@ -1307,17 +1303,15 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 
 		if (pixmap->colorspace != model && !after)
 		{
-			fz_irect bbox;
-			fz_pixmap_bbox(ctx, pixmap, &bbox);
-			converted = fz_new_pixmap_with_bbox(ctx, model, &bbox, (model ? pixmap->alpha : 1));
-			fz_convert_pixmap(ctx, converted, pixmap);
+			fz_pixmap *converted = fz_convert_pixmap(ctx, pixmap, model, 1);
+			fz_drop_pixmap(ctx, pixmap);
 			pixmap = converted;
 		}
 
 		if (!(devp->hints & FZ_DONT_INTERPOLATE_IMAGES) && ctx->tuning->image_scale(ctx->tuning->image_scale_arg, dx, dy, pixmap->w, pixmap->h))
 		{
 			int gridfit = alpha == 1.0f && !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3);
-			scaled = fz_transform_pixmap(ctx, dev, pixmap, &local_ctm, state->dest->x, state->dest->y, dx, dy, gridfit, &clip);
+			fz_pixmap *scaled = fz_transform_pixmap(ctx, dev, pixmap, &local_ctm, state->dest->x, state->dest->y, dx, dy, gridfit, &clip);
 			if (!scaled)
 			{
 				if (dx < 1)
@@ -1327,7 +1321,10 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 				scaled = fz_scale_pixmap_cached(ctx, pixmap, pixmap->x, pixmap->y, dx, dy, NULL, dev->cache_x, dev->cache_y);
 			}
 			if (scaled)
+			{
+				fz_drop_pixmap(ctx, pixmap);
 				pixmap = scaled;
+			}
 		}
 
 		if (pixmap->colorspace != model)
@@ -1341,10 +1338,8 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 			else
 #endif
 			{
-				fz_irect bbox;
-				fz_pixmap_bbox(ctx, pixmap, &bbox);
-				converted = fz_new_pixmap_with_bbox(ctx, model, &bbox, pixmap->alpha);
-				fz_convert_pixmap(ctx, converted, pixmap);
+				fz_pixmap *converted = fz_convert_pixmap(ctx, pixmap, model, 1);
+				fz_drop_pixmap(ctx, pixmap);
 				pixmap = converted;
 			}
 		}
@@ -1355,15 +1350,9 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 			fz_knockout_end(ctx, dev);
 	}
 	fz_always(ctx)
-	{
-		fz_drop_pixmap(ctx, scaled);
-		fz_drop_pixmap(ctx, converted);
-		fz_drop_pixmap(ctx, orig_pixmap);
-	}
+		fz_drop_pixmap(ctx, pixmap);
 	fz_catch(ctx)
-	{
 		fz_rethrow(ctx);
-	}
 }
 
 static void
@@ -1376,7 +1365,6 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 	float colorfv[FZ_MAX_COLORS];
 	fz_pixmap *scaled = NULL;
 	fz_pixmap *pixmap;
-	fz_pixmap *orig_pixmap;
 	int dx, dy;
 	int i, n;
 	fz_draw_state *state = &dev->stack[dev->top];
@@ -1399,7 +1387,7 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 	 * the destination device to the source pixels. */
 	if (fz_try_invert_matrix(&inverse, &local_ctm))
 	{
-		/* Not invertible. Could just bale? Use the whole image
+		/* Not invertible. Could just bail? Use the whole image
 		 * for now. */
 		src_area.x0 = 0;
 		src_area.x1 = image->w;
@@ -1430,7 +1418,8 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 	}
 
 	pixmap = fz_get_pixmap_from_image(ctx, image, &src_area, &local_ctm, &dx, &dy);
-	orig_pixmap = pixmap;
+
+	fz_var(pixmap);
 
 	fz_try(ctx)
 	{
@@ -1450,7 +1439,10 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 				scaled = fz_scale_pixmap_cached(ctx, pixmap, pixmap->x, pixmap->y, dx, dy, NULL, dev->cache_x, dev->cache_y);
 			}
 			if (scaled)
+			{
+				fz_drop_pixmap(ctx, pixmap);
 				pixmap = scaled;
+			}
 		}
 
 		n = fz_colorspace_n(ctx, model);
@@ -1466,19 +1458,13 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 
 		fz_paint_image_with_color(state->dest, &state->scissor, state->shape, pixmap, &local_ctm, colorbv, !(devp->hints & FZ_DONT_INTERPOLATE_IMAGES), devp->flags & FZ_DEVFLAG_GRIDFIT_AS_TILED);
 
-
 		if (state->blendmode & FZ_BLEND_KNOCKOUT)
 			fz_knockout_end(ctx, dev);
 	}
 	fz_always(ctx)
-	{
-		fz_drop_pixmap(ctx, scaled);
-		fz_drop_pixmap(ctx, orig_pixmap);
-	}
+		fz_drop_pixmap(ctx, pixmap);
 	fz_catch(ctx)
-	{
 		fz_rethrow(ctx);
-	}
 }
 
 static void
@@ -1492,7 +1478,6 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 	fz_pixmap *shape = NULL;
 	fz_pixmap *scaled = NULL;
 	fz_pixmap *pixmap = NULL;
-	fz_pixmap *orig_pixmap = NULL;
 	int dx, dy;
 	fz_draw_state *state = push_stack(ctx, dev);
 	fz_colorspace *model = state->dest->colorspace;
@@ -1502,12 +1487,6 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 	STACK_PUSHED("clip image mask");
 	fz_pixmap_bbox(ctx, state->dest, &clip);
 	fz_intersect_irect(&clip, &state->scissor);
-
-	fz_var(mask);
-	fz_var(dest);
-	fz_var(shape);
-	fz_var(pixmap);
-	fz_var(orig_pixmap);
 
 	if (image->w == 0 || image->h == 0)
 	{
@@ -1534,18 +1513,22 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 		fz_intersect_irect(&bbox, fz_irect_from_rect(&bbox2, &tscissor));
 	}
 
+	pixmap = fz_get_pixmap_from_image(ctx, image, NULL, &local_ctm, &dx, &dy);
+
+	fz_var(mask);
+	fz_var(dest);
+	fz_var(shape);
+	fz_var(pixmap);
+
 	fz_try(ctx)
 	{
-		pixmap = fz_get_pixmap_from_image(ctx, image, NULL, &local_ctm, &dx, &dy);
-		orig_pixmap = pixmap;
-
 		state[1].mask = mask = fz_new_pixmap_with_bbox(ctx, NULL, &bbox, 1);
 		fz_clear_pixmap(ctx, mask);
 
 		/* When there is no alpha in the current destination (state[0].dest->alpha == 0)
 		 * we have a choice. We can either create the new destination WITH alpha, or
 		 * we can copy the old pixmap contents in. We opt for the latter here, but
-		 * may want to revisit this decision in future. */
+		 * may want to revisit this decision in the future. */
 		state[1].dest = dest = fz_new_pixmap_with_bbox(ctx, model, &bbox, state[0].dest->alpha);
 		if (state[0].dest->alpha)
 			fz_clear_pixmap(ctx, state[1].dest);
@@ -1573,7 +1556,10 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 				scaled = fz_scale_pixmap_cached(ctx, pixmap, pixmap->x, pixmap->y, dx, dy, NULL, dev->cache_x, dev->cache_y);
 			}
 			if (scaled)
+			{
+				fz_drop_pixmap(ctx, pixmap);
 				pixmap = scaled;
+			}
 		}
 #ifdef DUMP_GROUP_BLENDS
 		dump_spaces(dev->top, "");
@@ -1592,14 +1578,9 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 #endif
 	}
 	fz_always(ctx)
-	{
-		fz_drop_pixmap(ctx, scaled);
-		fz_drop_pixmap(ctx, orig_pixmap);
-	}
+		fz_drop_pixmap(ctx, pixmap);
 	fz_catch(ctx)
-	{
 		emergency_pop_stack(ctx, dev, state);
-	}
 }
 
 static void
@@ -1969,10 +1950,10 @@ static void
 fz_print_tile(fz_context *ctx, fz_output *out, void *key_)
 {
 	tile_key *key = (tile_key *)key_;
-	fz_printf(ctx, out, "(tile id=%x, ctm=%g %g %g %g) ", key->id, key->ctm[0], key->ctm[1], key->ctm[2], key->ctm[3]);
+	fz_write_printf(ctx, out, "(tile id=%x, ctm=%g %g %g %g) ", key->id, key->ctm[0], key->ctm[1], key->ctm[2], key->ctm[3]);
 }
 
-static fz_store_type fz_tile_store_type =
+static const fz_store_type fz_tile_store_type =
 {
 	fz_make_hash_tile_key,
 	fz_keep_tile_key,
@@ -2313,7 +2294,7 @@ fz_draw_render_flags(fz_context *ctx, fz_device *devp, int set, int clear)
 fz_device *
 fz_new_draw_device(fz_context *ctx, const fz_matrix *transform, fz_pixmap *dest)
 {
-	fz_draw_device *dev = fz_new_device(ctx, sizeof *dev);
+	fz_draw_device *dev = fz_new_derived_device(ctx, fz_draw_device);
 
 	dev->super.drop_device = fz_draw_drop_device;
 
@@ -2423,7 +2404,7 @@ fz_bound_path_accurate(fz_context *ctx, fz_irect *bbox, const fz_irect *scissor,
 const char *fz_draw_options_usage =
 	"Common raster format output options:\n"
 	"\trotate=N: rotate rendered pages N degrees counterclockwise\n"
-	"\tresolution=N: set both X and Y resolution of rendered pages in pixels per inch\n"
+	"\tresolution=N: set both X and Y resolution in pixels per inch\n"
 	"\tx-resolution=N: X resolution of rendered pages in pixels per inch\n"
 	"\ty-resolution=N: Y resolution of rendered pages in pixels per inch\n"
 	"\twidth=N: render pages to fit N pixels wide (ignore resolution option)\n"

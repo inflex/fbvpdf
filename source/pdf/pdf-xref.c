@@ -20,14 +20,14 @@ static inline int iswhite(int ch)
  * xref tables
  */
 
-static void pdf_drop_xref_sections(fz_context *ctx, pdf_document *doc)
+static void pdf_drop_xref_sections_imp(fz_context *ctx, pdf_document *doc, pdf_xref *xref_sections, int num_xref_sections)
 {
 	pdf_unsaved_sig *usig;
 	int x, e;
 
-	for (x = 0; x < doc->num_xref_sections; x++)
+	for (x = 0; x < num_xref_sections; x++)
 	{
-		pdf_xref *xref = &doc->xref_sections[x];
+		pdf_xref *xref = &xref_sections[x];
 		pdf_xref_subsec *sub = xref->subsec;
 
 		while (sub != NULL)
@@ -60,7 +60,16 @@ static void pdf_drop_xref_sections(fz_context *ctx, pdf_document *doc)
 		}
 	}
 
-	fz_free(ctx, doc->xref_sections);
+	fz_free(ctx, xref_sections);
+}
+
+static void pdf_drop_xref_sections(fz_context *ctx, pdf_document *doc)
+{
+	pdf_drop_xref_sections_imp(ctx, doc, doc->saved_xref_sections, doc->saved_num_xref_sections);
+	pdf_drop_xref_sections_imp(ctx, doc, doc->xref_sections, doc->num_xref_sections);
+
+	doc->saved_xref_sections = NULL;
+	doc->saved_num_xref_sections = 0;
 	doc->xref_sections = NULL;
 	doc->num_xref_sections = 0;
 	doc->num_incremental_sections = 0;
@@ -130,7 +139,7 @@ pdf_obj *pdf_trailer(fz_context *ctx, pdf_document *doc)
 	/* Return the document's final trailer */
 	pdf_xref *xref = &doc->xref_sections[0];
 
-	return xref->trailer;
+	return xref ? xref->trailer : NULL;
 }
 
 void pdf_set_populating_xref_trailer(fz_context *ctx, pdf_document *doc, pdf_obj *trailer)
@@ -534,6 +543,36 @@ void pdf_replace_xref(fz_context *ctx, pdf_document *doc, pdf_xref_entry *entrie
 		pdf_drop_obj(ctx, trailer);
 		fz_rethrow(ctx);
 	}
+}
+
+void pdf_forget_xref(fz_context *ctx, pdf_document *doc)
+{
+	pdf_obj *trailer = pdf_keep_obj(ctx, pdf_trailer(ctx, doc));
+
+	if (doc->saved_xref_sections)
+		pdf_drop_xref_sections_imp(ctx, doc, doc->saved_xref_sections, doc->saved_num_xref_sections);
+
+	doc->saved_xref_sections = doc->xref_sections;
+	doc->saved_num_xref_sections = doc->num_xref_sections;
+
+	doc->startxref = 0;
+	doc->num_xref_sections = 0;
+	doc->num_incremental_sections = 0;
+	doc->xref_base = 0;
+	doc->disallow_new_increments = 0;
+
+	fz_try(ctx)
+	{
+		pdf_get_populating_xref_entry(ctx, doc, 0);
+	}
+	fz_catch(ctx)
+	{
+		pdf_drop_obj(ctx, trailer);
+		fz_rethrow(ctx);
+	}
+
+	/* Set the trailer of the final xref section. */
+	doc->xref_sections[0].trailer = trailer;
 }
 
 /*
@@ -1477,6 +1516,7 @@ pdf_drop_document_imp(fz_context *ctx, pdf_document *doc)
 		fz_free(ctx, doc->type3_fonts);
 
 		pdf_drop_ocg(ctx, doc);
+		pdf_drop_portfolio(ctx, doc);
 
 		pdf_empty_store(ctx, doc);
 
@@ -1488,6 +1528,8 @@ pdf_drop_document_imp(fz_context *ctx, pdf_document *doc)
 			pdf_drop_obj(ctx, doc->orphans[i]);
 
 		fz_free(ctx, doc->orphans);
+
+		fz_free(ctx, doc->rev_page_map);
 	}
 	fz_always(ctx)
 	{
@@ -1772,7 +1814,6 @@ pdf_obj_read(fz_context *ctx, pdf_document *doc, fz_off_t *offset, int *nump, pd
 static void
 pdf_load_hinted_page(fz_context *ctx, pdf_document *doc, int pagenum)
 {
-
 	if (!doc->hints_loaded || !doc->linear_page_refs)
 		return;
 
@@ -1796,7 +1837,6 @@ pdf_load_hinted_page(fz_context *ctx, pdf_document *doc, int pagenum)
 		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
 		/* Silently swallow the error and proceed as normal */
 	}
-
 }
 
 static int
@@ -1928,6 +1968,7 @@ object_updated:
 			{
 				pdf_repair_xref(ctx, doc);
 				pdf_prime_xref_index(ctx, doc);
+				pdf_repair_obj_stms(ctx, doc);
 			}
 			fz_catch(ctx)
 			{
@@ -2087,6 +2128,12 @@ pdf_update_object(fz_context *ctx, pdf_document *doc, int num, pdf_obj *newobj)
 		return;
 	}
 
+	if (!newobj)
+	{
+		pdf_delete_object(ctx, doc, num);
+		return;
+	}
+
 	x = pdf_get_incremental_xref_entry(ctx, doc, num);
 
 	pdf_drop_obj(ctx, x->obj);
@@ -2181,7 +2228,7 @@ pdf_lookup_metadata(fz_context *ctx, pdf_document *doc, const char *key, char *b
 static pdf_document *
 pdf_new_document(fz_context *ctx, fz_stream *file)
 {
-	pdf_document *doc = fz_new_document(ctx, pdf_document);
+	pdf_document *doc = fz_new_derived_document(ctx, pdf_document);
 
 	doc->super.drop_document = (fz_document_drop_fn *)pdf_drop_document_imp;
 	doc->super.needs_password = (fz_document_needs_password_fn *)pdf_needs_password;
@@ -2451,7 +2498,7 @@ pdf_load_hints(fz_context *ctx, pdf_document *doc, int objnum)
 		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
 		/* Don't try to load hints again */
 		doc->hints_loaded = 1;
-		/* We won't use the linearized object any more. */
+		/* We won't use the linearized object anymore. */
 		doc->file_reading_linearly = 0;
 		/* Any other error becomes a TRYLATER */
 		fz_throw(ctx, FZ_ERROR_TRYLATER, "malformed hints object");
@@ -2663,6 +2710,7 @@ pdf_document *pdf_create_document(fz_context *ctx)
 		doc->xref_base = 0;
 		doc->disallow_new_increments = 0;
 		pdf_get_populating_xref_entry(ctx, doc, 0);
+
 		trailer = pdf_new_dict(ctx, doc, 2);
 		pdf_dict_put_drop(ctx, trailer, PDF_NAME_Size, pdf_new_int(ctx, doc, 3));
 		o = root = pdf_new_dict(ctx, doc, 2);
@@ -2677,6 +2725,7 @@ pdf_document *pdf_create_document(fz_context *ctx)
 		pdf_dict_put_drop(ctx, pages, PDF_NAME_Type, PDF_NAME_Pages);
 		pdf_dict_put_drop(ctx, pages, PDF_NAME_Count, pdf_new_int(ctx, doc, 0));
 		pdf_dict_put_drop(ctx, pages, PDF_NAME_Kids, pdf_new_array(ctx, doc, 1));
+
 		/* Set the trailer of the final xref section. */
 		doc->xref_sections[0].trailer = trailer;
 	}
@@ -2707,9 +2756,9 @@ pdf_recognize(fz_context *doc, const char *magic)
 
 fz_document_handler pdf_document_handler =
 {
-	(fz_document_recognize_fn *)&pdf_recognize,
-	(fz_document_open_fn *)&pdf_open_document,
-	(fz_document_open_with_stream_fn *)&pdf_open_document_with_stream
+	pdf_recognize,
+	(fz_document_open_fn *) pdf_open_document,
+	(fz_document_open_with_stream_fn *) pdf_open_document_with_stream
 };
 
 void pdf_mark_xref(fz_context *ctx, pdf_document *doc)

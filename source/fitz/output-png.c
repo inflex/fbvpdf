@@ -2,10 +2,6 @@
 
 #include <zlib.h>
 
-#ifndef PATH_MAX
-#define PATH_MAX (1024)
-#endif
-
 static inline void big32(unsigned char *buf, unsigned int v)
 {
 	buf[0] = (v >> 24) & 0xff;
@@ -18,8 +14,8 @@ static void putchunk(fz_context *ctx, fz_output *out, char *tag, unsigned char *
 {
 	unsigned int sum;
 	fz_write_int32_be(ctx, out, size);
-	fz_write(ctx, out, tag, 4);
-	fz_write(ctx, out, data, size);
+	fz_write_data(ctx, out, tag, 4);
+	fz_write_data(ctx, out, data, size);
 	sum = crc32(0, NULL, 0);
 	sum = crc32(sum, (unsigned char*)tag, 4);
 	sum = crc32(sum, data, size);
@@ -37,9 +33,8 @@ fz_save_pixmap_as_png(fz_context *ctx, fz_pixmap *pixmap, const char *filename)
 	fz_try(ctx)
 	{
 		writer = fz_new_png_band_writer(ctx, out);
-		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, pixmap->xres, pixmap->yres, 1);
-		fz_write_band(ctx, writer, pixmap->stride, 0, pixmap->h, pixmap->samples);
-		fz_write_trailer(ctx, writer);
+		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, pixmap->xres, pixmap->yres, 0);
+		fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	}
 	fz_always(ctx)
 	{
@@ -64,9 +59,8 @@ fz_write_pixmap_as_png(fz_context *ctx, fz_output *out, const fz_pixmap *pixmap)
 
 	fz_try(ctx)
 	{
-		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, pixmap->xres, pixmap->yres, 1);
-		fz_write_band(ctx, writer, pixmap->stride, 0, pixmap->h, pixmap->samples);
-		fz_write_trailer(ctx, writer);
+		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, pixmap->xres, pixmap->yres, 0);
+		fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	}
 	fz_always(ctx)
 	{
@@ -120,7 +114,7 @@ png_write_header(fz_context *ctx, fz_band_writer *writer_)
 	head[11] = 0; /* filter */
 	head[12] = 0; /* interlace */
 
-	fz_write(ctx, out, pngsig, 8);
+	fz_write_data(ctx, out, pngsig, 8);
 	putchunk(ctx, out, "IHDR", head, 13);
 }
 
@@ -132,6 +126,9 @@ png_write_band(fz_context *ctx, fz_band_writer *writer_, int stride, int band_st
 	unsigned char *dp;
 	int y, x, k, err, finalband;
 	int w, h, n;
+
+	if (!out)
+		return;
 
 	w = writer->super.w;
 	h = writer->super.h;
@@ -260,8 +257,7 @@ png_from_pixmap(fz_context *ctx, fz_pixmap *pix, int drop)
 	{
 		if (pix->colorspace && pix->colorspace != fz_device_gray(ctx) && pix->colorspace != fz_device_rgb(ctx))
 		{
-			pix2 = fz_new_pixmap(ctx, fz_device_rgb(ctx), pix->w, pix->h, pix->alpha);
-			fz_convert_pixmap(ctx, pix2, pix);
+			pix2 = fz_convert_pixmap(ctx, pix, fz_device_rgb(ctx), 1);
 			if (drop)
 				fz_drop_pixmap(ctx, pix);
 			pix = pix2;
@@ -302,75 +298,4 @@ fz_buffer *
 fz_new_buffer_from_pixmap_as_png(fz_context *ctx, fz_pixmap *pix)
 {
 	return png_from_pixmap(ctx, pix, 0);
-}
-
-/* PNG output writer */
-
-typedef struct fz_png_writer_s fz_png_writer;
-
-struct fz_png_writer_s
-{
-	fz_document_writer super;
-	fz_draw_options options;
-	fz_pixmap *pixmap;
-	int count;
-	char *path;
-};
-
-const char *fz_png_write_options_usage = "";
-
-static fz_device *
-png_begin_page(fz_context *ctx, fz_document_writer *wri_, const fz_rect *mediabox)
-{
-	fz_png_writer *wri = (fz_png_writer*)wri_;
-	return fz_new_draw_device_with_options(ctx, &wri->options, mediabox, &wri->pixmap);
-}
-
-static void
-png_end_page(fz_context *ctx, fz_document_writer *wri_, fz_device *dev)
-{
-	fz_png_writer *wri = (fz_png_writer*)wri_;
-	char path[PATH_MAX];
-
-	fz_close_device(ctx, dev);
-	fz_drop_device(ctx, dev);
-
-	wri->count += 1;
-
-	fz_format_output_path(ctx, path, sizeof path, wri->path, wri->count);
-	fz_save_pixmap_as_png(ctx, wri->pixmap, path);
-	fz_drop_pixmap(ctx, wri->pixmap);
-	wri->pixmap = NULL;
-}
-
-static void
-png_drop_writer(fz_context *ctx, fz_document_writer *wri_)
-{
-	fz_png_writer *wri = (fz_png_writer*)wri_;
-	fz_drop_pixmap(ctx, wri->pixmap);
-	fz_free(ctx, wri->path);
-}
-
-fz_document_writer *
-fz_new_png_writer(fz_context *ctx, const char *path, const char *options)
-{
-	fz_png_writer *wri;
-
-	wri = fz_malloc_struct(ctx, fz_png_writer);
-	wri->super.begin_page = png_begin_page;
-	wri->super.end_page = png_end_page;
-	wri->super.drop_writer = png_drop_writer;
-
-	fz_try(ctx)
-	{
-		fz_parse_draw_options(ctx, &wri->options, options);
-		wri->path = fz_strdup(ctx, path ? path : "out-%04d.png");
-	}
-	fz_catch(ctx)
-	{
-		fz_free(ctx, wri);
-		fz_rethrow(ctx);
-	}
-
-	return (fz_document_writer*)wri;
 }

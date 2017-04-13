@@ -148,7 +148,9 @@ static float layout_w = DEFAULT_LAYOUT_W;
 static float layout_h = DEFAULT_LAYOUT_H;
 static float layout_em = DEFAULT_LAYOUT_EM;
 static char *layout_css = NULL;
+static int layout_use_doc_css = 1;
 
+static const char *fix_title = "MuPDFGL";
 static const char *title = "MuPDF/GL";
 static fz_document *doc = NULL;
 static fz_page *page = NULL;
@@ -179,6 +181,7 @@ static int showoutline = 0;
 static int showlinks = 0;
 static int showsearch = 0;
 static int showinfo = 0;
+static int showhelp = 0;
 
 static int history_count = 0;
 static int history[256];
@@ -286,7 +289,6 @@ void render_page(void)
 			break;
 		}
 	}
-
 }
 
 static void push_history(void)
@@ -589,7 +591,11 @@ static void do_links(fz_link *link, int xofs, int yofs)
 					open_browser(link->uri);
 				else
 				{
-					jump_to_page(fz_resolve_link(ctx, doc, link->uri, NULL, NULL));
+					int p = fz_resolve_link(ctx, doc, link->uri, NULL, NULL);
+					if (p >= 0)
+						jump_to_page(p);
+					else
+						fz_warn(ctx, "cannot find link destination '%s'", link->uri);
 					ui_needs_update = 1;
 				}
 			}
@@ -708,25 +714,24 @@ static void do_forms(float xofs, float yofs)
 
 static void toggle_fullscreen(void)
 {
-#if 0
-	static int oldw = 100, oldh = 100, oldx = 0, oldy = 0;
-
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	static int win_x = 0, win_y = 0;
+	static int win_w = 100, win_h = 100;
+	static int win_rr = 60;
 	if (!isfullscreen)
 	{
-		oldw = glutGet(GLUT_WINDOW_WIDTH);
-		oldh = glutGet(GLUT_WINDOW_HEIGHT);
-		oldx = glutGet(GLUT_WINDOW_X);
-		oldy = glutGet(GLUT_WINDOW_Y);
-		glutFullScreen();
+		const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+		glfwGetWindowPos(window, &win_x, &win_y);
+		glfwGetWindowSize(window, &win_w, &win_h);
+		win_rr = mode->refreshRate;
+		glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
 		isfullscreen = 1;
 	}
 	else
 	{
-		glutPositionWindow(oldx, oldy);
-		glutReshapeWindow(oldw, oldh);
+		glfwSetWindowMonitor(window, NULL, win_x, win_y, win_w, win_h, win_rr);
 		isfullscreen = 0;
 	}
-#endif
 }
 
 static void shrinkwrap(void)
@@ -865,7 +870,7 @@ static void do_app(void)
 		quit();
 
 	if (ui.down || ui.middle || ui.right || ui.key)
-		showinfo = 0;
+		showinfo = showhelp = 0;
 
 	if (!ui.focus && ui.key)
 	{
@@ -944,14 +949,15 @@ static void do_app(void)
 		case '-': currentzoom = zoom_out(currentzoom); break;
 		case '[': currentrotate += 90; break;
 		case ']': currentrotate -= 90; break;
-		case 'l': showlinks = !showlinks; break;
+		case 'L': showlinks = !showlinks; break;
 		case 'i': showinfo = !showinfo; break;
 		case '/': search_dir = 1; showsearch = 1; search_input.p = search_input.text; search_input.q = search_input.end; break;
 		case '?': search_dir = -1; showsearch = 1; search_input.p = search_input.text; search_input.q = search_input.end; break;
-		case KEY_UP: scroll_y -= 10; break;
-		case KEY_DOWN: scroll_y += 10; break;
-		case KEY_LEFT: scroll_x -= 10; break;
-		case KEY_RIGHT: scroll_x += 10; break;
+		case 'k': case KEY_UP: scroll_y -= 10; break;
+		case 'j': case KEY_DOWN: scroll_y += 10; break;
+		case 'h': case KEY_LEFT: scroll_x -= 10; break;
+		case 'l': case KEY_RIGHT: scroll_x += 10; break;
+		case KEY_F1: showhelp = !showhelp; break;
 		}
 
 		if (ui.key >= '0' && ui.key <= '9')
@@ -1033,6 +1039,68 @@ static void do_info(void)
 			fz_strlcat(buf, "none", sizeof buf);
 		y = do_info_line(x, y, "Permissions", buf);
 	}
+}
+
+static int do_help_line(int x, int y, char *label, char *text)
+{
+	ui_draw_string(ctx, x, y, label);
+	ui_draw_string(ctx, x+100, y, text);
+	return y + ui.lineheight;
+}
+
+static void do_help(void)
+{
+	int x = canvas_x + 4 * ui.lineheight;
+	int y = canvas_y + 4 * ui.lineheight;
+	int w = canvas_w - 8 * ui.lineheight;
+	int h = 34 * ui.lineheight;
+
+	glBegin(GL_TRIANGLE_STRIP);
+	{
+		glColor4f(0.9f, 0.9f, 0.9f, 1.0f);
+		glVertex2f(x, y);
+		glVertex2f(x, y + h);
+		glVertex2f(x + w, y);
+		glVertex2f(x + w, y + h);
+	}
+	glEnd();
+
+	x += ui.lineheight;
+	y += ui.lineheight + ui.baseline;
+
+	glColor4f(0, 0, 0, 1);
+	y = do_help_line(x, y, "MuPDF", FZ_VERSION);
+	y += ui.lineheight;
+	y = do_help_line(x, y, "q", "quit");
+	y = do_help_line(x, y, "r", "reload file");
+	y = do_help_line(x, y, "f", "fullscreen window");
+	y = do_help_line(x, y, "w", "shrink wrap window");
+	y = do_help_line(x, y, "i", "show document information");
+	y = do_help_line(x, y, "o", "show/hide outline");
+	y = do_help_line(x, y, "L", "show/hide links");
+	y += ui.lineheight;
+	y = do_help_line(x, y, "b", "smart move backward");
+	y = do_help_line(x, y, "Space", "smart move forward");
+	y = do_help_line(x, y, ", or PgUp", "go backward");
+	y = do_help_line(x, y, ". or PgDn", "go forward");
+	y = do_help_line(x, y, "<", "go backward 10 pages");
+	y = do_help_line(x, y, ">", "go forward 10 pages");
+	y = do_help_line(x, y, "N g", "go to page N");
+	y = do_help_line(x, y, "G", "go to last page");
+	y += ui.lineheight;
+	y = do_help_line(x, y, "t", "go backward in history");
+	y = do_help_line(x, y, "T", "go forward in history");
+	y = do_help_line(x, y, "N m", "save location in bookmark N");
+	y = do_help_line(x, y, "N t", "go to bookmark N");
+	y = do_help_line(x, y, "/ or ?", "search for text");
+	y = do_help_line(x, y, "n or N", "repeat search");
+	y += ui.lineheight;
+	y = do_help_line(x, y, "[ or ]", "rotate left or right");
+	y = do_help_line(x, y, "+ or -", "zoom in or out");
+	y = do_help_line(x, y, "W or H", "fit to width or height");
+	y = do_help_line(x, y, "Z", "fit to page");
+	y = do_help_line(x, y, "z", "reset zoom");
+	y = do_help_line(x, y, "N z", "set zoom to N");
 }
 
 static void do_canvas(void)
@@ -1175,6 +1243,8 @@ static void run_main_loop(void)
 
 	if (showinfo)
 		do_info();
+	else if (showhelp)
+		do_help();
 
 	if (showoutline)
 		do_outline(outline, canvas_x);
@@ -1340,6 +1410,7 @@ static void usage(const char *argv0)
 	fprintf(stderr, "\t-H -\tpage height for EPUB layout\n");
 	fprintf(stderr, "\t-S -\tfont size for EPUB layout\n");
 	fprintf(stderr, "\t-U -\tuser style sheet for EPUB layout\n");
+	fprintf(stderr, "\t-X\tdisable document styles for EPUB layout\n");
 	exit(1);
 }
 
@@ -1352,7 +1423,7 @@ int main(int argc, char **argv)
 	const GLFWvidmode *video_mode;
 	int c;
 
-	while ((c = fz_getopt(argc, argv, "p:r:W:H:S:U:")) != -1)
+	while ((c = fz_getopt(argc, argv, "p:r:W:H:S:U:X")) != -1)
 	{
 		switch (c)
 		{
@@ -1363,6 +1434,7 @@ int main(int argc, char **argv)
 		case 'H': layout_h = fz_atof(fz_optarg); break;
 		case 'S': layout_em = fz_atof(fz_optarg); break;
 		case 'U': layout_css = fz_optarg; break;
+		case 'X': layout_use_doc_css = 0; break;
 		}
 	}
 
@@ -1406,7 +1478,7 @@ int main(int argc, char **argv)
 	screen_w = video_mode->width;
 	screen_h = video_mode->height;
 
-	window = glfwCreateWindow(DEFAULT_WINDOW_W, DEFAULT_WINDOW_H, filename, NULL, NULL);
+	window = glfwCreateWindow(DEFAULT_WINDOW_W, DEFAULT_WINDOW_H, fix_title, NULL, NULL);
 	if (!window) {
 		fprintf(stderr, "cannot create glfw window\n");
 		exit(1);
@@ -1423,6 +1495,8 @@ int main(int argc, char **argv)
 		fz_set_user_css(ctx, fz_string_from_buffer(ctx, buf));
 		fz_drop_buffer(ctx, buf);
 	}
+
+	fz_set_use_document_css(ctx, layout_use_doc_css);
 
 	has_ARB_texture_non_power_of_two = glfwExtensionSupported("GL_ARB_texture_non_power_of_two");
 	if (!has_ARB_texture_non_power_of_two)

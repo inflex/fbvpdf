@@ -9,12 +9,12 @@
 FREETYPE_DIR := thirdparty/freetype
 HARFBUZZ_DIR := thirdparty/harfbuzz
 JBIG2DEC_DIR := thirdparty/jbig2dec
-JPEG_DIR := thirdparty/jpeg
+JPEGXR_DIR := thirdparty/jpegxr
+LIBJPEG_DIR := thirdparty/libjpeg
+LURATECH_DIR := thirdparty/luratech
 MUJS_DIR := thirdparty/mujs
 OPENJPEG_DIR := thirdparty/openjpeg/src/lib/openjp2
 ZLIB_DIR := thirdparty/zlib
-LURATECH_DIR := thirdparty/luratech
-JPEGXR_DIR := thirdparty/jpegxr
 
 CURL_DIR := thirdparty/curl
 GLFW_DIR := thirdparty/glfw
@@ -24,7 +24,7 @@ NPAPI_DIR := thirdparty/npapi-sdk
 
 ifneq "$(wildcard $(MUJS_DIR)/README)" ""
 
-MUJS_OUT := $(OUT)/mujs
+MUJS_OUT := $(OUT)/thirdparty/mujs
 MUJS_SRC := one.c
 
 MUJS_OBJ := $(addprefix $(MUJS_OUT)/, $(MUJS_SRC:%.c=%.o))
@@ -48,7 +48,7 @@ endif
 
 ifneq "$(wildcard $(FREETYPE_DIR)/README)" ""
 
-FREETYPE_OUT := $(OUT)/freetype
+FREETYPE_OUT := $(OUT)/thirdparty/freetype
 FREETYPE_SRC := \
 	ftbase.c \
 	ftbbox.c \
@@ -115,7 +115,7 @@ endif
 
 ifneq "$(wildcard $(HARFBUZZ_DIR)/README)" ""
 
-HARFBUZZ_OUT := $(OUT)/harfbuzz
+HARFBUZZ_OUT := $(OUT)/thirdparty/harfbuzz
 HARFBUZZ_SRC := \
 	hb-blob.cc \
 	hb-buffer.cc \
@@ -179,7 +179,7 @@ endif
 
 ifneq "$(wildcard $(LURATECH_DIR)/ldf_jb2)$(wildcard $(LURATECH_DIR)/lwf_jp2)" ""
 
-LURATECH_OUT := $(OUT)/luratech
+LURATECH_OUT := $(OUT)/thirdparty/luratech
 LURATECH_SRC := \
 	jb2_adt_cache.c \
 	jb2_adt_decoder_halftone_region.c \
@@ -338,7 +338,7 @@ else # --- LURATECH ---
 
 ifneq "$(wildcard $(JBIG2DEC_DIR)/README)" ""
 
-JBIG2DEC_OUT := $(OUT)/jbig2dec
+JBIG2DEC_OUT := $(OUT)/thirdparty/jbig2dec
 JBIG2DEC_SRC := \
 	jbig2.c \
 	jbig2_arith.c \
@@ -373,7 +373,7 @@ endif
 
 ifneq "$(wildcard $(OPENJPEG_DIR)/openjpeg.h)" ""
 
-OPENJPEG_OUT := $(OUT)/openjpeg
+OPENJPEG_OUT := $(OUT)/thirdparty/openjpeg
 OPENJPEG_SRC := \
 	bio.c \
 	cidx_manager.c \
@@ -405,9 +405,9 @@ OPENJPEG_OBJ := $(addprefix $(OPENJPEG_OUT)/, $(OPENJPEG_SRC:%.c=%.o))
 $(OPENJPEG_OUT):
 	$(MKDIR_CMD)
 $(OPENJPEG_OUT)/%.o: $(OPENJPEG_DIR)/%.c | $(OPENJPEG_OUT)
-	$(CC_CMD) -DOPJ_STATIC -DOPJ_HAVE_STDINT_H
+	$(CC_CMD) -DOPJ_STATIC -DOPJ_HAVE_STDINT_H -DOPJ_HAVE_INTTYPES_H -DUSE_JPIP
 
-OPENJPEG_CFLAGS += -I$(OPENJPEG_DIR) -DOPJ_HAVE_INTTYPES_H=1 -DUSE_JPIP=1
+OPENJPEG_CFLAGS += -I$(OPENJPEG_DIR)
 else
 OPENJPEG_CFLAGS := $(SYS_OPENJPEG_CFLAGS)
 OPENJPEG_LIBS := $(SYS_OPENJPEG_LIBS)
@@ -417,10 +417,10 @@ endif # --- LURATECH ---
 
 # --- JPEG library from IJG ---
 
-ifneq "$(wildcard $(JPEG_DIR)/README)" ""
+ifneq "$(wildcard $(LIBJPEG_DIR)/README)" ""
 
-JPEG_OUT := $(OUT)/jpeg
-JPEG_SRC := \
+LIBJPEG_OUT := $(OUT)/thirdparty/libjpeg
+LIBJPEG_SRC := \
 	jaricom.c \
 	jcomapi.c \
 	jdapimin.c \
@@ -452,24 +452,24 @@ JPEG_SRC := \
 	jquant2.c \
 	jutils.c \
 
-JPEG_OBJ := $(addprefix $(JPEG_OUT)/, $(JPEG_SRC:%.c=%.o))
+LIBJPEG_OBJ := $(addprefix $(LIBJPEG_OUT)/, $(LIBJPEG_SRC:%.c=%.o))
 
-$(JPEG_OUT):
+$(LIBJPEG_OUT):
 	$(MKDIR_CMD)
-$(JPEG_OUT)/%.o: $(JPEG_DIR)/%.c | $(JPEG_OUT)
+$(LIBJPEG_OUT)/%.o: $(LIBJPEG_DIR)/%.c | $(LIBJPEG_OUT)
 	$(CC_CMD) -Dmain=xxxmain
 
-JPEG_CFLAGS := -Iscripts/jpeg -I$(JPEG_DIR)
+LIBJPEG_CFLAGS := -Iscripts/libjpeg -I$(LIBJPEG_DIR)
 else
-JPEG_CFLAGS := $(SYS_JPEG_CFLAGS) -DSHARE_JPEG
-JPEG_LIBS := $(SYS_JPEG_LIBS)
+LIBJPEG_CFLAGS := $(SYS_LIBJPEG_CFLAGS) -DSHARE_JPEG
+LIBJPEG_LIBS := $(SYS_LIBJPEG_LIBS)
 endif
 
 # --- jpegxr ---
 
 ifneq "$(wildcard $(JPEGXR_DIR)/T835E.pdf)" ""
 
-JPEGXR_OUT := $(OUT)/jpegxr
+JPEGXR_OUT := $(OUT)/thirdparty/jpegxr
 JPEGXR_SRC := \
 	algo.c \
 	api.c \
@@ -503,7 +503,7 @@ endif
 
 ifneq "$(wildcard $(ZLIB_DIR)/README)" ""
 
-ZLIB_OUT := $(OUT)/zlib
+ZLIB_OUT := $(OUT)/thirdparty/zlib
 ZLIB_SRC := \
 	adler32.c \
 	compress.c \
@@ -538,7 +538,7 @@ endif
 ifneq "$(wildcard $(CURL_DIR)/README)" ""
 
 CURL_LIB := $(OUT)/libcurl.a
-CURL_OUT := $(OUT)/curl
+CURL_OUT := $(OUT)/thirdparty/curl
 CURL_SRC := \
 	base64.c \
 	conncache.c \
@@ -618,11 +618,12 @@ endif
 ifneq "$(wildcard $(GLFW_DIR)/README.md)" ""
 
 GLFW_LIB := $(OUT)/libglfw.a
-GLFW_OUT := $(OUT)/glfw
+GLFW_OUT := $(OUT)/thirdparty/glfw
 
 ifeq "$(OS)" "MACOS"
 
 GLFW_SRC := \
+	cocoa_time.c \
 	cocoa_init.m \
 	cocoa_monitor.m \
 	cocoa_window.m \
@@ -634,12 +635,13 @@ GLFW_SRC := \
 	monitor.c \
 	nsgl_context.m \
 	posix_tls.c \
+	vulkan.c \
 	window.c
 
 $(GLFW_OUT)/%.o: $(GLFW_DIR)/src/%.m | $(GLFW_OUT)
-	$(CC_CMD) -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_MENUBAR -D_GLFW_USE_RETINA -D_GLFW_USE_OPENGL -Wno-deprecated-declarations
+	$(CC_CMD) -D_GLFW_COCOA -D_GLFW_USE_MENUBAR -D_GLFW_USE_RETINA -Wno-deprecated-declarations
 $(GLFW_OUT)/%.o: $(GLFW_DIR)/src/%.c | $(GLFW_OUT)
-	$(CC_CMD) -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_MENUBAR -D_GLFW_USE_RETINA -D_GLFW_USE_OPENGL
+	$(CC_CMD) -D_GLFW_COCOA -D_GLFW_USE_MENUBAR -D_GLFW_USE_RETINA
 
 GLFW_OBJ := $(addprefix $(GLFW_OUT)/, $(GLFW_SRC))
 GLFW_OBJ := $(GLFW_OBJ:%.c=%.o)
@@ -648,10 +650,34 @@ GLFW_OBJ := $(GLFW_OBJ:%.m=%.o)
 $(GLFW_LIB): $(GLFW_OBJ)
 GLFW_LIBS := -framework OpenGL -framework IOKit -framework CoreVideo -framework Cocoa
 
+else ifeq "$(HAVE_WIN32)" "yes"
+
+GLFW_SRC := \
+	context.c \
+	egl_context.c \
+	init.c \
+	input.c \
+	monitor.c \
+	vulkan.c \
+	wgl_context.c \
+	win32_init.c \
+	win32_monitor.c \
+	win32_time.c \
+	win32_tls.c \
+	win32_window.c \
+	window.c \
+	win32_joystick.c
+
+$(GLFW_OUT)/%.o: $(GLFW_DIR)/src/%.c | $(GLFW_OUT)
+	$(CC_CMD) -D_GLFW_WIN32 -D_GLFW_WGL -D_GLFW_USE_OPENGL
+$(GLFW_LIB): $(addprefix $(GLFW_OUT)/, $(GLFW_SRC:%.c=%.o))
+GLFW_LIBS := -lopengl32
+
 else
 
 GLFW_SRC := \
 	context.c \
+	egl_context.c \
 	glx_context.c \
 	init.c \
 	input.c \
@@ -659,6 +685,7 @@ GLFW_SRC := \
 	monitor.c \
 	posix_time.c \
 	posix_tls.c \
+	vulkan.c \
 	window.c \
 	x11_init.c \
 	x11_monitor.c \
@@ -666,9 +693,9 @@ GLFW_SRC := \
 	xkb_unicode.c
 
 $(GLFW_OUT)/%.o: $(GLFW_DIR)/src/%.c | $(GLFW_OUT)
-	$(CC_CMD) -D_GLFW_X11 -D_GLFW_GLX -D_GLFW_USE_OPENGL -D_GLFW_HAS_GLXGETPROCADDRESS
+	$(CC_CMD) -D_GLFW_X11
 $(GLFW_LIB): $(addprefix $(GLFW_OUT)/, $(GLFW_SRC:%.c=%.o))
-GLFW_LIBS := -lGL -lX11 -lXcursor -lXrandr -lXinerama -lpthread
+GLFW_LIBS := -lGL -ldl -lX11 -lXcursor -lXrandr -lXinerama -lpthread
 
 endif
 
@@ -677,18 +704,9 @@ $(GLFW_OUT):
 	$(MKDIR_CMD)
 
 GLFW_SRC_UNUSED := \
-	egl_context.c \
-	mach_time.c \
 	mir_init.c \
 	mir_monitor.c \
 	mir_window.c \
-	win32_init.c \
-	win32_monitor.c \
-	win32_time.c \
-	win32_tls.c \
-	win32_window.c \
-	winmm_joystick.c \
-	wgl_context.c \
 	wl_init.c \
 	wl_monitor.c \
 	wl_window.c \
@@ -723,3 +741,10 @@ ifeq "$(HAVE_LIBCRYPTO)" "yes"
 LIBCRYPTO_CFLAGS := $(SYS_LIBCRYPTO_CFLAGS)
 LIBCRYPTO_LIBS := $(SYS_LIBCRYPTO_LIBS)
 endif
+
+# --- pthread ---
+
+#ifeq "$(HAVE_PTHREAD)" "yes"
+PTHREAD_CFLAGS := $(SYS_PTHREAD_CFLAGS)
+PTHREAD_LIBS := $(SYS_PTHREAD_LIBS)
+#endif

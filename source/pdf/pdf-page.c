@@ -4,11 +4,87 @@ int
 pdf_count_pages(fz_context *ctx, pdf_document *doc)
 {
 	if (doc->page_count == 0)
-	{
-		pdf_obj *count = pdf_dict_getp(ctx, pdf_trailer(ctx, doc), "Root/Pages/Count");
-		doc->page_count = pdf_to_int(ctx, count);
-	}
+		doc->page_count = pdf_to_int(ctx, pdf_dict_getp(ctx, pdf_trailer(ctx, doc), "Root/Pages/Count"));
 	return doc->page_count;
+}
+
+static int
+pdf_load_page_tree_imp(fz_context *ctx, pdf_document *doc, pdf_obj *node, int idx)
+{
+	pdf_obj *type = pdf_dict_get(ctx, node, PDF_NAME_Type);
+	if (pdf_name_eq(ctx, type, PDF_NAME_Pages))
+	{
+		pdf_obj *kids = pdf_dict_get(ctx, node, PDF_NAME_Kids);
+		int count = pdf_to_int(ctx, pdf_dict_get(ctx, node, PDF_NAME_Count));
+		int i, n = pdf_array_len(ctx, kids);
+
+		/* if Kids length is same as Count, all children must be page objects */
+		if (n == count)
+		{
+			for (i = 0; i < n; ++i)
+			{
+				if (idx >= doc->page_count)
+					fz_throw(ctx, FZ_ERROR_GENERIC, "too many kids in page tree");
+				doc->rev_page_map[idx].page = idx;
+				doc->rev_page_map[idx].object = pdf_to_num(ctx, pdf_array_get(ctx, kids, i));
+				++idx;
+			}
+		}
+
+		/* else Kids may contain intermediate nodes */
+		else
+		{
+			if (pdf_mark_obj(ctx, node))
+				fz_throw(ctx, FZ_ERROR_GENERIC, "cycle in page tree");
+			fz_try(ctx)
+				for (i = 0; i < n; ++i)
+					idx = pdf_load_page_tree_imp(ctx, doc, pdf_array_get(ctx, kids, i), idx);
+			fz_always(ctx)
+				pdf_unmark_obj(ctx, node);
+			fz_catch(ctx)
+				fz_rethrow(ctx);
+		}
+	}
+	else if (pdf_name_eq(ctx, type, PDF_NAME_Page))
+	{
+		if (idx >= doc->page_count)
+			fz_throw(ctx, FZ_ERROR_GENERIC, "too many kids in page tree");
+		doc->rev_page_map[idx].page = idx;
+		doc->rev_page_map[idx].object = pdf_to_num(ctx, node);
+		++idx;
+	}
+	else
+	{
+		fz_throw(ctx, FZ_ERROR_GENERIC, "non-page object in page tree");
+	}
+	return idx;
+}
+
+static int
+cmp_rev_page_map(const void *va, const void *vb)
+{
+	const pdf_rev_page_map *a = va;
+	const pdf_rev_page_map *b = vb;
+	return a->object - b->object;
+}
+
+void
+pdf_load_page_tree(fz_context *ctx, pdf_document *doc)
+{
+	if (!doc->rev_page_map)
+	{
+		int n = pdf_count_pages(ctx, doc);
+		doc->rev_page_map = fz_malloc_array(ctx, n, sizeof *doc->rev_page_map);
+		pdf_load_page_tree_imp(ctx, doc, pdf_dict_getp(ctx, pdf_trailer(ctx, doc), "Root/Pages"), 0);
+		qsort(doc->rev_page_map, n, sizeof *doc->rev_page_map, cmp_rev_page_map);
+	}
+}
+
+void
+pdf_drop_page_tree(fz_context *ctx, pdf_document *doc)
+{
+	fz_free(ctx, doc->rev_page_map);
+	doc->rev_page_map = NULL;
 }
 
 enum
@@ -40,7 +116,7 @@ pdf_lookup_page_loc_imp(fz_context *ctx, pdf_document *doc, pdf_obj *node, int *
 			len = pdf_array_len(ctx, kids);
 
 			if (len == 0)
-				fz_throw(ctx, FZ_ERROR_GENERIC, "Malformed pages tree");
+				fz_throw(ctx, FZ_ERROR_GENERIC, "malformed page tree");
 
 			/* Every node we need to unmark goes into the stack */
 			if (stack_len == stack_max)
@@ -158,8 +234,8 @@ pdf_count_pages_before_kid(fz_context *ctx, pdf_document *doc, pdf_obj *parent, 
 	fz_throw(ctx, FZ_ERROR_GENERIC, "kid not found in parent's kids array");
 }
 
-int
-pdf_lookup_page_number(fz_context *ctx, pdf_document *doc, pdf_obj *node)
+static int
+pdf_lookup_page_number_slow(fz_context *ctx, pdf_document *doc, pdf_obj *node)
 {
 	int needle = pdf_to_num(ctx, node);
 	int total = 0;
@@ -198,6 +274,34 @@ pdf_lookup_page_number(fz_context *ctx, pdf_document *doc, pdf_obj *node)
 	}
 
 	return total;
+}
+
+static int
+pdf_lookup_page_number_fast(fz_context *ctx, pdf_document *doc, int needle)
+{
+	int l = 0;
+	int r = doc->page_count - 1;
+	while (l <= r)
+	{
+		int m = (l + r) >> 1;
+		int c = needle - doc->rev_page_map[m].object;
+		if (c < 0)
+			r = m - 1;
+		else if (c > 0)
+			l = m + 1;
+		else
+			return doc->rev_page_map[m].page;
+	}
+	return -1;
+}
+
+int
+pdf_lookup_page_number(fz_context *ctx, pdf_document *doc, pdf_obj *page)
+{
+	if (doc->rev_page_map)
+		return pdf_lookup_page_number_fast(ctx, doc, pdf_to_num(ctx, page));
+	else
+		return pdf_lookup_page_number_slow(ctx, doc, page);
 }
 
 int
@@ -502,7 +606,7 @@ pdf_page_obj_transform(fz_context *ctx, pdf_obj *pageobj, fz_rect *page_mediabox
 		rotate = 0;
 
 	/* Compute transform from fitz' page space (upper left page origin, y descending, 72 dpi)
-	 * to PDF user space (arbitary page origin, y ascending, UserUnit dpi). */
+	 * to PDF user space (arbitrary page origin, y ascending, UserUnit dpi). */
 
 	/* Make left-handed and scale by UserUnit */
 	fz_scale(page_ctm, userunit, -userunit);
@@ -542,15 +646,10 @@ pdf_drop_page_imp(fz_context *ctx, pdf_page *page)
 	fz_drop_document(ctx, &page->doc->super);
 }
 
-void pdf_drop_page(fz_context *ctx, pdf_page *page)
-{
-	fz_drop_page(ctx, &page->super);
-}
-
 static pdf_page *
 pdf_new_page(fz_context *ctx, pdf_document *doc)
 {
-	pdf_page *page = fz_new_page(ctx, sizeof(*page));
+	pdf_page *page = fz_new_derived_page(ctx, pdf_page);
 
 	page->doc = (pdf_document*) fz_keep_document(ctx, &doc->super);
 
@@ -683,8 +782,16 @@ pdf_add_page(fz_context *ctx, pdf_document *doc, const fz_rect *mediabox, int ro
 		pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Type, PDF_NAME_Page);
 		pdf_dict_put_drop(ctx, page_obj, PDF_NAME_MediaBox, pdf_new_rect(ctx, doc, mediabox));
 		pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Rotate, pdf_new_int(ctx, doc, rotate));
-		pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Resources, pdf_add_object(ctx, doc, resources));
-		pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Contents, pdf_add_stream(ctx, doc, contents, NULL, 0));
+
+		if (pdf_is_indirect(ctx, resources))
+			pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Resources, resources);
+		else if (pdf_is_dict(ctx, resources))
+			pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Resources, pdf_add_object(ctx, doc, resources));
+		else
+			pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Resources, pdf_new_dict(ctx, doc, 1));
+
+		if (contents)
+			pdf_dict_put_drop(ctx, page_obj, PDF_NAME_Contents, pdf_add_stream(ctx, doc, contents, NULL, 0));
 	}
 	fz_catch(ctx)
 	{

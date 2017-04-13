@@ -43,7 +43,7 @@ fz_drop_halftone(fz_context *ctx, fz_halftone *ht)
 /* Default mono halftone, lifted from Ghostscript. */
 /* The 0x00 entry has been changed to 0x01 to avoid problems with white
  * pixels appearing in the output; as we use < 0 should not appear in the
- * array. I think that gs scales this slighly and hence never actually uses
+ * array. I think that gs scales this slightly and hence never actually uses
  * the raw values here. */
 static unsigned char mono_ht[] =
 {
@@ -528,7 +528,8 @@ fz_bitmap *fz_new_bitmap_from_pixmap_band(fz_context *ctx, fz_pixmap *pix, fz_ha
 	if (!pix)
 		return NULL;
 
-	assert(pix->alpha == 0);
+	if (pix->alpha != 0)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "pixmap may not have alpha channel to convert to bitmap");
 
 	fz_var(ht_line);
 	fz_var(out);
@@ -544,7 +545,7 @@ fz_bitmap *fz_new_bitmap_from_pixmap_band(fz_context *ctx, fz_pixmap *pix, fz_ha
 		thresh = &do_threshold_4;
 		break;
 	default:
-		assert(!"Unsupported number of components");
+		fz_throw(ctx, FZ_ERROR_GENERIC, "pixmap must be grayscale or CMYK to convert to bitmap");
 		return NULL;
 	}
 

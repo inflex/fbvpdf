@@ -38,7 +38,7 @@ typedef enum fz_display_command_e
  *
  *	cmd:	What type of node this is.
  *
- *	size:	The number of sizeof(fz_display_node) bytes that this nodes
+ *	size:	The number of sizeof(fz_display_node) bytes that this node's
  *		data occupies. (i.e. &node[node->size] = the next node in the
  *		chain; 0 for end of list).
  *
@@ -1209,7 +1209,7 @@ fz_new_list_device(fz_context *ctx, fz_display_list *list)
 {
 	fz_list_device *dev;
 
-	dev = fz_new_device(ctx, sizeof(fz_list_device));
+	dev = fz_new_derived_device(ctx, fz_list_device);
 
 	dev->super.fill_path = fz_list_fill_path;
 	dev->super.stroke_path = fz_list_stroke_path;

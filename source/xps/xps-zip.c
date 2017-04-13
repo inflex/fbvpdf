@@ -3,8 +3,8 @@
 
 static void xps_init_document(fz_context *ctx, xps_document *doc);
 
-xps_part *
-xps_new_part(fz_context *ctx, xps_document *doc, char *name, unsigned char *data, size_t size)
+static xps_part *
+xps_new_part(fz_context *ctx, xps_document *doc, char *name, fz_buffer *data)
 {
 	xps_part *part;
 
@@ -12,13 +12,11 @@ xps_new_part(fz_context *ctx, xps_document *doc, char *name, unsigned char *data
 	fz_try(ctx)
 	{
 		part->name = fz_strdup(ctx, name);
-		part->data = data;
-		part->size = size;
+		part->data = data; /* take ownership of buffer */
 	}
 	fz_catch(ctx)
 	{
-		fz_free(ctx, part->name);
-		fz_free(ctx, part->data);
+		fz_drop_buffer(ctx, data);
 		fz_free(ctx, part);
 		fz_rethrow(ctx);
 	}
@@ -30,7 +28,7 @@ void
 xps_drop_part(fz_context *ctx, xps_document *doc, xps_part *part)
 {
 	fz_free(ctx, part->name);
-	fz_free(ctx, part->data);
+	fz_drop_buffer(ctx, part->data);
 	fz_free(ctx, part);
 }
 
@@ -43,8 +41,6 @@ xps_read_part(fz_context *ctx, xps_document *doc, char *partname)
 	fz_archive *zip = doc->zip;
 	fz_buffer *buf, *tmp;
 	char path[2048];
-	unsigned char *data;
-	size_t size;
 	int count;
 	char *name;
 	int seen_last;
@@ -92,14 +88,7 @@ xps_read_part(fz_context *ctx, xps_document *doc, char *partname)
 		}
 	}
 
-	fz_write_buffer_byte(ctx, buf, 0); /* zero-terminate */
-
-	/* take over the data */
-	/* size doesn't include the added zero-terminator */
-	size = fz_buffer_extract(ctx, buf, &data) - 1;
-	fz_drop_buffer(ctx, buf);
-
-	return xps_new_part(ctx, doc, partname, data, size);
+	return xps_new_part(ctx, doc, partname, buf);
 }
 
 int
