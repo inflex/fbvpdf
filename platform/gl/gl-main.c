@@ -144,6 +144,7 @@ static int zoom_out(int oldres)
 
 static char filename[2048];
 static char *password = "";
+static char *anchor = NULL;
 static float layout_w = DEFAULT_LAYOUT_W;
 static float layout_h = DEFAULT_LAYOUT_H;
 static float layout_em = DEFAULT_LAYOUT_EM;
@@ -767,7 +768,17 @@ static void reload(void)
 
 	pdf = pdf_specifics(ctx, doc);
 	if (pdf)
+	{
 		pdf_enable_js(ctx, pdf);
+		if (anchor)
+			currentpage = pdf_lookup_anchor(ctx, pdf, anchor, NULL, NULL);
+	}
+	else
+	{
+		if (anchor)
+			currentpage = fz_atoi(anchor) - 1;
+	}
+	anchor = NULL;
 
 	currentpage = fz_clampi(currentpage, 0, fz_count_pages(ctx, doc) - 1);
 
@@ -876,9 +887,37 @@ static void do_app(void)
 	{
 		switch (ui.key)
 		{
-		case 'q':
-			quit();
-			break;
+		case KEY_F1: showhelp = !showhelp; break;
+		case 'o': toggle_outline(); break;
+		case 'L': showlinks = !showlinks; break;
+		case 'i': showinfo = !showinfo; break;
+		case 'r': reload(); break;
+		case 'q': quit(); break;
+
+		case 'f': toggle_fullscreen(); break;
+		case 'w': shrinkwrap(); break;
+		case 'W': auto_zoom_w(); break;
+		case 'H': auto_zoom_h(); break;
+		case 'Z': auto_zoom(); break;
+		case 'z': currentzoom = number > 0 ? number : DEFRES; break;
+		case '+': currentzoom = zoom_in(currentzoom); break;
+		case '-': currentzoom = zoom_out(currentzoom); break;
+		case '[': currentrotate += 90; break;
+		case ']': currentrotate -= 90; break;
+		case 'k': case KEY_UP: scroll_y -= 10; break;
+		case 'j': case KEY_DOWN: scroll_y += 10; break;
+		case 'h': case KEY_LEFT: scroll_x -= 10; break;
+		case 'l': case KEY_RIGHT: scroll_x += 10; break;
+
+		case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
+		case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
+		case ',': case KEY_PAGE_UP: currentpage -= fz_maxi(number, 1); break;
+		case '.': case KEY_PAGE_DOWN: currentpage += fz_maxi(number, 1); break;
+		case '<': currentpage -= 10 * fz_maxi(number, 1); break;
+		case '>': currentpage += 10 * fz_maxi(number, 1); break;
+		case 'g': jump_to_page(number - 1); break;
+		case 'G': jump_to_page(fz_count_pages(ctx, doc) - 1); break;
+
 		case 'm':
 			if (number == 0)
 				push_history();
@@ -902,6 +941,19 @@ static void do_app(void)
 				if (future_count > 0)
 					pop_future();
 			}
+			break;
+
+		case '/':
+			search_dir = 1;
+			showsearch = 1;
+			search_input.p = search_input.text;
+			search_input.q = search_input.end;
+			break;
+		case '?':
+			search_dir = -1;
+			showsearch = 1;
+			search_input.p = search_input.text;
+			search_input.q = search_input.end;
 			break;
 		case 'N':
 			search_dir = -1;
@@ -929,35 +981,6 @@ static void do_app(void)
 					search_active = 1;
 			}
 			break;
-		case 'f': toggle_fullscreen(); break;
-		case 'w': shrinkwrap(); break;
-		case 'r': reload(); break;
-		case 'o': toggle_outline(); break;
-		case 'W': auto_zoom_w(); break;
-		case 'H': auto_zoom_h(); break;
-		case 'Z': auto_zoom(); break;
-		case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-		case '<': currentpage -= 10 * fz_maxi(number, 1); break;
-		case '>': currentpage += 10 * fz_maxi(number, 1); break;
-		case ',': case KEY_PAGE_UP: currentpage -= fz_maxi(number, 1); break;
-		case '.': case KEY_PAGE_DOWN: currentpage += fz_maxi(number, 1); break;
-		case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
-		case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
-		case 'g': jump_to_page(number - 1); break;
-		case 'G': jump_to_page(fz_count_pages(ctx, doc) - 1); break;
-		case '+': currentzoom = zoom_in(currentzoom); break;
-		case '-': currentzoom = zoom_out(currentzoom); break;
-		case '[': currentrotate += 90; break;
-		case ']': currentrotate -= 90; break;
-		case 'L': showlinks = !showlinks; break;
-		case 'i': showinfo = !showinfo; break;
-		case '/': search_dir = 1; showsearch = 1; search_input.p = search_input.text; search_input.q = search_input.end; break;
-		case '?': search_dir = -1; showsearch = 1; search_input.p = search_input.text; search_input.q = search_input.end; break;
-		case 'k': case KEY_UP: scroll_y -= 10; break;
-		case 'j': case KEY_DOWN: scroll_y += 10; break;
-		case 'h': case KEY_LEFT: scroll_x -= 10; break;
-		case 'l': case KEY_RIGHT: scroll_x += 10; break;
-		case KEY_F1: showhelp = !showhelp; break;
 		}
 
 		if (ui.key >= '0' && ui.key <= '9')
@@ -1053,7 +1076,7 @@ static void do_help(void)
 	int x = canvas_x + 4 * ui.lineheight;
 	int y = canvas_y + 4 * ui.lineheight;
 	int w = canvas_w - 8 * ui.lineheight;
-	int h = 34 * ui.lineheight;
+	int h = 37 * ui.lineheight;
 
 	glBegin(GL_TRIANGLE_STRIP);
 	{
@@ -1071,13 +1094,22 @@ static void do_help(void)
 	glColor4f(0, 0, 0, 1);
 	y = do_help_line(x, y, "MuPDF", FZ_VERSION);
 	y += ui.lineheight;
-	y = do_help_line(x, y, "q", "quit");
-	y = do_help_line(x, y, "r", "reload file");
-	y = do_help_line(x, y, "f", "fullscreen window");
-	y = do_help_line(x, y, "w", "shrink wrap window");
+	y = do_help_line(x, y, "F1", "show this message");
 	y = do_help_line(x, y, "i", "show document information");
 	y = do_help_line(x, y, "o", "show/hide outline");
 	y = do_help_line(x, y, "L", "show/hide links");
+	y = do_help_line(x, y, "r", "reload file");
+	y = do_help_line(x, y, "q", "quit");
+	y += ui.lineheight;
+	y = do_help_line(x, y, "f", "fullscreen window");
+	y = do_help_line(x, y, "w", "shrink wrap window");
+	y = do_help_line(x, y, "W or H", "fit to width or height");
+	y = do_help_line(x, y, "Z", "fit to page");
+	y = do_help_line(x, y, "z", "reset zoom");
+	y = do_help_line(x, y, "N z", "set zoom to N");
+	y = do_help_line(x, y, "+ or -", "zoom in or out");
+	y = do_help_line(x, y, "[ or ]", "rotate left or right");
+	y = do_help_line(x, y, "arrow keys", "pan in small increments");
 	y += ui.lineheight;
 	y = do_help_line(x, y, "b", "smart move backward");
 	y = do_help_line(x, y, "Space", "smart move forward");
@@ -1092,15 +1124,9 @@ static void do_help(void)
 	y = do_help_line(x, y, "T", "go forward in history");
 	y = do_help_line(x, y, "N m", "save location in bookmark N");
 	y = do_help_line(x, y, "N t", "go to bookmark N");
+	y += ui.lineheight;
 	y = do_help_line(x, y, "/ or ?", "search for text");
 	y = do_help_line(x, y, "n or N", "repeat search");
-	y += ui.lineheight;
-	y = do_help_line(x, y, "[ or ]", "rotate left or right");
-	y = do_help_line(x, y, "+ or -", "zoom in or out");
-	y = do_help_line(x, y, "W or H", "fit to width or height");
-	y = do_help_line(x, y, "Z", "fit to page");
-	y = do_help_line(x, y, "z", "reset zoom");
-	y = do_help_line(x, y, "N z", "set zoom to N");
 }
 
 static void do_canvas(void)
@@ -1440,7 +1466,7 @@ int main(int argc, char **argv)
 
 	if (fz_optind < argc)
 	{
-		fz_strlcpy(filename, argv[fz_optind], sizeof filename);
+		fz_strlcpy(filename, argv[fz_optind++], sizeof filename);
 	}
 	else
 	{
@@ -1452,6 +1478,9 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 #endif
 	}
+
+	if (fz_optind < argc)
+		anchor = argv[fz_optind++];
 
 	title = strrchr(filename, '/');
 	if (!title)

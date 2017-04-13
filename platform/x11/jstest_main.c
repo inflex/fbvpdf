@@ -346,7 +346,7 @@ main(int argc, char *argv[])
 				}
 				else if (match(&line, "OPEN"))
 				{
-					char path[1024];
+					char path[LONGLINE];
 					if (file_open)
 						pdfapp_close(&gapp);
 					if (prefix)
@@ -402,7 +402,7 @@ main(int argc, char *argv[])
 				}
 				else
 				{
-					fprintf(stderr, "Unmatched: %s\n", line);
+					fprintf(stderr, "Ignoring line without script statement.\n");
 				}
 			}
 			while (!feof(script));
