@@ -233,19 +233,19 @@ CMAP_UTF8_SRC := $(wildcard resources/cmaps/utf8/*)
 CMAP_UTF32_SRC := $(wildcard resources/cmaps/utf32/*)
 
 CMAP_GEN := \
-	generated/pdf-cmap-cjk.c \
-	generated/pdf-cmap-extra.c \
-	generated/pdf-cmap-utf8.c \
-	generated/pdf-cmap-utf32.c
-CMAP_OBJ := $(CMAP_GEN:%.c=$(OUT)/%.o)
+	$(OUT)/generated/pdf-cmap-cjk.c \
+	$(OUT)/generated/pdf-cmap-extra.c \
+	$(OUT)/generated/pdf-cmap-utf8.c \
+	$(OUT)/generated/pdf-cmap-utf32.c
+CMAP_OBJ := $(CMAP_GEN:%.c=%.o)
 
-generated/pdf-cmap-cjk.c : $(CMAP_CJK_SRC) | generated
+$(OUT)/generated/pdf-cmap-cjk.c : $(CMAP_CJK_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_CJK_SRC)
-generated/pdf-cmap-extra.c : $(CMAP_EXTRA_SRC) | generated
+$(OUT)/generated/pdf-cmap-extra.c : $(CMAP_EXTRA_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_EXTRA_SRC)
-generated/pdf-cmap-utf8.c : $(CMAP_UTF8_SRC) | generated
+$(OUT)/generated/pdf-cmap-utf8.c : $(CMAP_UTF8_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_UTF8_SRC)
-generated/pdf-cmap-utf32.c : $(CMAP_UTF32_SRC) | generated
+$(OUT)/generated/pdf-cmap-utf32.c : $(CMAP_UTF32_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_UTF32_SRC)
 
 $(CMAP_OBJ) : $(CMAP_GEN)
@@ -279,10 +279,10 @@ $(OUT)/scripts/cmapdump.o : \
 # --- Generated embedded javascript files ---
 
 JAVASCRIPT_SRC := source/pdf/pdf-js-util.js
-JAVASCRIPT_GEN := generated/pdf-js-util.c
-JAVASCRIPT_OBJ := $(JAVASCRIPT_GEN:%.c=$(OUT)/%.o)
+JAVASCRIPT_GEN := $(OUT)/generated/pdf-js-util.c
+JAVASCRIPT_OBJ := $(JAVASCRIPT_GEN:%.c=%.o)
 
-$(JAVASCRIPT_GEN) : $(JAVASCRIPT_SRC) | generated
+$(JAVASCRIPT_GEN) : $(JAVASCRIPT_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(JAVASCRIPT_SRC)
 
 ifneq "$(CROSSCOMPILE)" "yes"
