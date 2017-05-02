@@ -332,7 +332,9 @@ tiff_decode_data(fz_context *ctx, struct tiff *tiff, unsigned char *rp, unsigned
 		case 3:
 		case 4:
 			stm = fz_open_faxd(ctx, stm,
-					tiff->compression == 4 ? -1 : 0,
+					tiff->compression == 4 ? -1 :
+					tiff->compression == 2 ? 0 :
+					tiff->g3opts & 1,
 					0,
 					tiff->compression == 2,
 					tiff->imagewidth,
@@ -909,7 +911,7 @@ tiff_read_tag(fz_context *ctx, struct tiff *tiff, unsigned offset)
 		break;
 
 	case TileByteCounts:
-		if (tiff->tileoffsets)
+		if (tiff->tilebytecounts)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "at most one tile byte counts tag allowed");
 		tiff->tilebytecounts = fz_malloc_array(ctx, count, sizeof(unsigned));
 		tiff_read_tag_value(tiff->tilebytecounts, tiff, type, value, count);
@@ -932,6 +934,24 @@ tiff_swap_byte_order(unsigned char *buf, int n)
 		buf[i * 2 + 0] = buf[i * 2 + 1];
 		buf[i * 2 + 1] = t;
 	}
+}
+
+static void
+tiff_scale_lab_samples(fz_context *ctx, unsigned char *buf, int bps, int n)
+{
+	int i;
+	if (bps == 8)
+		for (i = 0; i < n; i++, buf += 3)
+		{
+			buf[1] ^= 128;
+			buf[2] ^= 128;
+		}
+	else if (bps == 16)
+		for (i = 0; i < n; i++, buf += 6)
+		{
+			buf[2] ^= 128;
+			buf[4] ^= 128;
+		}
 }
 
 static void
@@ -1255,6 +1275,13 @@ tiff_decode_samples(fz_context *ctx, struct tiff *tiff)
 	/* Byte swap 16-bit images to big endian if necessary */
 	if (tiff->bitspersample == 16 && tiff->order == TII)
 		tiff_swap_byte_order(tiff->samples, tiff->imagewidth * tiff->imagelength * tiff->samplesperpixel);
+
+	/* Lab colorspace expects all sample components 0..255.
+	TIFF supplies them as L = 0..255, a/b = -128..127 (for
+	8 bits per sample, -32768..32767 for 16 bits per sample)
+	Scale them to the colorspace's expectations. */
+	if (tiff->photometric == 8 && tiff->samplesperpixel == 3)
+		tiff_scale_lab_samples(ctx, tiff->samples, tiff->bitspersample, tiff->imagewidth * tiff->imagelength);
 }
 
 fz_pixmap *

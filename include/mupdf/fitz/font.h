@@ -165,7 +165,7 @@ fz_rect *fz_font_bbox(fz_context *ctx, fz_font *font);
 
 	Returns a new font handle, or NULL if no font found (or on error).
 */
-typedef fz_font *(*fz_load_system_font_fn)(fz_context *ctx, const char *name, int bold, int italic, int needs_exact_metrics);
+typedef fz_font *(fz_load_system_font_fn)(fz_context *ctx, const char *name, int bold, int italic, int needs_exact_metrics);
 
 /*
 	fz_load_system_cjk_font_fn: Type for user supplied cjk font loading hook.
@@ -176,7 +176,7 @@ typedef fz_font *(*fz_load_system_font_fn)(fz_context *ctx, const char *name, in
 
 	Returns a new font handle, or NULL if no font found (or on error).
 */
-typedef fz_font *(*fz_load_system_cjk_font_fn)(fz_context *ctx, const char *name, int ros, int serif);
+typedef fz_font *(fz_load_system_cjk_font_fn)(fz_context *ctx, const char *name, int ros, int serif);
 
 /*
 	fz_load_system_fallback_font_fn: Type for user supplied fallback font loading hook.
@@ -188,7 +188,7 @@ typedef fz_font *(*fz_load_system_cjk_font_fn)(fz_context *ctx, const char *name
 
 	Returns a new font handle, or NULL if no font found (or on error).
 */
-typedef fz_font *(*fz_load_system_fallback_font_fn)(fz_context *ctx, int script, int language, int serif, int bold, int italic);
+typedef fz_font *(fz_load_system_fallback_font_fn)(fz_context *ctx, int script, int language, int serif, int bold, int italic);
 
 /*
 	fz_install_load_system_font_fn: Install functions to allow
@@ -197,9 +197,9 @@ typedef fz_font *(*fz_load_system_fallback_font_fn)(fz_context *ctx, int script,
 	Only one set of hooks can be in use at a time.
 */
 void fz_install_load_system_font_funcs(fz_context *ctx,
-	fz_load_system_font_fn f,
-	fz_load_system_cjk_font_fn f_cjk,
-	fz_load_system_fallback_font_fn f_fallback);
+	fz_load_system_font_fn *f,
+	fz_load_system_cjk_font_fn *f_cjk,
+	fz_load_system_fallback_font_fn *f_fallback);
 
 /* fz_load_*_font returns NULL if no font could be loaded (also on error) */
 /*
@@ -588,16 +588,6 @@ int fz_encode_character_with_fallback(fz_context *ctx, fz_font *font, int unicod
 	the buffer.
 */
 void fz_get_glyph_name(fz_context *ctx, fz_font *font, int glyph, char *buf, int size);
-
-/*
-	fz_print_font: Output textual information about a font
-	to a given output stream.
-
-	out: The output stream to output to.
-
-	font: The font to output details for.
-*/
-void fz_print_font(fz_context *ctx, fz_output *out, fz_font *font);
 
 /*
 	Internal functions for our Harfbuzz integration
