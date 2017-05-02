@@ -31,8 +31,8 @@ typedef enum
 	PDF_ANNOT_UNKNOWN = -1
 } fz_annot_type;
 
-const char *pdf_string_from_annot_type(fz_annot_type type);
-int pdf_annot_type_from_string(const char *subtype);
+const char *pdf_string_from_annot_type(fz_context *ctx, fz_annot_type type);
+int pdf_annot_type_from_string(fz_context *ctx, const char *subtype);
 
 enum
 {
@@ -46,6 +46,20 @@ enum
 	PDF_ANNOT_IS_LOCKED = 1 << (8-1),
 	PDF_ANNOT_IS_TOGGLE_NO_VIEW = 1 << (9-1),
 	PDF_ANNOT_IS_LOCKED_CONTENTS = 1 << (10-1)
+};
+
+enum
+{
+	PDF_ANNOT_LINE_ENDING_NONE = 0,
+	PDF_ANNOT_LINE_ENDING_SQUARE,
+	PDF_ANNOT_LINE_ENDING_CIRCLE,
+	PDF_ANNOT_LINE_ENDING_DIAMOND,
+	PDF_ANNOT_LINE_ENDING_OPENARROW,
+	PDF_ANNOT_LINE_ENDING_CLOSEDARROW,
+	PDF_ANNOT_LINE_ENDING_BUTT,
+	PDF_ANNOT_LINE_ENDING_ROPENARROW,
+	PDF_ANNOT_LINE_ENDING_RCLOSEDARROW,
+	PDF_ANNOT_LINE_ENDING_SLASH
 };
 
 /*

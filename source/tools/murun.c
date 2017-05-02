@@ -3786,11 +3786,13 @@ static void ffi_PDFPage_createAnnotation(js_State *J)
 	pdf_page *page = js_touserdata(J, 0, "pdf_page");
 	const char *name = js_tostring(J, 1);
 	pdf_annot *annot;
-	int subtype = pdf_annot_type_from_string(name);
-	if (subtype < 0)
-		js_error(J, "unknown PDF annotation subtype: %s", name);
+	int subtype;
+
 	fz_try(ctx)
+	{
+		subtype = pdf_annot_type_from_string(ctx, name);
 		annot = pdf_create_annot(ctx, page, subtype);
+	}
 	fz_catch(ctx)
 		rethrow(J);
 	ffi_pushannot(J, (fz_annot*)annot);
@@ -3805,19 +3807,22 @@ static void ffi_PDFPage_deleteAnnotation(js_State *J)
 		pdf_delete_annot(ctx, page, annot);
 	fz_catch(ctx)
 		rethrow(J);
-	ffi_pushannot(J, (fz_annot*)annot);
 }
 
 static void ffi_PDFAnnotation_getType(js_State *J)
 {
 	fz_context *ctx = js_getcontext(J);
 	pdf_annot *annot = js_touserdata(J, 0, "pdf_annot");
-	int subtype;
+	int type;
+	const char *subtype;
 	fz_try(ctx)
-		subtype = pdf_annot_type(ctx, annot);
+	{
+		type = pdf_annot_type(ctx, annot);
+		subtype = pdf_string_from_annot_type(ctx, type);
+	}
 	fz_catch(ctx)
 		rethrow(J);
-	js_pushstring(J, pdf_string_from_annot_type(subtype));
+	js_pushstring(J, subtype);
 }
 
 static void ffi_PDFAnnotation_getFlags(js_State *J)
@@ -3935,15 +3940,47 @@ static void ffi_PDFAnnotation_setColor(js_State *J)
 	pdf_annot *annot = js_touserdata(J, 0, "pdf_annot");
 	int i, n = js_getlength(J, 1);
 	float color[4];
-	if (n != 0 && n != 1 && n != 3 && n != 4)
-		js_error(J, "color must be 0, 1, 3, or 4 components");
-	for (i = 0; i < n; ++i) {
+	for (i = 0; i < n && i < 4; ++i) {
 		js_getindex(J, 1, i);
 		color[i] = js_tonumber(J, -1);
 		js_pop(J, 1);
 	}
 	fz_try(ctx)
 		pdf_set_annot_color(ctx, annot, n, color);
+	fz_catch(ctx)
+		rethrow(J);
+}
+
+static void ffi_PDFAnnotation_getInteriorColor(js_State *J)
+{
+	fz_context *ctx = js_getcontext(J);
+	pdf_annot *annot = js_touserdata(J, 0, "pdf_annot");
+	int i, n;
+	float color[4];
+	fz_try(ctx)
+		pdf_annot_interior_color(ctx, annot, &n, color);
+	fz_catch(ctx)
+		rethrow(J);
+	js_newarray(J);
+	for (i = 0; i < n; ++i) {
+		js_pushnumber(J, color[i]);
+		js_setindex(J, -2, i);
+	}
+}
+
+static void ffi_PDFAnnotation_setInteriorColor(js_State *J)
+{
+	fz_context *ctx = js_getcontext(J);
+	pdf_annot *annot = js_touserdata(J, 0, "pdf_annot");
+	int i, n = js_getlength(J, 1);
+	float color[4];
+	for (i = 0; i < n && i < 4; ++i) {
+		js_getindex(J, 1, i);
+		color[i] = js_tonumber(J, -1);
+		js_pop(J, 1);
+	}
+	fz_try(ctx)
+		pdf_set_annot_interior_color(ctx, annot, n, color);
 	fz_catch(ctx)
 		rethrow(J);
 }
@@ -4001,12 +4038,10 @@ static void ffi_PDFAnnotation_setQuadPoints(js_State *J)
 
 	fz_try(ctx)
 		pdf_set_annot_quad_points(ctx, annot, n, qp);
-	fz_catch(ctx) {
+	fz_always(ctx)
 		fz_free(ctx, qp);
+	fz_catch(ctx)
 		rethrow(J);
-	}
-
-	fz_free(ctx, qp);
 }
 
 static void ffi_PDFAnnotation_getInkList(js_State *J)
@@ -4090,14 +4125,12 @@ static void ffi_PDFAnnotation_setInkList(js_State *J)
 
 	fz_try(ctx)
 		pdf_set_annot_ink_list(ctx, annot, n, counts, points);
-	fz_catch(ctx) {
+	fz_always(ctx) {
 		fz_free(ctx, counts);
 		fz_free(ctx, points);
-		rethrow(J);
 	}
-
-	fz_free(ctx, counts);
-	fz_free(ctx, points);
+	fz_catch(ctx)
+		rethrow(J);
 }
 
 static void ffi_PDFAnnotation_updateAppearance(js_State *J)
@@ -4422,6 +4455,8 @@ int murun_main(int argc, char **argv)
 		jsB_propfun(J, "PDFAnnotation.setBorder", ffi_PDFAnnotation_setBorder, 1);
 		jsB_propfun(J, "PDFAnnotation.getColor", ffi_PDFAnnotation_getColor, 0);
 		jsB_propfun(J, "PDFAnnotation.setColor", ffi_PDFAnnotation_setColor, 1);
+		jsB_propfun(J, "PDFAnnotation.getInteriorColor", ffi_PDFAnnotation_getInteriorColor, 0);
+		jsB_propfun(J, "PDFAnnotation.setInteriorColor", ffi_PDFAnnotation_setInteriorColor, 1);
 		jsB_propfun(J, "PDFAnnotation.getQuadPoints", ffi_PDFAnnotation_getQuadPoints, 0);
 		jsB_propfun(J, "PDFAnnotation.setQuadPoints", ffi_PDFAnnotation_setQuadPoints, 1);
 		jsB_propfun(J, "PDFAnnotation.getInkList", ffi_PDFAnnotation_getInkList, 0);
