@@ -1,4 +1,7 @@
+#include "mupdf/fitz.h"
 #include "fitz-imp.h"
+
+#include <string.h>
 
 #include <zlib.h>
 
@@ -224,7 +227,7 @@ static void ensure_zip_entries(fz_context *ctx, fz_zip_archive *zip)
 	size_t size, back, maxback;
 	size_t i, n;
 
-	fz_seek(ctx, file, 0, SEEK_END);
+	fz_seek(ctx, file, 0, FZ_SEEK_END);
 	size = fz_tell(ctx, file);
 
 	maxback = fz_minz(size, 0xFFFF + sizeof buf);

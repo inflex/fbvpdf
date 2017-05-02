@@ -17,7 +17,6 @@ extern "C" {
 #include "mupdf/fitz/pool.h"
 #include "mupdf/fitz/string-util.h"
 #include "mupdf/fitz/tree.h"
-#include "mupdf/fitz/ucdn.h"
 #include "mupdf/fitz/bidi.h"
 #include "mupdf/fitz/xml.h"
 
@@ -36,7 +35,6 @@ extern "C" {
 #include "mupdf/fitz/glyph.h"
 #include "mupdf/fitz/bitmap.h"
 #include "mupdf/fitz/image.h"
-#include "mupdf/fitz/function.h"
 #include "mupdf/fitz/shade.h"
 #include "mupdf/fitz/font.h"
 #include "mupdf/fitz/path.h"

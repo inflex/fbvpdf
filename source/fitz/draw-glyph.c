@@ -2,6 +2,9 @@
 #include "draw-imp.h"
 #include "glyph-cache-imp.h"
 
+#include <string.h>
+#include <math.h>
+
 #define MAX_GLYPH_SIZE 256
 #define MAX_CACHE_SIZE (1024*1024)
 
@@ -455,8 +458,8 @@ fz_dump_glyph_cache_stats(fz_context *ctx)
 {
 	fz_glyph_cache *cache = ctx->glyph_cache;
 
-	fprintf(stderr, "Glyph Cache Size: " FMT_zu "\n", cache->total);
+	fz_write_printf(ctx, fz_stderr(ctx), "Glyph Cache Size: %zu\n", cache->total);
 #ifndef NDEBUG
-	fprintf(stderr, "Glyph Cache Evictions: %d (" FMT_zu " bytes)\n", cache->num_evictions, cache->evicted);
+	fz_write_printf(ctx, fz_stderr(ctx), "Glyph Cache Evictions: %d (%zu bytes)\n", cache->num_evictions, cache->evicted);
 #endif
 }

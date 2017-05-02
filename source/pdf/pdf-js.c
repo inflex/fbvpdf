@@ -1,8 +1,12 @@
+#include "mupdf/fitz.h"
 #include "mupdf/pdf.h"
 
 #if FZ_ENABLE_JS
 
 #include "mujs.h"
+
+#include <stdarg.h>
+#include <string.h>
 
 struct pdf_js_s
 {
@@ -505,6 +509,15 @@ static void declare_dom(pdf_js *js)
 	/* Create the 'app' object */
 	js_newobject(J);
 	{
+#if defined(_WIN32) || defined(_WIN64)
+		js_pushstring(J, "WIN");
+#elif defined(__APPLE__)
+		js_pushstring(J, "MAC");
+#else
+		js_pushstring(J, "UNIX");
+#endif
+		js_defproperty(J, -2, "app.platform", JS_READONLY | JS_DONTENUM | JS_DONTCONF);
+
 		addmethod(J, "app.alert", app_alert, 4);
 		addmethod(J, "app.execDialog", app_execDialog, 0);
 		addmethod(J, "app.execMenuItem", app_execMenuItem, 1);

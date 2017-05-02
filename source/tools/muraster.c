@@ -139,6 +139,18 @@
 #include "mupdf/fitz.h"
 #include "mupdf/helpers/mu-threads.h"
 
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#ifdef _MSC_VER
+struct timeval;
+struct timezone;
+int gettimeofday(struct timeval *tv, struct timezone *tz);
+#else
+#include <sys/time.h>
+#endif
+
 /*
 	After this point, we convert the #defines set (or not set)
 	above into sensible values we can work with. Don't edit
@@ -1709,9 +1721,9 @@ int main(int argc, char **argv)
 
 	if (showmemory)
 	{
-		fprintf(stderr, "Total memory use = " FMT_zu " bytes\n", memtrace_total);
-		fprintf(stderr, "Peak memory use = " FMT_zu " bytes\n", memtrace_peak);
-		fprintf(stderr, "Current memory use = " FMT_zu " bytes\n", memtrace_current);
+		fprintf(stderr, "Total memory use = " FZ_FMT_zu " bytes\n", memtrace_total);
+		fprintf(stderr, "Peak memory use = " FZ_FMT_zu " bytes\n", memtrace_peak);
+		fprintf(stderr, "Current memory use = " FZ_FMT_zu " bytes\n", memtrace_current);
 	}
 
 	return (errored != 0);

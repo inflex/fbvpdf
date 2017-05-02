@@ -5,6 +5,8 @@
 #define FZ_LARGEFILE
 #endif
 
+#define FZ_PATH_MAX (2048)
+
 /* The very first decision we need to make is, are we using the 64bit
  * file pointers code. This must happen before the stdio.h include. */
 #ifdef FZ_LARGEFILE
@@ -92,6 +94,10 @@
 #define fz_jmp_buf jmp_buf
 #endif
 
+/* these constants mirror the corresponding macros in stdio.h */
+#define FZ_SEEK_SET 0
+#define FZ_SEEK_CUR 1
+#define FZ_SEEK_END 2
 #ifdef _WIN32
 char **fz_argv_from_wargv(int argc, wchar_t **wargv);
 void fz_free_argv(int argc, char **argv);
@@ -122,10 +128,6 @@ static __inline int signbit(double x)
 
 #else
 #define va_copy_end(a) va_end(a)
-#endif
-
-#ifndef PATH_MAX
-#define PATH_MAX (1024)
 #endif
 
 typedef signed char int8_t;
@@ -232,11 +234,11 @@ typedef int fz_off_t;
 
 /* Portable way to format a size_t */
 #if defined(_WIN64)
-#define FMT_zu "%llu"
+#define FZ_FMT_zu "%llu"
 #elif defined(_WIN32)
-#define FMT_zu "%u"
+#define FZ_FMT_zu "%u"
 #else
-#define FMT_zu "%zu"
+#define FZ_FMT_zu "%zu"
 #endif
 
 #ifdef __ANDROID__

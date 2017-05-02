@@ -1,6 +1,12 @@
 #include "mupdf/fitz.h"
 #include "draw-imp.h"
 
+#include <string.h>
+#include <math.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <assert.h>
+
 #define BBOX_MIN -(1<<20)
 #define BBOX_MAX (1<<20)
 
@@ -8,6 +14,12 @@
 static inline int fz_idiv(int a, int b)
 {
 	return a < 0 ? (a - b + 1) / b : a / b;
+}
+
+/* divide and ceil towards inf */
+static inline int fz_idiv_up(int a, int b)
+{
+	return a < 0 ? a / b : (a + b - 1) / b;
 }
 
 /* If AA_BITS is defined, then we assume constant N bits of antialiasing. We
@@ -353,8 +365,8 @@ fz_bound_gel(fz_context *ctx, const fz_gel *gel, fz_irect *bbox)
 	{
 		bbox->x0 = fz_idiv(gel->bbox.x0, hscale);
 		bbox->y0 = fz_idiv(gel->bbox.y0, vscale);
-		bbox->x1 = fz_idiv(gel->bbox.x1, hscale) + 1;
-		bbox->y1 = fz_idiv(gel->bbox.y1, vscale) + 1;
+		bbox->x1 = fz_idiv_up(gel->bbox.x1, hscale);
+		bbox->y1 = fz_idiv_up(gel->bbox.y1, vscale);
 	}
 	return bbox;
 }
@@ -875,7 +887,7 @@ fz_scan_convert_aa(fz_context *ctx, fz_gel *gel, int eofill, const fz_irect *cli
 	const int vscale = fz_aa_vscale;
 
 	int xmin = fz_idiv(gel->bbox.x0, hscale);
-	int xmax = fz_idiv(gel->bbox.x1, hscale) + 1;
+	int xmax = fz_idiv_up(gel->bbox.x1, hscale);
 
 	int xofs = xmin * hscale;
 
@@ -885,11 +897,12 @@ fz_scan_convert_aa(fz_context *ctx, fz_gel *gel, int eofill, const fz_irect *cli
 	if (gel->len == 0)
 		return;
 
+	assert(xmin < xmax);
 	assert(clip->x0 >= xmin);
 	assert(clip->x1 <= xmax);
 
 	alphas = fz_malloc_no_throw(ctx, xmax - xmin + 1);
-	deltas = fz_malloc_no_throw(ctx, (xmax - xmin + 1) * sizeof(int));
+	deltas = fz_malloc_no_throw(ctx, (xmax - xmin + 2) * sizeof(int));
 	if (alphas == NULL || deltas == NULL)
 	{
 		fz_free(ctx, alphas);

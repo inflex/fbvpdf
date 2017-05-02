@@ -1,5 +1,8 @@
 #include "mupdf/fitz.h"
 
+#include <string.h>
+#include <limits.h>
+
 /* Lifted from ghostscript gdevjlm.h */
 /*
  * The notion that there is such a thing as a "PCL printer" is a fiction: no
@@ -345,7 +348,7 @@ make_init(fz_pcl_options *pcl, char *buf, unsigned long len, const char *str, in
 {
 	int paper_source = -1;
 
-	snprintf(buf, len, str, res);
+	fz_snprintf(buf, len, str, res);
 
 	if (pcl->manual_feed_set && pcl->manual_feed)
 		paper_source = 2;
@@ -354,7 +357,7 @@ make_init(fz_pcl_options *pcl, char *buf, unsigned long len, const char *str, in
 	if (paper_source >= 0)
 	{
 		char buf2[40];
-		snprintf(buf2, sizeof(buf2), "\033&l%dH", paper_source);
+		fz_snprintf(buf2, sizeof(buf2), "\033&l%dH", paper_source);
 		strncat(buf, buf2, len);
 	}
 }

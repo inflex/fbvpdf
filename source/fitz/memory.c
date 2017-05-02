@@ -1,5 +1,9 @@
 #include "mupdf/fitz.h"
 
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
 /* Enable FITZ_DEBUG_LOCKING_TIMES below if you want to check the times
  * for which locks are held too. */
 #ifdef FITZ_DEBUG_LOCKING
@@ -56,7 +60,7 @@ fz_malloc(fz_context *ctx, size_t size)
 
 	p = do_scavenging_malloc(ctx, size);
 	if (!p)
-		fz_throw(ctx, FZ_ERROR_MEMORY, "malloc of " FMT_zu " bytes failed", size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "malloc of %zu bytes failed", size);
 	return p;
 }
 
@@ -75,11 +79,11 @@ fz_malloc_array(fz_context *ctx, size_t count, size_t size)
 		return 0;
 
 	if (count > SIZE_MAX / size)
-		fz_throw(ctx, FZ_ERROR_MEMORY, "malloc of array (" FMT_zu " x " FMT_zu " bytes) failed (size_t overflow)", count, size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "malloc of array (%zu x %zu bytes) failed (size_t overflow)", count, size);
 
 	p = do_scavenging_malloc(ctx, count * size);
 	if (!p)
-		fz_throw(ctx, FZ_ERROR_MEMORY, "malloc of array (" FMT_zu " x " FMT_zu " bytes) failed", count, size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "malloc of array (%zu x %zu bytes) failed", count, size);
 	return p;
 }
 
@@ -91,7 +95,7 @@ fz_malloc_array_no_throw(fz_context *ctx, size_t count, size_t size)
 
 	if (count > SIZE_MAX / size)
 	{
-		fprintf(stderr, "error: malloc of array (" FMT_zu " x " FMT_zu " bytes) failed (size_t overflow)", count, size);
+		fprintf(stderr, "error: malloc of array (" FZ_FMT_zu " x " FZ_FMT_zu " bytes) failed (size_t overflow)", count, size);
 		return NULL;
 	}
 
@@ -108,13 +112,13 @@ fz_calloc(fz_context *ctx, size_t count, size_t size)
 
 	if (count > SIZE_MAX / size)
 	{
-		fz_throw(ctx, FZ_ERROR_MEMORY, "calloc (" FMT_zu " x " FMT_zu " bytes) failed (size_t overflow)", count, size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "calloc (%zu x %zu bytes) failed (size_t overflow)", count, size);
 	}
 
 	p = do_scavenging_malloc(ctx, count * size);
 	if (!p)
 	{
-		fz_throw(ctx, FZ_ERROR_MEMORY, "calloc (" FMT_zu " x " FMT_zu " bytes) failed", count, size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "calloc (%zu x %zu bytes) failed", count, size);
 	}
 	memset(p, 0, count*size);
 	return p;
@@ -130,7 +134,7 @@ fz_calloc_no_throw(fz_context *ctx, size_t count, size_t size)
 
 	if (count > SIZE_MAX / size)
 	{
-		fprintf(stderr, "error: calloc (" FMT_zu " x " FMT_zu " bytes) failed (size_t overflow)\n", count, size);
+		fprintf(stderr, "error: calloc (" FZ_FMT_zu " x " FZ_FMT_zu " bytes) failed (size_t overflow)\n", count, size);
 		return NULL;
 	}
 
@@ -154,11 +158,11 @@ fz_resize_array(fz_context *ctx, void *p, size_t count, size_t size)
 	}
 
 	if (count > SIZE_MAX / size)
-		fz_throw(ctx, FZ_ERROR_MEMORY, "resize array (" FMT_zu " x " FMT_zu " bytes) failed (size_t overflow)", count, size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "resize array (%zu x %zu bytes) failed (size_t overflow)", count, size);
 
 	np = do_scavenging_realloc(ctx, p, count * size);
 	if (!np)
-		fz_throw(ctx, FZ_ERROR_MEMORY, "resize array (" FMT_zu " x " FMT_zu " bytes) failed", count, size);
+		fz_throw(ctx, FZ_ERROR_MEMORY, "resize array (%zu x %zu bytes) failed", count, size);
 	return np;
 }
 
@@ -173,7 +177,7 @@ fz_resize_array_no_throw(fz_context *ctx, void *p, size_t count, size_t size)
 
 	if (count > SIZE_MAX / size)
 	{
-		fprintf(stderr, "error: resize array (" FMT_zu " x " FMT_zu " bytes) failed (size_t overflow)\n", count, size);
+		fprintf(stderr, "error: resize array (" FZ_FMT_zu " x " FZ_FMT_zu " bytes) failed (size_t overflow)\n", count, size);
 		return NULL;
 	}
 

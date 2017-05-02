@@ -1,4 +1,7 @@
-#include "mupdf/html.h"
+#include "mupdf/fitz.h"
+#include "html-imp.h"
+
+#include <string.h>
 
 struct lexbuf
 {
