@@ -402,7 +402,7 @@ static void paint_solid_color_1_da(byte * restrict dp, int n, int w, const byte 
 static void paint_solid_color_0_da(byte * restrict dp, int n, int w, const byte * restrict color, int da)
 {
 	TRACK_FN();
-	template_solid_color_0_da(dp, w, 1);
+	template_solid_color_0_da(dp, w, 256);
 }
 
 #if FZ_PLOTTERS_RGB
@@ -461,7 +461,7 @@ static void paint_solid_color_N(byte * restrict dp, int n, int w, const byte * r
 static void paint_solid_color_N_da(byte * restrict dp, int n, int w, const byte * restrict color, int da)
 {
 	TRACK_FN();
-	template_solid_color_N_general(dp, n, w, color, 1, FZ_EXPAND(color[1]));
+	template_solid_color_N_general(dp, n, w, color, 1, FZ_EXPAND(color[n]));
 }
 #endif /* FZ_PLOTTERS_N */
 
