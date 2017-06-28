@@ -348,10 +348,10 @@ void cleanup(pdfapp_t *app)
 	fz_drop_context(ctx);
 }
 
-static int winresolution()
+static int winresolution(void)
 {
-	return DisplayWidth(xdpy, xscr) * 25.4 /
-		DisplayWidthMM(xdpy, xscr) + 0.5;
+	return DisplayWidth(xdpy, xscr) * 25.4f /
+		DisplayWidthMM(xdpy, xscr) + 0.5f;
 }
 
 void wincursor(pdfapp_t *app, int curs)

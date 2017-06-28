@@ -9,7 +9,7 @@ OS := $(OS:Darwin=MACOS)
 HAVE_LIBDL ?= yes
 
 
-CFLAGS += -Wall
+CFLAGS += -Wall -Wdeclaration-after-statement
 
 ifeq (,$(findstring -fembed-bitcode,$(XCFLAGS)))
 # clang does not support these in combination with -fembed-bitcode
@@ -155,6 +155,11 @@ endif
 ifeq "$(shell pkg-config --exists libopenjp2 && echo yes)" "yes"
 SYS_OPENJPEG_CFLAGS := $(shell pkg-config --cflags libopenjp2)
 SYS_OPENJPEG_LIBS := $(shell pkg-config --libs libopenjp2)
+endif
+
+ifeq "$(shell pkg-config --exists lcms2 && echo yes)" "yes"
+SYS_LCMS2_CFLAGS := $(shell pkg-config --cflags lcms2)
+SYS_LCMS2_LIBS := $(shell pkg-config --libs lcms2)
 endif
 
 SYS_JBIG2DEC_LIBS := -ljbig2dec

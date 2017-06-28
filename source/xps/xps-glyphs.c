@@ -64,9 +64,9 @@ xps_measure_font_glyph(fz_context *ctx, xps_document *doc, fz_font *font, int gi
 	FT_Get_Advance(face, gid, mask | FT_LOAD_VERTICAL_LAYOUT, &vadv);
 	fz_unlock(ctx, FZ_LOCK_FREETYPE);
 
-	mtx->hadv = hadv / (float)face->units_per_EM;
-	mtx->vadv = vadv / (float)face->units_per_EM;
-	mtx->vorg = face->ascender / (float) face->units_per_EM;
+	mtx->hadv = (float) hadv / face->units_per_EM;
+	mtx->vadv = (float) vadv / face->units_per_EM;
+	mtx->vorg = (float) face->ascender / face->units_per_EM;
 }
 
 static fz_font *
@@ -610,7 +610,7 @@ xps_parse_glyphs(fz_context *ctx, xps_document *doc, const fz_matrix *ctm,
 		xps_set_color(ctx, doc, colorspace, samples);
 
 		fz_fill_text(ctx, dev, text, &local_ctm,
-			doc->colorspace, doc->color, doc->alpha);
+			doc->colorspace, doc->color, doc->alpha, NULL);
 	}
 
 	/* If it's a complex brush, use the charpath as a clip mask */

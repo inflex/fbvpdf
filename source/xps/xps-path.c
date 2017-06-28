@@ -17,7 +17,7 @@ xps_parse_float_array(fz_context *ctx, xps_document *doc, char *s, int num, floa
 	{
 		while (*s == 0x0d || *s == '\t' || *s == ' ' || *s == 0x0a)
 			s++;
-		x[k] = (float)fz_strtod(s, &s);
+		x[k] = fz_strtof(s, &s);
 		while (*s == 0x0d || *s == '\t' || *s == ' ' || *s == 0x0a)
 			s++;
 		if (*s == ',')
@@ -55,9 +55,9 @@ xps_draw_arc_segment(fz_context *ctx, xps_document *doc, fz_path *path, const fz
 	fz_point p;
 
 	while (th1 < th0)
-		th1 += (float)M_PI * 2;
+		th1 += FZ_PI * 2;
 
-	d = (float)M_PI / 180; /* 1-degree precision */
+	d = FZ_PI / 180; /* 1-degree precision */
 
 	if (iscw)
 	{
@@ -69,7 +69,7 @@ xps_draw_arc_segment(fz_context *ctx, xps_document *doc, fz_path *path, const fz
 	}
 	else
 	{
-		th0 += (float)M_PI * 2;
+		th0 += FZ_PI * 2;
 		for (t = th0 - d; t > th1 + d/2; t -= d)
 		{
 			fz_transform_point_xy(&p, mtx, cosf(t), sinf(t));
@@ -202,9 +202,9 @@ xps_draw_arc(fz_context *ctx, xps_document *doc, fz_path *path,
 		th1 = angle_between(coord1, coord2);
 		dth = angle_between(coord3, coord4);
 		if (dth < 0 && !is_clockwise)
-			dth += (((float)M_PI / 180) * 360);
+			dth += ((FZ_PI / 180) * 360);
 		if (dth > 0 && is_clockwise)
-			dth -= (((float)M_PI / 180) * 360);
+			dth -= ((FZ_PI / 180) * 360);
 	}
 
 	fz_pre_scale(fz_pre_rotate(fz_translate(&mtx, cx, cy), rotation_angle), rx, ry);
@@ -1002,7 +1002,7 @@ xps_parse_path(fz_context *ctx, xps_document *doc, const fz_matrix *ctm, char *b
 		xps_set_color(ctx, doc, colorspace, samples);
 
 		fz_fill_path(ctx, dev, path, fill_rule == 0, &local_ctm,
-			doc->colorspace, doc->color, doc->alpha);
+			doc->colorspace, doc->color, doc->alpha, NULL);
 	}
 
 	if (fill_tag)
@@ -1020,7 +1020,7 @@ xps_parse_path(fz_context *ctx, xps_document *doc, const fz_matrix *ctm, char *b
 		xps_set_color(ctx, doc, colorspace, samples);
 
 		fz_stroke_path(ctx, dev, stroke_path, stroke, &local_ctm,
-			doc->colorspace, doc->color, doc->alpha);
+			doc->colorspace, doc->color, doc->alpha, NULL);
 	}
 
 	if (stroke_tag)

@@ -203,7 +203,7 @@ push_span(fz_context *ctx, fz_stext_device *tdev, fz_stext_span *span, int new_l
 	{
 		float size = fz_matrix_expansion(&span->transform);
 		/* So, a new line. Part of the same block or not? */
-		if (distance == 0 || distance > size * 1.5 || distance < -size * PARAGRAPH_DIST || page->len == 0 || prev_not_text)
+		if (distance == 0 || distance > size * 1.5f || distance < -size * PARAGRAPH_DIST || page->len == 0 || prev_not_text)
 		{
 			/* New block */
 			if (page->len == page->cap)
@@ -340,7 +340,7 @@ strain_soup(fz_context *ctx, fz_stext_device *tdev)
 			/* Check if p and q are parallel. If so, then this
 			 * line is parallel with the last one. */
 			dot = p.x * q.x + p.y * q.y;
-			if (fabsf(dot) > 0.9995)
+			if (fabsf(dot) > 0.9995f)
 			{
 				/* If we take the dot product of normalised(p) and
 				 * perp(r), we get the perpendicular distance from
@@ -676,10 +676,10 @@ fz_add_stext_char_imp(fz_context *ctx, fz_stext_device *dev, fz_stext_style *sty
 		base_offset = -ndir.y * delta.x + ndir.x * delta.y;
 
 		spacing /= size * SPACE_DIST;
-		if (fabsf(base_offset) < size * 0.1)
+		if (fabsf(base_offset) < size * 0.1f)
 		{
 			/* Only a small amount off the baseline - we'll take this */
-			if (fabsf(spacing) < 1.0)
+			if (fabsf(spacing) < 1.0f)
 			{
 				/* Motion is in line, and small. */
 			}
@@ -867,7 +867,7 @@ fz_stext_extract(fz_context *ctx, fz_stext_device *dev, fz_text_span *span, cons
 
 static void
 fz_stext_fill_text(fz_context *ctx, fz_device *dev, const fz_text *text, const fz_matrix *ctm,
-	fz_colorspace *colorspace, const float *color, float alpha)
+	fz_colorspace *colorspace, const float *color, float alpha, const fz_color_params *color_params)
 {
 	fz_stext_device *tdev = (fz_stext_device*)dev;
 	fz_stext_style *style;
@@ -881,7 +881,7 @@ fz_stext_fill_text(fz_context *ctx, fz_device *dev, const fz_text *text, const f
 
 static void
 fz_stext_stroke_text(fz_context *ctx, fz_device *dev, const fz_text *text, const fz_stroke_state *stroke, const fz_matrix *ctm,
-	fz_colorspace *colorspace, const float *color, float alpha)
+	fz_colorspace *colorspace, const float *color, float alpha, const fz_color_params *color_params)
 {
 	fz_stext_device *tdev = (fz_stext_device*)dev;
 	fz_stext_style *style;
@@ -934,7 +934,7 @@ fz_stext_ignore_text(fz_context *ctx, fz_device *dev, const fz_text *text, const
 
 static void
 fz_stext_fill_image_mask(fz_context *ctx, fz_device *dev, fz_image *img, const fz_matrix *ctm,
-		fz_colorspace *cspace, const float *color, float alpha)
+		fz_colorspace *cspace, const float *color, float alpha, const fz_color_params *color_params)
 {
 	fz_stext_device *tdev = (fz_stext_device*)dev;
 	fz_stext_page *page = tdev->page;
@@ -942,7 +942,7 @@ fz_stext_fill_image_mask(fz_context *ctx, fz_device *dev, fz_image *img, const f
 
 	/* If the alpha is less than 50% then it's probably a watermark or
 	 * effect or something. Skip it */
-	if (alpha < 0.5)
+	if (alpha < 0.5f)
 		return;
 
 	/* New block */
@@ -969,9 +969,9 @@ fz_stext_fill_image_mask(fz_context *ctx, fz_device *dev, fz_image *img, const f
 }
 
 static void
-fz_stext_fill_image(fz_context *ctx, fz_device *dev, fz_image *img, const fz_matrix *ctm, float alpha)
+fz_stext_fill_image(fz_context *ctx, fz_device *dev, fz_image *img, const fz_matrix *ctm, float alpha, const fz_color_params *color_params)
 {
-	fz_stext_fill_image_mask(ctx, dev, img, ctm, NULL, NULL, alpha);
+	fz_stext_fill_image_mask(ctx, dev, img, ctm, NULL, NULL, alpha, color_params);
 }
 
 static int
@@ -1095,6 +1095,8 @@ fz_parse_stext_options(fz_context *ctx, fz_stext_options *opts, const char *stri
 		opts->flags |= FZ_STEXT_PRESERVE_LIGATURES;
 	if (fz_has_option(ctx, string, "preserve-whitespace", &val) && fz_option_eq(val, "yes"))
 		opts->flags |= FZ_STEXT_PRESERVE_WHITESPACE;
+	if (fz_has_option(ctx, string, "preserve-images", &val) && fz_option_eq(val, "yes"))
+		opts->flags |= FZ_STEXT_PRESERVE_IMAGES;
 
 	return opts;
 }
@@ -1104,8 +1106,6 @@ fz_new_stext_device(fz_context *ctx, fz_stext_sheet *sheet, fz_stext_page *page,
 {
 	fz_stext_device *dev = fz_new_derived_device(ctx, fz_stext_device);
 
-	dev->super.hints = FZ_IGNORE_IMAGE | FZ_IGNORE_SHADE;
-
 	dev->super.close_device = fz_stext_close_device;
 	dev->super.drop_device = fz_stext_drop_device;
 
@@ -1114,16 +1114,18 @@ fz_new_stext_device(fz_context *ctx, fz_stext_sheet *sheet, fz_stext_page *page,
 	dev->super.clip_text = fz_stext_clip_text;
 	dev->super.clip_stroke_text = fz_stext_clip_stroke_text;
 	dev->super.ignore_text = fz_stext_ignore_text;
-	dev->super.fill_image = fz_stext_fill_image;
-	dev->super.fill_image_mask = fz_stext_fill_image_mask;
+
+	if (opts && (opts->flags & FZ_STEXT_PRESERVE_IMAGES))
+	{
+		dev->super.fill_image = fz_stext_fill_image;
+		dev->super.fill_image_mask = fz_stext_fill_image_mask;
+	}
 
 	dev->sheet = sheet;
 	dev->page = page;
 	dev->spans = NULL;
 	dev->cur_span = NULL;
 	dev->lastchar = ' ';
-	if (opts)
-		dev->flags = opts->flags;
 
 	return (fz_device*)dev;
 }

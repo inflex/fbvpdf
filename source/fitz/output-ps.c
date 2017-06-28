@@ -41,7 +41,7 @@ void fz_write_ps_file_trailer(fz_context *ctx, fz_output *out, int pages)
 }
 
 static void
-ps_write_header(fz_context *ctx, fz_band_writer *writer_)
+ps_write_header(fz_context *ctx, fz_band_writer *writer_, const fz_colorspace *cs)
 {
 	ps_band_writer *writer = (ps_band_writer *)writer_;
 	fz_output *out = writer->super.out;
@@ -54,8 +54,8 @@ ps_write_header(fz_context *ctx, fz_band_writer *writer_)
 	int pagenum = writer->super.pagenum;
 	int w_points = (w * 72 + (xres>>1)) / xres;
 	int h_points = (h * 72 + (yres>>1)) / yres;
-	float sx = w/(float)w_points;
-	float sy = h/(float)h_points;
+	float sx = (float) w / w_points;
+	float sy = (float) h / h_points;
 	int err;
 
 	if (alpha != 0)
@@ -147,7 +147,7 @@ void fz_write_pixmap_as_ps(fz_context *ctx, fz_output *out, const fz_pixmap *pix
 
 	fz_try(ctx)
 	{
-		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, pixmap->xres, pixmap->yres, 0);
+		fz_write_header(ctx, writer, pixmap->w, pixmap->h, pixmap->n, pixmap->alpha, pixmap->xres, pixmap->yres, 0, pixmap->colorspace);
 		fz_write_band(ctx, writer, pixmap->stride, pixmap->h, pixmap->samples);
 	}
 	fz_always(ctx)

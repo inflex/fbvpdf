@@ -49,7 +49,6 @@ typedef struct pdf_filter_processor_s
 	pdf_processor super;
 	pdf_processor *chain;
 	filter_gstate *gstate;
-	pdf_document *doc;
 	pdf_obj *old_rdb, *new_rdb;
 } pdf_filter_processor;
 
@@ -68,7 +67,7 @@ copy_resource(fz_context *ctx, pdf_filter_processor *p, pdf_obj *key, const char
 		res = pdf_dict_get(ctx, p->new_rdb, key);
 		if (!res)
 		{
-			res = pdf_new_dict(ctx, p->doc, 1);
+			res = pdf_new_dict(ctx, pdf_get_bound_document(ctx, p->new_rdb), 1);
 			pdf_dict_put_drop(ctx, p->new_rdb, key, res);
 		}
 		pdf_dict_putp(ctx, res, name, obj);
@@ -387,6 +386,42 @@ pdf_filter_ri(fz_context *ctx, pdf_processor *proc, const char *intent)
 	filter_flush(ctx, p, 0);
 	if (p->chain->op_ri)
 		p->chain->op_ri(ctx, p->chain, intent);
+}
+
+static void
+pdf_filter_gs_OP(fz_context *ctx, pdf_processor *proc, int b)
+{
+	pdf_filter_processor *p = (pdf_filter_processor*)proc;
+	filter_flush(ctx, p, 0);
+	if (p->chain->op_gs_OP)
+		p->chain->op_gs_OP(ctx, p->chain, b);
+}
+
+static void
+pdf_filter_gs_op(fz_context *ctx, pdf_processor *proc, int b)
+{
+	pdf_filter_processor *p = (pdf_filter_processor*)proc;
+	filter_flush(ctx, p, 0);
+	if (p->chain->op_gs_op)
+		p->chain->op_gs_op(ctx, p->chain, b);
+}
+
+static void
+pdf_filter_gs_OPM(fz_context *ctx, pdf_processor *proc, int i)
+{
+	pdf_filter_processor *p = (pdf_filter_processor*)proc;
+	filter_flush(ctx, p, 0);
+	if (p->chain->op_gs_OPM)
+		p->chain->op_gs_OPM(ctx, p->chain, i);
+}
+
+static void
+pdf_filter_gs_UseBlackPtComp(fz_context *ctx, pdf_processor *proc, pdf_obj *name)
+{
+	pdf_filter_processor *p = (pdf_filter_processor*)proc;
+	filter_flush(ctx, p, 0);
+	if (p->chain->op_gs_UseBlackPtComp)
+		p->chain->op_gs_UseBlackPtComp(ctx, p->chain, name);
 }
 
 static void
@@ -1123,7 +1158,7 @@ pdf_drop_filter_processor(fz_context *ctx, pdf_processor *proc)
 }
 
 pdf_processor *
-pdf_new_filter_processor(fz_context *ctx, pdf_processor *chain, pdf_document *doc, pdf_obj *old_rdb, pdf_obj *new_rdb)
+pdf_new_filter_processor(fz_context *ctx, pdf_processor *chain, pdf_obj *old_rdb, pdf_obj *new_rdb)
 {
 	pdf_filter_processor *proc = pdf_new_processor(ctx, sizeof *proc);
 	{
@@ -1239,11 +1274,16 @@ pdf_new_filter_processor(fz_context *ctx, pdf_processor *chain, pdf_document *do
 		proc->super.op_BX = pdf_filter_BX;
 		proc->super.op_EX = pdf_filter_EX;
 
+		/* extgstate */
+		proc->super.op_gs_OP = pdf_filter_gs_OP;
+		proc->super.op_gs_op = pdf_filter_gs_op;
+		proc->super.op_gs_OPM = pdf_filter_gs_OPM;
+		proc->super.op_gs_UseBlackPtComp = pdf_filter_gs_UseBlackPtComp;
+
 		proc->super.op_END = pdf_filter_END;
 	}
 
 	proc->chain = chain;
-	proc->doc = doc;
 	proc->old_rdb = old_rdb;
 	proc->new_rdb = new_rdb;
 

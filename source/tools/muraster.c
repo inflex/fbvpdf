@@ -71,13 +71,13 @@
 	MURASTER_CONFIG_WIDTH: The printable page width
 	(in inches)
 */
-/* #define MURASTER_CONFIG_WIDTH 8.27 */
+/* #define MURASTER_CONFIG_WIDTH 8.27f */
 
 /*
 	MURASTER_CONFIG_HEIGHT: The printable page height
 	(in inches)
 */
-/* #define MURASTER_CONFIG_HEIGHT 11.69 */
+/* #define MURASTER_CONFIG_HEIGHT 11.69f */
 
 /*
 	MURASTER_CONFIG_STORE_SIZE: The maximum size to use
@@ -172,13 +172,13 @@ int gettimeofday(struct timeval *tv, struct timezone *tz);
 #ifdef MURASTER_CONFIG_WIDTH
 #define PAPER_WIDTH MURASTER_CONFIG_WIDTH
 #else
-#define PAPER_WIDTH 8.27
+#define PAPER_WIDTH 8.27f
 #endif
 
 #ifdef MURASTER_CONFIG_HEIGHT
 #define PAPER_HEIGHT MURASTER_CONFIG_HEIGHT
 #else
-#define PAPER_HEIGHT 11.69
+#define PAPER_HEIGHT 11.69f
 #endif
 
 #ifdef MURASTER_CONFIG_STORE_SIZE
@@ -384,7 +384,6 @@ static int alphabits_graphics = 8;
 
 static int min_band_height;
 static size_t max_band_memory;
-int band_height;
 
 static int errored = 0;
 static fz_colorspace *colorspace;
@@ -616,7 +615,7 @@ static int dodrawpage(fz_context *ctx, int pagenum, fz_cookie *cookie, render_de
 			pix = fz_new_pixmap_with_bbox(ctx, colorspace, &ibounds, 0);
 			fz_set_pixmap_resolution(ctx, pix, x_resolution, y_resolution);
 		}
-		fz_write_header(ctx, render->bander, pix->w, total_height, pix->n, pix->alpha, pix->xres, pix->yres, pagenum);
+		fz_write_header(ctx, render->bander, pix->w, total_height, pix->n, pix->alpha, pix->xres, pix->yres, pagenum, pix->colorspace);
 
 		for (band = 0; band < bands; band++)
 		{
@@ -719,7 +718,7 @@ static int try_render_page(fz_context *ctx, int pagenum, fz_cookie *cookie, int 
 		{
 			int w = render->ibounds.x1 - render->ibounds.x0;
 			int h = render->ibounds.y1 - render->ibounds.y0;
-			fz_write_header(ctx, render->bander, w, h, render->n, 0, 0, 0, 0);
+			fz_write_header(ctx, render->bander, w, h, render->n, 0, 0, 0, 0, NULL);
 		}
 		fz_catch(ctx)
 		{

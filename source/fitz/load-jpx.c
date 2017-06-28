@@ -32,9 +32,9 @@ jpx_ycc_to_rgb(fz_context *ctx, fz_pixmap *pix, int cbsign, int crsign)
 			if (crsign)
 				ycc[2] -= 128;
 
-			row[x * 3 + 0] = fz_clampi((double)ycc[0] + 1.402 * ycc[2], 0, 255);
-			row[x * 3 + 1] = fz_clampi((double)ycc[0] - 0.34413 * ycc[1] - 0.71414 * ycc[2], 0, 255);
-			row[x * 3 + 2] = fz_clampi((double)ycc[0] + 1.772 * ycc[1], 0, 255);
+			row[x * 3 + 0] = fz_clampi(ycc[0] + 1.402f * ycc[2], 0, 255);
+			row[x * 3 + 1] = fz_clampi(ycc[0] - 0.34413f * ycc[1] - 0.71414f * ycc[2], 0, 255);
+			row[x * 3 + 2] = fz_clampi(ycc[0] + 1.772f * ycc[1], 0, 255);
 		}
 	}
 }
@@ -500,7 +500,7 @@ static void set_opj_context(fz_context *ctx)
 	opj_secret = ctx;
 }
 
-static fz_context *get_opj_context()
+static fz_context *get_opj_context(void)
 {
 	return opj_secret;
 }
@@ -672,6 +672,7 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 	int sub_w[FZ_MAX_COLORS];
 	int sub_h[FZ_MAX_COLORS];
 	int upsample_required = 0;
+	OPJ_UINT32 i;
 
 	fz_var(img);
 
@@ -732,15 +733,18 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 	if (!jpx)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "opj_decode failed");
 
-	n = jpx->numcomps;
 	depth = jpx->comps[0].prec;
 	sgnd = jpx->comps[0].sgnd;
 
-	if (jpx->color_space == OPJ_CLRSPC_SRGB && n == 4) { n = 3; a = 1; }
-	else if (jpx->color_space == OPJ_CLRSPC_SYCC && n == 4) { n = 3; a = 1; }
-	else if (n == 2) { n = 1; a = 1; }
-	else if (n > 4) { n = 4; a = 1; }
-	else { a = 0; }
+	/* Count number of alpha and color channels */
+	n = a = 0;
+	for (i = 0; i < jpx->numcomps; ++i)
+	{
+		if (jpx->comps[i].alpha)
+			++a;
+		else
+			++n;
+	}
 
 	if (defcs)
 	{
@@ -805,10 +809,11 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 		return NULL;
 	}
 
-	img = fz_new_pixmap(ctx, state->cs, w, h, a);
-
 	fz_try(ctx)
 	{
+		a = !!a; /* ignore any superfluous alpha channels */
+		img = fz_new_pixmap(ctx, state->cs, w, h, a);
+
 		p = img->samples;
 		if (upsample_required)
 		{
@@ -819,7 +824,7 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 				{
 					int sh = sub_h[k];
 					int sw = sub_w[k];
-					int yy = (y>>sh) * jpx->comps[k].w;
+					int yy = (y>>sh) * (jpx->comps[k].w >> sw);
 					OPJ_INT32 *data = &jpx->comps[k].data[yy];
 					for (x = 0; x < w; x ++)
 					{

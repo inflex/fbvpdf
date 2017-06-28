@@ -64,7 +64,6 @@ fz_new_font(fz_context *ctx, const char *name, int use_glyph_bbox, int glyph_cou
 
 	font->glyph_count = glyph_count;
 
-	font->flags.use_glyph_bbox = !!use_glyph_bbox;
 	if (use_glyph_bbox && glyph_count <= MAX_BBOX_TABLE_SIZE)
 	{
 		font->bbox_table = fz_malloc_array(ctx, glyph_count, sizeof(fz_rect));
@@ -73,8 +72,6 @@ fz_new_font(fz_context *ctx, const char *name, int use_glyph_bbox, int glyph_cou
 	}
 	else
 	{
-		if (use_glyph_bbox)
-			fz_warn(ctx, "not building glyph bbox table for font '%s' with %d glyphs", font->name, glyph_count);
 		font->bbox_table = NULL;
 	}
 
@@ -171,12 +168,17 @@ fz_set_font_bbox(fz_context *ctx, fz_font *font, float xmin, float ymin, float x
 {
 	if (xmin >= xmax || ymin >= ymax)
 	{
-		/* Invalid bbox supplied. It would be prohibitively slow to
-		 * measure the true one, so make one up. */
-		font->bbox.x0 = -1;
-		font->bbox.y0 = -1;
-		font->bbox.x1 = 2;
-		font->bbox.y1 = 2;
+		/* Invalid bbox supplied. */
+		if (font->t3procs)
+		{
+			/* For type3 fonts we use the union of all the glyphs' bboxes. */
+			font->bbox = fz_empty_rect;
+		}
+		else
+		{
+			/* For other fonts it would be prohibitively slow to measure the true one, so make one up. */
+			font->bbox = fz_unit_rect;
+		}
 		font->flags.invalid_bbox = 1;
 	}
 	else
@@ -553,7 +555,7 @@ fz_adjust_ft_glyph_width(fz_context *ctx, fz_font *font, int gid, fz_matrix *trm
 		FT_Get_Advance(font->ft_face, gid, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_IGNORE_TRANSFORM, &adv);
 		fz_unlock(ctx, FZ_LOCK_FREETYPE);
 
-		realw = (float)adv * 1000 / ((FT_Face)font->ft_face)->units_per_EM;
+		realw = adv * 1000.0f / ((FT_Face)font->ft_face)->units_per_EM;
 		if (gid < font->width_count)
 			subw = font->width_table[gid];
 		else
@@ -912,7 +914,7 @@ fz_bound_ft_glyph(fz_context *ctx, fz_font *font, int gid)
 	// TODO: cache results
 
 	const int scale = face->units_per_EM;
-	const float recip = 1 / (float)scale;
+	const float recip = 1.0f / scale;
 	const float strength = 0.02f;
 	fz_matrix local_trm = fz_identity;
 
@@ -959,7 +961,7 @@ fz_bound_ft_glyph(fz_context *ctx, fz_font *font, int gid)
 	if (font->flags.fake_bold)
 	{
 		FT_Outline_Embolden(&face->glyph->outline, strength * scale);
-		FT_Outline_Translate(&face->glyph->outline, -strength * 0.5 * scale, -strength * 0.5 * scale);
+		FT_Outline_Translate(&face->glyph->outline, -strength * 0.5f * scale, -strength * 0.5f * scale);
 	}
 
 	FT_Outline_Get_CBox(&face->glyph->outline, &cbox);
@@ -1053,7 +1055,7 @@ fz_outline_ft_glyph(fz_context *ctx, fz_font *font, int gid, const fz_matrix *tr
 	int ft_flags;
 
 	const int scale = face->units_per_EM;
-	const float recip = 1 / (float)scale;
+	const float recip = 1.0f / scale;
 	const float strength = 0.02f;
 
 	fz_adjust_ft_glyph_width(ctx, font, gid, &local_trm);
@@ -1086,7 +1088,7 @@ fz_outline_ft_glyph(fz_context *ctx, fz_font *font, int gid, const fz_matrix *tr
 	if (font->flags.fake_bold)
 	{
 		FT_Outline_Embolden(&face->glyph->outline, strength * scale);
-		FT_Outline_Translate(&face->glyph->outline, -strength * 0.5 * scale, -strength * 0.5 * scale);
+		FT_Outline_Translate(&face->glyph->outline, -strength * 0.5f * scale, -strength * 0.5f * scale);
 	}
 
 	cc.path = NULL;
@@ -1168,6 +1170,10 @@ fz_bound_t3_glyph(fz_context *ctx, fz_font *font, int gid)
 	{
 		fz_rethrow(ctx);
 	}
+
+	/* Update font bbox with glyph's computed bbox if the font bbox is invalid */
+	if (font->flags.invalid_bbox)
+		fz_union_rect(&font->bbox, &font->bbox_table[gid]);
 }
 
 void
@@ -1225,6 +1231,11 @@ fz_prepare_t3_glyph(fz_context *ctx, fz_font *font, int gid, int nested_depth)
 			fz_bound_t3_glyph(ctx, font, gid);
 		}
 	}
+	else
+	{
+		/* No bbox has been defined for this glyph, so compute it. */
+		fz_bound_t3_glyph(ctx, font, gid);
+	}
 }
 
 void
@@ -1247,7 +1258,7 @@ fz_render_t3_glyph_pixmap(fz_context *ctx, fz_font *font, int gid, const fz_matr
 	fz_display_list *list;
 	fz_rect bounds;
 	fz_irect bbox;
-	fz_device *dev;
+	fz_device *dev = NULL;
 	fz_pixmap *glyph;
 	fz_pixmap *result;
 
@@ -1281,11 +1292,12 @@ fz_render_t3_glyph_pixmap(fz_context *ctx, fz_font *font, int gid, const fz_matr
 
 	/* Glyphs must always have alpha */
 	glyph = fz_new_pixmap_with_bbox(ctx, model, &bbox, 1);
-	fz_clear_pixmap(ctx, glyph);
 
-	dev = fz_new_draw_device_type3(ctx, NULL, glyph);
+	fz_var(dev);
 	fz_try(ctx)
 	{
+		fz_clear_pixmap(ctx, glyph);
+		dev = fz_new_draw_device_type3(ctx, NULL, glyph);
 		fz_run_t3_glyph(ctx, font, gid, trm, dev);
 		fz_close_device(ctx, dev);
 	}
@@ -1295,6 +1307,7 @@ fz_render_t3_glyph_pixmap(fz_context *ctx, fz_font *font, int gid, const fz_matr
 	}
 	fz_catch(ctx)
 	{
+		fz_drop_pixmap(ctx, glyph);
 		fz_rethrow(ctx);
 	}
 

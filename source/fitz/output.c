@@ -197,14 +197,10 @@ fz_new_output_with_path(fz_context *ctx, const char *filename, int append)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot open file '%s': %s", filename, strerror(errno));
 
 	fz_try(ctx)
-	{
 		out = fz_new_output_with_file_ptr(ctx, file, 1);
-	}
 	fz_catch(ctx)
-	{
-		fclose(file);
 		fz_rethrow(ctx);
-	}
+
 	return out;
 }
 
@@ -296,6 +292,88 @@ fz_write_printf(fz_context *ctx, fz_output *out, const char *fmt, ...)
 }
 
 void
+fz_write_data(fz_context *ctx, fz_output *out, const void *data, size_t size)
+{
+	if (out)
+		out->write(ctx, out->state, data, size);
+}
+
+void
+fz_write_string(fz_context *ctx, fz_output *out, const char *s)
+{
+	extern size_t strlen(const char *s); /* avoid including string.h in public header */
+	if (out)
+		out->write(ctx, out->state, s, strlen(s));
+}
+
+void
+fz_write_int32_be(fz_context *ctx, fz_output *out, int x)
+{
+	char data[4];
+
+	data[0] = x>>24;
+	data[1] = x>>16;
+	data[2] = x>>8;
+	data[3] = x;
+
+	if (out)
+		out->write(ctx, out->state, data, 4);
+}
+
+void
+fz_write_int32_le(fz_context *ctx, fz_output *out, int x)
+{
+	char data[4];
+
+	data[0] = x;
+	data[1] = x>>8;
+	data[2] = x>>16;
+	data[3] = x>>24;
+
+	if (out)
+		out->write(ctx, out->state, data, 4);
+}
+
+void
+fz_write_int16_be(fz_context *ctx, fz_output *out, int x)
+{
+	char data[2];
+
+	data[0] = x>>8;
+	data[1] = x;
+
+	if (out)
+		out->write(ctx, out->state, data, 2);
+}
+
+void
+fz_write_int16_le(fz_context *ctx, fz_output *out, int x)
+{
+	char data[2];
+
+	data[0] = x;
+	data[1] = x>>8;
+
+	if (out)
+		out->write(ctx, out->state, data, 2);
+}
+
+void
+fz_write_byte(fz_context *ctx, fz_output *out, unsigned char x)
+{
+	if (out)
+		out->write(ctx, out->state, &x, 1);
+}
+
+void
+fz_write_rune(fz_context *ctx, fz_output *out, int rune)
+{
+	char data[10];
+	if (out)
+		out->write(ctx, out->state, data, fz_runetochar(data, rune));
+}
+
+void
 fz_save_buffer(fz_context *ctx, fz_buffer *buf, const char *filename)
 {
 	fz_output *out = fz_new_output_with_path(ctx, filename, 0);
@@ -314,7 +392,7 @@ fz_band_writer *fz_new_band_writer_of_size(fz_context *ctx, size_t size, fz_outp
 	return writer;
 }
 
-void fz_write_header(fz_context *ctx, fz_band_writer *writer, int w, int h, int n, int alpha, int xres, int yres, int pagenum)
+void fz_write_header(fz_context *ctx, fz_band_writer *writer, int w, int h, int n, int alpha, int xres, int yres, int pagenum, const fz_colorspace *cs)
 {
 	if (writer == NULL || writer->band == NULL)
 		return;
@@ -326,7 +404,7 @@ void fz_write_header(fz_context *ctx, fz_band_writer *writer, int w, int h, int 
 	writer->yres = yres;
 	writer->pagenum = pagenum;
 	writer->line = 0;
-	writer->header(ctx, writer);
+	writer->header(ctx, writer, cs);
 }
 
 void fz_write_band(fz_context *ctx, fz_band_writer *writer, int stride, int band_height, const unsigned char *samples)

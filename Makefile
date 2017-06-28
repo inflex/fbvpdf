@@ -21,6 +21,7 @@ LIBS += $(FREETYPE_LIBS)
 LIBS += $(HARFBUZZ_LIBS)
 LIBS += $(JBIG2DEC_LIBS)
 LIBS += $(JPEGXR_LIB)
+LIBS += $(LCMS2_LIBS)
 LIBS += $(LIBCRYPTO_LIBS)
 LIBS += $(LIBJPEG_LIBS)
 LIBS += $(LURATECH_LIBS)
@@ -32,6 +33,7 @@ CFLAGS += $(FREETYPE_CFLAGS)
 CFLAGS += $(HARFBUZZ_CFLAGS)
 CFLAGS += $(JBIG2DEC_CFLAGS)
 CFLAGS += $(JPEGXR_CFLAGS)
+CFLAGS += $(LCMS2_CFLAGS)
 CFLAGS += $(LIBCRYPTO_CFLAGS)
 CFLAGS += $(LIBJPEG_CFLAGS)
 CFLAGS += $(LURATECH_CFLAGS)
@@ -126,14 +128,14 @@ FITZ_HDR := include/mupdf/fitz.h $(wildcard include/mupdf/fitz/*.h)
 PDF_HDR := include/mupdf/pdf.h $(wildcard include/mupdf/pdf/*.h)
 THREAD_HDR := include/mupdf/helpers/mu-threads.h
 
-FITZ_SRC := $(wildcard source/fitz/*.c)
-PDF_SRC := $(wildcard source/pdf/*.c)
-XPS_SRC := $(wildcard source/xps/*.c)
-SVG_SRC := $(wildcard source/svg/*.c)
-CBZ_SRC := $(wildcard source/cbz/*.c)
-HTML_SRC := $(wildcard source/html/*.c)
-GPRF_SRC := $(wildcard source/gprf/*.c)
-THREAD_SRC := $(wildcard source/helpers/mu-threads/*.c)
+FITZ_SRC := $(sort $(wildcard source/fitz/*.c))
+PDF_SRC := $(sort $(wildcard source/pdf/*.c))
+XPS_SRC := $(sort $(wildcard source/xps/*.c))
+SVG_SRC := $(sort $(wildcard source/svg/*.c))
+CBZ_SRC := $(sort $(wildcard source/cbz/*.c))
+HTML_SRC := $(sort $(wildcard source/html/*.c))
+GPRF_SRC := $(sort $(wildcard source/gprf/*.c))
+THREAD_SRC := $(sort $(wildcard source/helpers/mu-threads/*.c))
 
 FITZ_SRC_HDR := $(wildcard source/fitz/*.h)
 PDF_SRC_HDR := $(wildcard source/pdf/*.h) $(OUT)/generated/pdf-name-table.h
@@ -181,11 +183,11 @@ generate: $(NAME_GEN)
 
 HEXDUMP_EXE := $(OUT)/scripts/hexdump.exe
 
-FONT_BIN_DROID := $(wildcard resources/fonts/droid/*.ttf)
-FONT_BIN_NOTO := $(wildcard resources/fonts/noto/*.ttf)
-FONT_BIN_HAN := $(wildcard resources/fonts/han/*.otf)
-FONT_BIN_URW := $(wildcard resources/fonts/urw/*.cff)
-FONT_BIN_SIL := $(wildcard resources/fonts/sil/*.cff)
+FONT_BIN_DROID := $(sort $(wildcard resources/fonts/droid/*.ttf))
+FONT_BIN_NOTO := $(sort $(wildcard resources/fonts/noto/*.ttf))
+FONT_BIN_HAN := $(sort $(wildcard resources/fonts/han/*.otf))
+FONT_BIN_URW := $(sort $(wildcard resources/fonts/urw/*.cff))
+FONT_BIN_SIL := $(sort $(wildcard resources/fonts/sil/*.cff))
 
 FONT_GEN_DROID := $(subst resources/fonts/droid/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_DROID))))
 FONT_GEN_NOTO := $(subst resources/fonts/noto/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_NOTO))))
@@ -221,14 +223,30 @@ endif
 
 generate: $(FONT_GEN)
 
+# --- Generated ICC profiles ---
+
+ICC_BIN := resources/icc/gray.icc resources/icc/rgb.icc resources/icc/cmyk.icc resources/icc/lab.icc
+ICC_GEN := generated/icc-profiles.c
+ICC_OBJ := $(ICC_GEN:%.c=$(OUT)/%.o)
+
+$(ICC_OBJ) : $(ICC_GEN)
+$(ICC_GEN) : $(ICC_BIN) | generated
+	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(ICC_BIN)
+
+ifneq "$(CROSSCOMPILE)" "yes"
+$(ICC_GEN) : $(HEXDUMP_EXE)
+endif
+
+generate: $(ICC_GEN)
+
 # --- Generated CMap files ---
 
 CMAPDUMP_EXE := $(OUT)/scripts/cmapdump.exe
 
-CMAP_CJK_SRC := $(wildcard resources/cmaps/cjk/*)
-CMAP_EXTRA_SRC := $(wildcard resources/cmaps/extra/*)
-CMAP_UTF8_SRC := $(wildcard resources/cmaps/utf8/*)
-CMAP_UTF32_SRC := $(wildcard resources/cmaps/utf32/*)
+CMAP_CJK_SRC := $(sort $(wildcard resources/cmaps/cjk/*))
+CMAP_EXTRA_SRC := $(sort $(wildcard resources/cmaps/extra/*))
+CMAP_UTF8_SRC := $(sort $(wildcard resources/cmaps/utf8/*))
+CMAP_UTF32_SRC := $(sort $(wildcard resources/cmaps/utf32/*))
 
 CMAP_GEN := \
 	$(OUT)/generated/pdf-cmap-cjk.c \
@@ -265,7 +283,6 @@ $(OUT)/scripts/cmapdump.o : \
 	source/fitz/buffer.c \
 	source/fitz/stream-open.c \
 	source/fitz/stream-read.c \
-	source/fitz/strtod.c \
 	source/fitz/strtof.c \
 	source/fitz/ftoa.c \
 	source/fitz/printf.c \
@@ -307,7 +324,8 @@ MUPDF_OBJ := \
 	$(SVG_OBJ) \
 	$(CBZ_OBJ) \
 	$(HTML_OBJ) \
-	$(GPRF_OBJ)
+	$(GPRF_OBJ) \
+	$(ICC_OBJ)
 
 THIRD_OBJ := \
 	$(FREETYPE_OBJ) \
@@ -318,7 +336,8 @@ THIRD_OBJ := \
 	$(LURATECH_OBJ) \
 	$(MUJS_OBJ) \
 	$(OPENJPEG_OBJ) \
-	$(ZLIB_OBJ)
+	$(ZLIB_OBJ) \
+	$(LCMS2_OBJ)
 
 THREAD_OBJ := $(THREAD_OBJ)
 
@@ -332,7 +351,7 @@ INSTALL_LIBS := $(MUPDF_LIB) $(THIRD_LIB)
 
 MUTOOL_EXE := $(OUT)/mutool
 MUTOOL_SRC := source/tools/mutool.c source/tools/muconvert.c source/tools/mudraw.c source/tools/murun.c
-MUTOOL_SRC += $(wildcard source/tools/pdf*.c)
+MUTOOL_SRC += $(sort $(wildcard source/tools/pdf*.c))
 MUTOOL_OBJ := $(MUTOOL_SRC:%.c=$(OUT)/%.o)
 $(MUTOOL_OBJ) : $(FITZ_HDR) $(PDF_HDR)
 $(MUTOOL_EXE) : $(MUTOOL_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(THREAD_LIB)
@@ -408,9 +427,9 @@ INSTALL_APPS += $(MUJSTEST_EXE)
 
 examples: $(OUT)/example $(OUT)/multi-threaded
 
-$(OUT)/example: docs/example.c $(MUPDF_LIB) $(THIRD_LIB)
+$(OUT)/example: docs/examples/example.c $(MUPDF_LIB) $(THIRD_LIB)
 	$(LINK_CMD) $(CFLAGS)
-$(OUT)/multi-threaded: docs/multi-threaded.c $(MUPDF_LIB) $(THIRD_LIB)
+$(OUT)/multi-threaded: docs/examples/multi-threaded.c $(MUPDF_LIB) $(THIRD_LIB)
 	$(LINK_CMD) $(CFLAGS) -lpthread
 
 # --- Update version string header ---
@@ -462,7 +481,10 @@ install: libs apps
 	install docs/man/*.1 $(DESTDIR)$(mandir)/man1
 
 	install -d $(DESTDIR)$(docdir)
-	install README COPYING CHANGES docs/*.txt $(DESTDIR)$(docdir)
+	install -d $(DESTDIR)$(docdir)/examples
+	install README COPYING CHANGES $(DESTDIR)$(docdir)
+	install docs/*.html docs/*.css docs/*.png $(DESTDIR)$(docdir)
+	install docs/examples/* $(DESTDIR)$(docdir)/examples
 
 tarball:
 	bash scripts/archive.sh

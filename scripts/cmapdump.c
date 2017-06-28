@@ -21,7 +21,6 @@
 #include "../source/fitz/crypt-md5.c"
 #include "../source/fitz/stream-open.c"
 #include "../source/fitz/stream-read.c"
-#include "../source/fitz/strtod.c"
 #include "../source/fitz/strtof.c"
 #include "../source/fitz/ftoa.c"
 #include "../source/fitz/printf.c"
@@ -222,6 +221,14 @@ void fz_drop_font_context(fz_context *ctx)
 fz_font_context *fz_keep_font_context(fz_context *ctx)
 {
 	return NULL;
+}
+
+void fz_new_cmm_context(fz_context *ctx)
+{
+}
+
+void fz_drop_cmm_context(fz_context *ctx)
+{
 }
 
 void fz_new_colorspace_context(fz_context *ctx)

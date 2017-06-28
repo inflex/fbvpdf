@@ -254,6 +254,12 @@ static int files = 0;
 static int num_workers = 0;
 static worker_t *workers;
 
+#ifdef NO_ICC
+static fz_cmm_engine *icc_engine = NULL;
+#else
+static fz_cmm_engine *icc_engine = &fz_cmm_engine_lcms;
+#endif
+
 static const char *layer_config = NULL;
 
 static struct {
@@ -327,6 +333,7 @@ static void usage(void)
 		"\t-i\tignore errors\n"
 		"\t-L\tlow memory mode (avoid caching, clear objects after each page)\n"
 		"\t-P\tparallel interpretation/rendering\n"
+		"\t-N\tdisable ICC workflow (\"N\"o color management)\n"
 		"\n"
 		"\t-y l\tList the layer configs to stderr\n"
 		"\t-y -\tSelect layer config (by number)\n"
@@ -510,16 +517,16 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 		fz_try(ctx)
 		{
 			fz_rect mediabox;
+			fz_stext_options stext_options;
 			if (list)
 				fz_bound_display_list(ctx, list, &mediabox);
 			else
 				fz_bound_page(ctx, page, &mediabox);
+			stext_options.flags = (output_format == OUT_HTML) ? FZ_STEXT_PRESERVE_IMAGES : 0;
 			text = fz_new_stext_page(ctx, &mediabox);
-			dev = fz_new_stext_device(ctx, sheet, text, 0);
+			dev = fz_new_stext_device(ctx, sheet, text, &stext_options);
 			if (lowmemory)
 				fz_enable_device_hints(ctx, dev, FZ_NO_CACHE);
-			if (output_format == OUT_HTML)
-				fz_disable_device_hints(ctx, dev, FZ_IGNORE_IMAGE);
 			if (list)
 				fz_run_display_list(ctx, list, dev, &fz_identity, &fz_infinite_rect, cookie);
 			else
@@ -797,7 +804,9 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 						bander = fz_new_color_pcl_band_writer(ctx, out, NULL);
 				}
 				if (bander)
-					fz_write_header(ctx, bander, pix->w, totalheight, pix->n, pix->alpha, pix->xres, pix->yres, output_pagenum++);
+				{
+					fz_write_header(ctx, bander, pix->w, totalheight, pix->n, pix->alpha, pix->xres, pix->yres, output_pagenum++, pix->colorspace);
+				}
 			}
 
 			for (band = 0; band < bands; band++)
@@ -1345,10 +1354,11 @@ int mudraw_main(int argc, char **argv)
 	fz_context *ctx;
 	fz_alloc_context alloc_ctx = { NULL, trace_malloc, trace_realloc, trace_free };
 	fz_locks_context *locks = NULL;
+	fz_colorspace *oi = NULL;
 
 	fz_var(doc);
 
-	while ((c = fz_getopt(argc, argv, "p:o:F:R:r:w:h:fB:c:G:Is:A:DiW:H:S:T:U:XLvPl:y:")) != -1)
+	while ((c = fz_getopt(argc, argv, "p:o:F:R:r:w:h:fB:c:G:Is:A:DiW:H:S:T:U:XLvPl:y:N")) != -1)
 	{
 		switch (c)
 		{
@@ -1397,6 +1407,7 @@ int mudraw_main(int argc, char **argv)
 		case 'D': uselist = 0; break;
 		case 'l': min_line_width = fz_atof(fz_optarg); break;
 		case 'i': ignore_errors = 1; break;
+		case 'N': icc_engine = NULL; break;
 
 		case 'T':
 #ifndef DISABLE_MUTHREADS
@@ -1459,6 +1470,7 @@ int mudraw_main(int argc, char **argv)
 	fz_set_text_aa_level(ctx, alphabits_text);
 	fz_set_graphics_aa_level(ctx, alphabits_graphics);
 	fz_set_graphics_min_line_width(ctx, min_line_width);
+	fz_set_cmm_engine(ctx, icc_engine);
 
 #ifndef DISABLE_MUTHREADS
 	if (bgprint.active)
@@ -1658,6 +1670,17 @@ int mudraw_main(int argc, char **argv)
 				files++;
 
 				doc = fz_open_document(ctx, filename);
+
+				/* Once document is open check for output intent colorspace */
+				oi = fz_document_output_intent(ctx, doc);
+				if (oi)
+				{
+					if (fz_colorspace_n(ctx, oi) == fz_colorspace_n(ctx, colorspace))
+					{
+						fz_drop_colorspace(ctx, colorspace);
+						colorspace = fz_keep_colorspace(ctx, oi);
+					}
+				}
 
 				if (fz_needs_password(ctx, doc))
 				{

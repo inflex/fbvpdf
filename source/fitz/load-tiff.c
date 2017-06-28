@@ -290,7 +290,7 @@ tiff_expand_colormap(fz_context *ctx, struct tiff *tiff)
 static unsigned
 tiff_decode_data(fz_context *ctx, struct tiff *tiff, unsigned char *rp, unsigned int rlen, unsigned char *wp, unsigned int wlen)
 {
-	fz_stream *stm;
+	fz_stream *stm = NULL;
 	unsigned i, size;
 	unsigned char *reversed = NULL;
 	fz_stream *jpegtables = NULL;
@@ -307,6 +307,8 @@ tiff_decode_data(fz_context *ctx, struct tiff *tiff, unsigned char *rp, unsigned
 			reversed[i] = bitrev[rp[i]];
 		rp = reversed;
 	}
+
+	fz_var(stm);
 
 	fz_try(ctx)
 	{
@@ -1071,9 +1073,9 @@ tiff_ycc_to_rgb(fz_context *ctx, struct tiff *tiff)
 			ycc[1] = row[x * 3 + 1] - 128;
 			ycc[2] = row[x * 3 + 2] - 128;
 
-			row[x * 3 + 0] = fz_clampi((double)ycc[0] + 1.402 * ycc[2], 0, 255);
-			row[x * 3 + 1] = fz_clampi((double)ycc[0] - 0.34413 * ycc[1] - 0.71414 * ycc[2], 0, 255);
-			row[x * 3 + 2] = fz_clampi((double)ycc[0] + 1.772 * ycc[1], 0, 255);
+			row[x * 3 + 0] = fz_clampi(ycc[0] + 1.402f * ycc[2], 0, 255);
+			row[x * 3 + 1] = fz_clampi(ycc[0] - 0.34413f * ycc[1] - 0.71414f * ycc[2], 0, 255);
+			row[x * 3 + 2] = fz_clampi(ycc[0] + 1.772f * ycc[1], 0, 255);
 		}
 	}
 }
@@ -1100,6 +1102,8 @@ tiff_decode_ifd(fz_context *ctx, struct tiff *tiff)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "unsupported samples per pixel when subsampling");
 		if (tiff->bitspersample != 8)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "unsupported bits per sample when subsampling");
+		if (tiff->ycbcrsubsamp[0] == 0 || tiff->ycbcrsubsamp[1] == 0)
+			fz_throw(ctx, FZ_ERROR_GENERIC, "unsupported subsampling factor");
 	}
 
 	tiff->stride = (tiff->imagewidth * tiff->samplesperpixel * tiff->bitspersample + 7) / 8;
@@ -1362,7 +1366,10 @@ fz_load_tiff_info_subimage(fz_context *ctx, unsigned char *buf, size_t len, int 
 		*hp = tiff.imagelength;
 		*xresp = (tiff.xresolution ? tiff.xresolution : 96);
 		*yresp = (tiff.yresolution ? tiff.yresolution : 96);
-		*cspacep = tiff.colorspace;
+		if (tiff.extrasamples /* == 2 */)
+			*cspacep = fz_device_rgb(ctx);
+		else
+			*cspacep = tiff.colorspace;
 	}
 	fz_always(ctx)
 	{
