@@ -226,11 +226,11 @@ generate: $(FONT_GEN)
 # --- Generated ICC profiles ---
 
 ICC_BIN := resources/icc/gray.icc resources/icc/rgb.icc resources/icc/cmyk.icc resources/icc/lab.icc
-ICC_GEN := generated/icc-profiles.c
-ICC_OBJ := $(ICC_GEN:%.c=$(OUT)/%.o)
+ICC_GEN := $(OUT)/generated/icc-profiles.c
+ICC_OBJ := $(ICC_GEN:%.c=%.o)
 
 $(ICC_OBJ) : $(ICC_GEN)
-$(ICC_GEN) : $(ICC_BIN) | generated
+$(ICC_GEN) : $(ICC_BIN) | $(ALL_DIR)
 	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(ICC_BIN)
 
 ifneq "$(CROSSCOMPILE)" "yes"
