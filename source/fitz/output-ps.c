@@ -6,6 +6,7 @@ typedef struct ps_band_writer_s
 {
 	fz_band_writer super;
 	z_stream stream;
+	int stream_ended;
 	int input_size;
 	unsigned char *input;
 	int output_size;
@@ -67,10 +68,7 @@ ps_write_header(fz_context *ctx, fz_band_writer *writer_, const fz_colorspace *c
 
 	err = deflateInit(&writer->stream, Z_DEFAULT_COMPRESSION);
 	if (err != Z_OK)
-	{
-		fz_free(ctx, writer);
 		fz_throw(ctx, FZ_ERROR_GENERIC, "compression error %d", err);
-	}
 
 	fz_write_printf(ctx, out, "%%%%Page: %d %d\n", pagenum, pagenum);
 	fz_write_printf(ctx, out, "%%%%PageBoundingBox: 0 0 %d %d\n", w_points, h_points);
@@ -123,6 +121,10 @@ ps_write_trailer(fz_context *ctx, fz_band_writer *writer_)
 	err = deflate(&writer->stream, Z_FINISH);
 	if (err != Z_STREAM_END)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "compression error %d", err);
+	writer->stream_ended = 1;
+	err = deflateEnd(&writer->stream);
+	if (err != Z_OK)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "compression error %d", err);
 
 	fz_write_data(ctx, out, writer->output, writer->output_size - writer->stream.avail_out);
 	fz_write_string(ctx, out, "\nshowpage\n%%%%PageTrailer\n%%%%EndPageTrailer\n\n");
@@ -132,6 +134,13 @@ static void
 ps_drop_band_writer(fz_context *ctx, fz_band_writer *writer_)
 {
 	ps_band_writer *writer = (ps_band_writer *)writer_;
+
+	if (!writer->stream_ended)
+	{
+		int err = deflateEnd(&writer->stream);
+		if (err != Z_OK)
+			fz_warn(ctx, "ignoring compression error %d", err);
+	}
 
 	fz_free(ctx, writer->input);
 	fz_free(ctx, writer->output);

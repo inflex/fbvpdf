@@ -2889,15 +2889,16 @@ void fz_init_cached_color_converter(fz_context *ctx, fz_color_converter *cc, fz_
 	int n = ss->n;
 	fz_cached_color_converter *cached = fz_malloc_struct(ctx, fz_cached_color_converter);
 
+	cc->opaque = cached;
+	cc->convert = fz_cached_color_convert;
+	cc->ds = ds;
+	cc->ss = ss;
+	cc->is = is;
+
 	fz_try(ctx)
 	{
 		fz_find_color_converter(ctx, &cached->base, is, ds, ss, params);
 		cached->hash = fz_new_hash_table(ctx, 256, n * sizeof(float), -1, fz_free);
-		cc->convert = fz_cached_color_convert;
-		cc->ds = ds;
-		cc->ss = ss;
-		cc->is = is;
-		cc->opaque = cached;
 	}
 	fz_catch(ctx)
 	{
@@ -2992,7 +2993,7 @@ fz_new_icc_colorspace(fz_context *ctx, int is_static, int num, fz_buffer *buf, c
 			size_t size;
 			const unsigned char *data;
 			data = fz_lookup_icc(ctx, name, &size);
-			profile->buffer = fz_new_buffer_from_shared_data(ctx, (const char *)data, size);
+			profile->buffer = fz_new_buffer_from_shared_data(ctx, data, size);
 			is_lab = (strcmp(name, "lab-icc") == 0);
 			profile->bgr = (strcmp(name, "bgr-icc") == 0);
 		}
