@@ -200,15 +200,15 @@ FONT_GEN := $(FONT_GEN_DROID) $(FONT_GEN_NOTO) $(FONT_GEN_HAN) $(FONT_GEN_URW) $
 FONT_OBJ := $(FONT_GEN:%.c=%.o)
 
 $(OUT)/generated/%.c : resources/fonts/droid/%.ttf $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/noto/%.ttf $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/han/%.otf $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/urw/%.cff $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/sil/%.cff $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 
 $(FONT_OBJ) : $(FONT_GEN)
 $(FONT_GEN_DROID) : $(FONT_BIN_DROID)
