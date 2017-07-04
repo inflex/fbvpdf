@@ -434,6 +434,8 @@ static void drawband(fz_context *ctx, fz_page *page, fz_display_list *list, cons
 {
 	fz_device *dev = NULL;
 
+	fz_var(dev);
+
 	*bit = NULL;
 
 	fz_try(ctx)
@@ -1626,6 +1628,7 @@ int mudraw_main(int argc, char **argv)
 		exit(1);
 		break;
 	}
+	colorspace = fz_keep_colorspace(ctx, colorspace);
 
 #if FZ_ENABLE_PDF
 	if (output_format == OUT_PDF)
@@ -1817,6 +1820,7 @@ int mudraw_main(int argc, char **argv)
 	}
 #endif /* DISABLE_MUTHREADS */
 
+	fz_drop_colorspace(ctx, colorspace);
 	fz_drop_context(ctx);
 
 #ifndef DISABLE_MUTHREADS
