@@ -306,7 +306,7 @@ static fz_buffer *
 png_from_pixmap(fz_context *ctx, fz_pixmap *pix, const fz_color_params *color_params, int drop)
 {
 	fz_buffer *buf = NULL;
-	fz_output *out;
+	fz_output *out = NULL;
 	fz_pixmap *pix2 = NULL;
 
 	fz_var(buf);
@@ -314,7 +314,11 @@ png_from_pixmap(fz_context *ctx, fz_pixmap *pix, const fz_color_params *color_pa
 	fz_var(pix2);
 
 	if (pix->w == 0 || pix->h == 0)
+	{
+		if (drop)
+			fz_drop_pixmap(ctx, pix);
 		return NULL;
+	}
 
 	if (color_params == NULL)
 		color_params = fz_default_color_params(ctx);
