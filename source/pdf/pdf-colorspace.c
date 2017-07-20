@@ -58,8 +58,13 @@ load_icc_based(fz_context *ctx, pdf_obj *dict, int alt)
 	{
 		if (fz_get_cmm_engine(ctx))
 		{
+			const char *name;
+			if (n == 1) name = "ICCBased-Gray";
+			else if (n == 3) name = "ICCBased-RGB";
+			else if (n == 4) name = "ICCBased-CMYK";
+			else name = "ICCBased";
 			buffer = pdf_load_stream(ctx, dict);
-			cs = fz_new_icc_colorspace(ctx, n, buffer, NULL);
+			cs = fz_new_icc_colorspace(ctx, name, n, buffer);
 		}
 	}
 	fz_always(ctx)
@@ -119,65 +124,71 @@ load_icc_based(fz_context *ctx, pdf_obj *dict, int alt)
 	return cs;
 }
 
-struct separation
+struct devicen
 {
 	fz_colorspace *base;
 	pdf_function *tint;
 };
 
 static void
-separation_to_alt(fz_context *ctx, fz_colorspace *cs, const float *color, float *alt)
+devicen_to_alt(fz_context *ctx, const fz_colorspace *cs, const float *color, float *alt)
 {
-	struct separation *sep = cs->data;
-	pdf_eval_function(ctx, sep->tint, color, cs->n, alt, sep->base->n);
+	struct devicen *devn = cs->data;
+	pdf_eval_function(ctx, devn->tint, color, cs->n, alt, devn->base->n);
 }
 
 static void
-separation_to_rgb(fz_context *ctx, fz_colorspace *cs, const float *color, float *rgb)
+devicen_to_rgb(fz_context *ctx, const fz_colorspace *cs, const float *color, float *rgb)
 {
-	struct separation *sep = cs->data;
+	struct devicen *devn = cs->data;
 	float alt[FZ_MAX_COLORS];
-	pdf_eval_function(ctx, sep->tint, color, cs->n, alt, sep->base->n);
-	fz_convert_color(ctx, fz_default_color_params(ctx), NULL, fz_device_rgb(ctx), rgb, sep->base, alt);
+	pdf_eval_function(ctx, devn->tint, color, cs->n, alt, devn->base->n);
+	fz_convert_color(ctx, fz_default_color_params(ctx), NULL, fz_device_rgb(ctx), rgb, devn->base, alt);
 }
 
 static void
-free_separation(fz_context *ctx, fz_colorspace *cs)
+free_devicen(fz_context *ctx, fz_colorspace *cs)
 {
-	struct separation *sep = cs->data;
-	fz_drop_colorspace(ctx, sep->base);
-	pdf_drop_function(ctx, sep->tint);
-	fz_free(ctx, sep);
+	struct devicen *devn = cs->data;
+	fz_drop_colorspace(ctx, devn->base);
+	pdf_drop_function(ctx, devn->tint);
+	fz_free(ctx, devn);
 }
 
 static fz_colorspace *
-base_separation(const fz_colorspace *cs)
+base_devicen(const fz_colorspace *cs)
 {
-	struct separation *sep = cs->data;
+	struct devicen *devn = cs->data;
 
-	return sep->base;
+	return devn->base;
 }
 
 static fz_colorspace *
-load_separation(fz_context *ctx, pdf_obj *array)
+load_devicen(fz_context *ctx, pdf_obj *array)
 {
 	fz_colorspace *cs;
-	struct separation *sep = NULL;
+	struct devicen *devn = NULL;
 	pdf_obj *nameobj = pdf_array_get(ctx, array, 1);
 	pdf_obj *baseobj = pdf_array_get(ctx, array, 2);
 	pdf_obj *tintobj = pdf_array_get(ctx, array, 3);
 	fz_colorspace *base;
 	pdf_function *tint = NULL;
-	int n;
+	int i, n;
+	char *colorspace_name = "DeviceN";
 
 	fz_var(tint);
-	fz_var(sep);
+	fz_var(devn);
 
 	if (pdf_is_array(ctx, nameobj))
 		n = pdf_array_len(ctx, nameobj);
 	else
+	{
 		n = 1;
+		colorspace_name = "Separation";
+	}
 
+	if (n < 1)
+		fz_throw(ctx, FZ_ERROR_SYNTAX, "insufficient components in colorspace");
 	if (n > FZ_MAX_COLORS)
 		fz_throw(ctx, FZ_ERROR_SYNTAX, "too many components in colorspace");
 
@@ -189,20 +200,28 @@ load_separation(fz_context *ctx, pdf_obj *array)
 		/* RJW: fz_drop_colorspace(ctx, base);
 		 * "cannot load tint function (%d 0 R)", pdf_to_num(ctx, tintobj) */
 
-		sep = fz_malloc_struct(ctx, struct separation);
-		sep->base = fz_keep_colorspace(ctx, base);  /* We drop it during the sep free... */
-		sep->tint = tint;
+		devn = fz_malloc_struct(ctx, struct devicen);
+		devn->base = fz_keep_colorspace(ctx, base);  /* We drop it during the devn free... */
+		devn->tint = tint;
 
-		cs = fz_new_colorspace(ctx, n == 1 ? "Separation" : "DeviceN", n, 1,
-			fz_colorspace_is_icc(ctx, fz_device_rgb(ctx)) ? separation_to_alt : separation_to_rgb, NULL, base_separation, NULL, free_separation, sep,
-			sizeof(struct separation) + (base ? base->size : 0) + pdf_function_size(ctx, tint));
+		cs = fz_new_colorspace(ctx, colorspace_name, n, 1, 1,
+			fz_colorspace_is_icc(ctx, fz_device_rgb(ctx)) ? devicen_to_alt : devicen_to_rgb, NULL, base_devicen, NULL, free_devicen, devn,
+			sizeof(struct devicen) + (base ? base->size : 0) + pdf_function_size(ctx, tint));
+
+		devn = NULL;
+		if (pdf_is_array(ctx, nameobj))
+			for (i = 0; i < n; i++)
+				fz_colorspace_name_colorant(ctx, cs, i, pdf_to_name(ctx, pdf_array_get(ctx, nameobj, i)));
+		else
+			fz_colorspace_name_colorant(ctx, cs, 0, pdf_to_name(ctx, nameobj));
+
 	}
 	fz_always(ctx)
 		fz_drop_colorspace(ctx, base);
 	fz_catch(ctx)
 	{
 		pdf_drop_function(ctx, tint);
-		fz_free(ctx, sep);
+		fz_free(ctx, devn);
 		fz_rethrow(ctx);
 	}
 
@@ -212,7 +231,7 @@ load_separation(fz_context *ctx, pdf_obj *array)
 int
 pdf_is_tint_colorspace(fz_context *ctx, fz_colorspace *cs)
 {
-	return cs && cs->free_data == free_separation;
+	return cs && cs->free_data == free_devicen;
 }
 
 /* Indexed */
@@ -352,7 +371,7 @@ pdf_load_cal_gray(fz_context *ctx, pdf_obj *dict)
 	}
 	fz_catch(ctx)
 		return fz_keep_colorspace(ctx, fz_device_gray(ctx));
-	return fz_new_cal_colorspace(ctx, wp, bp, gamma, NULL);
+	return fz_new_cal_colorspace(ctx, "CalGray", wp, bp, gamma, NULL);
 }
 
 static fz_colorspace *
@@ -381,7 +400,7 @@ pdf_load_cal_rgb(fz_context *ctx, pdf_obj *dict)
 	}
 	fz_catch(ctx)
 		return fz_keep_colorspace(ctx, fz_device_rgb(ctx));
-	return fz_new_cal_colorspace(ctx, wp, bp, gamma, matrix);
+	return fz_new_cal_colorspace(ctx, "CalRGB", wp, bp, gamma, matrix);
 }
 
 /* Parse and create colorspace from PDF object */
@@ -465,10 +484,10 @@ pdf_load_colorspace_imp(fz_context *ctx, pdf_obj *obj)
 						cs = load_indexed(ctx, obj);
 
 					else if (pdf_name_eq(ctx, name, PDF_NAME_Separation))
-						cs = load_separation(ctx, obj);
+						cs = load_devicen(ctx, obj);
 
 					else if (pdf_name_eq(ctx, name, PDF_NAME_DeviceN))
-						cs = load_separation(ctx, obj);
+						cs = load_devicen(ctx, obj);
 					else if (pdf_name_eq(ctx, name, PDF_NAME_Pattern))
 					{
 						pdf_obj *pobj;

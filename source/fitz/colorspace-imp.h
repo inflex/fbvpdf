@@ -6,10 +6,16 @@
 #include "mupdf/fitz/color-management.h"
 #include "mupdf/fitz/pixmap.h"
 
+#define FZ_ICC_PROFILE_GRAY "DeviceGray-ICCBased"
+#define FZ_ICC_PROFILE_RGB "DeviceRGB-ICCBased"
+#define FZ_ICC_PROFILE_BGR "DeviceBGR-ICCBased"
+#define FZ_ICC_PROFILE_CMYK "DeviceCMYK-ICCBased"
+#define FZ_ICC_PROFILE_LAB "Lab-ICCBased"
+
 int fz_cmm_avoid_white_fix_flag(fz_context *ctx);
 void fz_cmm_transform_pixmap(fz_context *ctx, fz_icclink *link, fz_pixmap *dst, fz_pixmap *src);
 void fz_cmm_transform_color(fz_context *ctx, fz_icclink *link, unsigned short *dst, const unsigned short *src);
-void fz_cmm_init_link(fz_context *ctx, fz_icclink *link, const fz_color_params *rend, int cmm_flags, int num_bytes, int alpha, const fz_iccprofile *src, const fz_iccprofile *prf, const fz_iccprofile *des);
+void fz_cmm_init_link(fz_context *ctx, fz_icclink *link, const fz_color_params *rend, int cmm_flags, int num_bytes, int extras, const fz_iccprofile *src, const fz_iccprofile *prf, const fz_iccprofile *des);
 void fz_cmm_fin_link(fz_context *ctx, fz_icclink *link);
 fz_cmm_instance *fz_cmm_new_instance(fz_context *ctx);
 void fz_cmm_drop_instance(fz_context *ctx);
@@ -20,15 +26,17 @@ struct fz_colorspace_s
 {
 	fz_storable storable;
 	size_t size;
-	char name[16];
-	int n;
-	int is_subtractive;
+	char name[24];
+	unsigned char n;
+	unsigned char is_subtractive;
+	unsigned char is_device_n;
 	fz_colorspace_convert_fn *to_ccs;
 	fz_colorspace_convert_fn *from_ccs;
 	fz_colorspace_clamp_fn *clamp;
 	fz_colorspace_base_fn *get_base;
 	fz_colorspace_destruct_fn *free_data;
 	void *data;
+	char *colorant[FZ_MAX_COLORS];
 };
 
 struct fz_iccprofile_s
@@ -46,7 +54,7 @@ struct fz_icclink_s
 	int num_in;
 	int num_out;
 	int depth;
-	int alpha;
+	int extras;
 	int is_identity;
 	void *cmm_handle;
 };

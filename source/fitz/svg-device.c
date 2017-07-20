@@ -980,7 +980,7 @@ svg_dev_fill_shade(fz_context *ctx, fz_device *dev, fz_shade *shade, const fz_ma
 	fz_round_rect(&bbox, fz_intersect_rect(fz_bound_shade(ctx, shade, ctm, &rect), &dev->container[dev->container_len-1].scissor));
 	if (fz_is_empty_irect(&bbox))
 		return;
-	pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), &bbox, 1);
+	pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), &bbox, NULL, 1);
 	fz_clear_pixmap(ctx, pix);
 
 	fz_try(ctx)
@@ -1094,7 +1094,7 @@ svg_dev_end_mask(fz_context *ctx, fz_device *dev)
 }
 
 static void
-svg_dev_begin_group(fz_context *ctx, fz_device *dev, const fz_rect *bbox, int isolated, int knockout, int blendmode, float alpha)
+svg_dev_begin_group(fz_context *ctx, fz_device *dev, const fz_rect *bbox, fz_colorspace *cs, int isolated, int knockout, int blendmode, float alpha)
 {
 	svg_device *sdev = (svg_device*)dev;
 	fz_output *out = sdev->out;

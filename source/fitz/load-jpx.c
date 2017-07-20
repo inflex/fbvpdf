@@ -406,10 +406,7 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 		if (state->pix->alpha && ! (HAS_PALETTE(colorspace) && !state->expand_indexed))
 		{
 			if (alphas > 0 && prealphas == 0)
-			{
-				state->pix = fz_ensure_pixmap_is_additive(ctx, state->pix);
 				fz_premultiply_pixmap(ctx, state->pix);
-			}
 		}
 	}
 	fz_always(ctx)
@@ -821,7 +818,7 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 	fz_try(ctx)
 	{
 		a = !!a; /* ignore any superfluous alpha channels */
-		img = fz_new_pixmap(ctx, state->cs, w, h, a);
+		img = fz_new_pixmap(ctx, state->cs, w, h, NULL, a);
 
 		p = img->samples;
 		if (upsample_required)
@@ -877,12 +874,8 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 
 		if (jpx->color_space == OPJ_CLRSPC_SYCC && n == 3 && a == 0)
 			jpx_ycc_to_rgb(ctx, img, 1, 1);
-
 		if (a)
-		{
-			img = fz_ensure_pixmap_is_additive(ctx, img);
 			fz_premultiply_pixmap(ctx, img);
-		}
 	}
 	fz_always(ctx)
 		opj_image_destroy(jpx);

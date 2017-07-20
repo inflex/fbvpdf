@@ -85,6 +85,7 @@ static jclass cls_Point;
 static jclass cls_Rect;
 static jclass cls_RuntimeException;
 static jclass cls_Separation;
+static jclass cls_Separations;
 static jclass cls_Shade;
 static jclass cls_StrokeState;
 static jclass cls_StructuredText;
@@ -130,6 +131,7 @@ static jfieldID fid_Rect_x0;
 static jfieldID fid_Rect_x1;
 static jfieldID fid_Rect_y0;
 static jfieldID fid_Rect_y1;
+static jfieldID fid_Separations_pointer;
 static jfieldID fid_Shade_pointer;
 static jfieldID fid_StrokeState_pointer;
 static jfieldID fid_StructuredText_pointer;
@@ -191,6 +193,7 @@ static jmethodID mid_Point_init;
 static jmethodID mid_Rect_init;
 static jmethodID mid_Shade_init;
 static jmethodID mid_Separation_init;
+static jmethodID mid_Separations_init;
 static jmethodID mid_StrokeState_init;
 static jmethodID mid_StructuredText_init;
 static jmethodID mid_TextBlock_init;
@@ -556,6 +559,10 @@ static int find_fids(JNIEnv *env)
 	cls_Separation = get_class(&err, env, PKG"Separation");
 	mid_Separation_init = get_method(&err, env, "<init>", "(Ljava/lang/String;II)V");
 
+	cls_Separations = get_class(&err, env, PKG"Separations");
+	fid_Separations_pointer = get_field(&err, env, "pointer", "J");
+	mid_Separations_init = get_method(&err, env, "<init>", "(J)V");
+
 	cls_StrokeState = get_class(&err, env, PKG"StrokeState");
 	fid_StrokeState_pointer = get_field(&err, env, "pointer", "J");
 	mid_StrokeState_init = get_method(&err, env, "<init>", "(J)V");
@@ -649,6 +656,7 @@ static void lose_fids(JNIEnv *env)
 	(*env)->DeleteGlobalRef(env, cls_Rect);
 	(*env)->DeleteGlobalRef(env, cls_RuntimeException);
 	(*env)->DeleteGlobalRef(env, cls_Separation);
+	(*env)->DeleteGlobalRef(env, cls_Separations);
 	(*env)->DeleteGlobalRef(env, cls_Shade);
 	(*env)->DeleteGlobalRef(env, cls_StrokeState);
 	(*env)->DeleteGlobalRef(env, cls_StructuredText);
@@ -1428,6 +1436,19 @@ static inline jobject to_Pixmap_safe_own(fz_context *ctx, JNIEnv *env, fz_pixmap
 	return jobj;
 }
 
+static inline jobject to_Separations_safe_own(fz_context *ctx, JNIEnv *env, fz_separations *seps)
+{
+	jobject jseps;
+
+	if (!ctx || !seps) return NULL;
+
+	jseps = (*env)->NewObject(env, cls_Separations, mid_Separations_init, jlong_cast(seps));
+	if (!jseps)
+		fz_drop_separations(ctx, seps);
+
+	return jseps;
+}
+
 static inline jobject to_StructuredText_safe_own(fz_context *ctx, JNIEnv *env, fz_stext_page *text)
 {
 	jobject jtext;
@@ -1603,6 +1624,15 @@ static inline fz_pixmap *from_Pixmap(JNIEnv *env, jobject jobj)
 	pixmap = CAST(fz_pixmap *, (*env)->GetLongField(env, jobj, fid_Pixmap_pointer));
 	if (!pixmap) jni_throw_null(env, "cannot use already destroyed Pixmap");
 	return pixmap;
+}
+
+static inline fz_separations *from_Separations(JNIEnv *env, jobject jobj)
+{
+	fz_separations *seps;
+	if (!jobj) return NULL;
+	seps = CAST(fz_separations *, (*env)->GetLongField(env, jobj, fid_Separations_pointer));
+	if (!seps) jni_throw_null(env, "cannot use already destroyed Separations");
+	return seps;
 }
 
 static inline fz_shade *from_Shade(JNIEnv *env, jobject jobj)
@@ -2689,7 +2719,7 @@ FUN(NativeDevice_beginGroup)(JNIEnv *env, jobject self, jobject jrect, jboolean 
 
 	info = lockNativeDevice(env, self);
 	fz_try(ctx)
-		fz_begin_group(ctx, dev, &rect, isolated, knockout, blendmode, alpha);
+		fz_begin_group(ctx, dev, &rect, NULL, isolated, knockout, blendmode, alpha);
 	fz_always(ctx)
 		unlockNativeDevice(env, info);
 	fz_catch(ctx)
@@ -2831,7 +2861,7 @@ newNativeAndroidDrawDevice(JNIEnv *env, jobject self, fz_context *ctx, jobject o
 
 	fz_try(ctx)
 	{
-		pixmap = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx), &bbox, 1, &dummy);
+		pixmap = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx), &bbox, NULL, 1, &dummy);
 		pixmap->stride = width * sizeof(int32_t);
 		ninfo = fz_malloc(ctx, sizeof(*ninfo));
 		ninfo->pixmap = pixmap;
@@ -2943,7 +2973,7 @@ FUN(AndroidImage_newImageFromBitmap)(JNIEnv *env, jobject self, jobject jbitmap,
 
 	fz_try(ctx)
 	{
-		pixmap = fz_new_pixmap(ctx, fz_device_rgb(ctx), info.width, info.height, 1);
+		pixmap = fz_new_pixmap(ctx, fz_device_rgb(ctx), info.width, info.height, NULL, 1);
 		if (AndroidBitmap_lockPixels(env, jbitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "bitmap lock failed in new Image");
 		memcpy(pixmap->samples, pixels, info.width * info.height * 4);
@@ -3140,7 +3170,7 @@ FUN(Pixmap_newNative)(JNIEnv *env, jobject self, jobject jcs, jint x, jint y, ji
 
 	fz_try(ctx)
 	{
-		pixmap = fz_new_pixmap(ctx, cs, w, h, alpha);
+		pixmap = fz_new_pixmap(ctx, cs, w, h, NULL, alpha);
 		pixmap->x = x;
 		pixmap->y = y;
 	}
@@ -4193,7 +4223,7 @@ FUN(Annotation_toPixmap)(JNIEnv *env, jobject self, jobject jctm, jobject jcs, j
 	if (!ctx || !annot) return NULL;
 
 	fz_try(ctx)
-		pixmap = fz_new_pixmap_from_annot(ctx, annot, &ctm, cs, alpha);
+		pixmap = fz_new_pixmap_from_annot(ctx, annot, &ctm, cs, NULL, alpha);
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
@@ -4718,63 +4748,18 @@ FUN(Page_finalize)(JNIEnv *env, jobject self)
 	fz_drop_page(ctx, page);
 }
 
-JNIEXPORT jint JNICALL
-FUN(Page_countSeparations)(JNIEnv *env, jobject self)
+JNIEXPORT jobject JNICALL
+FUN(Page_getSeparations)(JNIEnv *env, jobject self)
 {
 	fz_context *ctx = get_context(env);
 	fz_page *page = from_Page(env, self);
-	int nSep;
+	fz_separations *seps;
 
 	if (!ctx || !page) return 0;
 
-	fz_try(ctx)
-		nSep = fz_count_separations_on_page(ctx, page);
-	fz_catch(ctx)
-	{
-		jni_rethrow(env, ctx);
-		return 0;
-	}
+	seps = fz_page_separations(ctx, page);
 
-	return nSep;
-}
-
-JNIEXPORT void JNICALL
-FUN(Page_enableSeparation)(JNIEnv *env, jobject self, jint sep, jboolean enable)
-{
-	fz_context *ctx = get_context(env);
-	fz_page *page = from_Page(env, self);
-
-	if (!ctx || !page) return;
-
-	fz_try(ctx)
-		fz_control_separation_on_page(ctx, page, sep, !enable);
-	fz_catch(ctx)
-		jni_rethrow(env, ctx);
-}
-
-JNIEXPORT jobject JNICALL
-FUN(Page_getSeparation)(JNIEnv *env, jobject self, jint sep)
-{
-	fz_context *ctx = get_context(env);
-	fz_page *page = from_Page(env, self);
-	const char *name;
-	char rgba[4];
-	unsigned int bgra;
-	unsigned int cmyk;
-	jobject jname = NULL;
-
-	if (!ctx || !page) return NULL;
-
-	/* MuPDF returns RGBA as bytes. Android wants a packed BGRA int. */
-	name = fz_get_separation_on_page(ctx, page, sep, (unsigned int *)(&rgba[0]), &cmyk);
-	bgra = (rgba[0] << 16) | (rgba[1]<<8) | rgba[2] | (rgba[3]<<24);
-	if (name)
-	{
-		jname = (*env)->NewStringUTF(env, name);
-		if (!jname) return NULL;
-	}
-
-	return (*env)->NewObject(env, cls_Separation, mid_Separation_init, jname, bgra, cmyk);
+	return to_Separations_safe_own(ctx, env, seps);
 }
 
 JNIEXPORT jobject JNICALL
@@ -4789,7 +4774,7 @@ FUN(Page_toPixmap)(JNIEnv *env, jobject self, jobject jctm, jobject jcs, jboolea
 	if (!ctx || !page) return NULL;
 
 	fz_try(ctx)
-		pixmap = fz_new_pixmap_from_page(ctx, page, &ctm, cs, alpha);
+		pixmap = fz_new_pixmap_from_page(ctx, page, &ctm, cs, NULL, alpha);
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
@@ -5288,7 +5273,7 @@ FUN(DisplayList_toPixmap)(JNIEnv *env, jobject self, jobject jctm, jobject jcs, 
 	if (!ctx || !list) return NULL;
 
 	fz_try(ctx)
-		pixmap = fz_new_pixmap_from_display_list(ctx, list, &ctm, cs, alpha);
+		pixmap = fz_new_pixmap_from_display_list(ctx, list, &ctm, cs, NULL, alpha);
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
@@ -8848,4 +8833,75 @@ FUN(PDFAnnotation_setLineEndingStyles)(JNIEnv *env, jobject self, jint start_sty
 		pdf_set_annot_line_ending_styles(ctx, annot, start_style, end_style);
 	fz_catch(ctx)
 		jni_rethrow(env, ctx);
+}
+
+/* Separations interface */
+
+JNIEXPORT jint JNICALL
+FUN(Separations_getNumberOfSeparations)(JNIEnv *env, jobject self)
+{
+	fz_context *ctx = get_context(env);
+	fz_separations *seps = from_Separations(env, self);
+	int nSep;
+
+	fz_try(ctx)
+		nSep = fz_count_separations(ctx, seps);
+	fz_catch(ctx)
+	{
+		jni_rethrow(env, ctx);
+		return 0;
+	}
+
+	return nSep;
+}
+
+JNIEXPORT void JNICALL
+FUN(Separations_controlSeparation)(JNIEnv *env, jobject self, jint sep, jboolean disable)
+{
+	fz_context *ctx = get_context(env);
+	fz_separations *seps = from_Separations(env, self);
+
+	if (!ctx || !seps) return;
+
+	fz_try(ctx)
+		fz_control_separation(ctx, seps, sep, disable);
+	fz_catch(ctx)
+		jni_rethrow(env, ctx);
+}
+
+JNIEXPORT jobject JNICALL
+FUN(Separations_getSeparation)(JNIEnv *env, jobject self, jint sep)
+{
+	fz_context *ctx = get_context(env);
+	fz_separations *seps = from_Separations(env, self);
+	const char *name;
+	char rgba[4];
+	unsigned int bgra;
+	unsigned int cmyk;
+	jobject jname = NULL;
+
+	if (!ctx || !seps) return NULL;
+
+	/* MuPDF returns RGBA as bytes. Android wants a packed BGRA int. */
+	name = fz_get_separation(ctx, seps, sep, (unsigned int *)(&rgba[0]), &cmyk);
+	bgra = (rgba[0] << 16) | (rgba[1]<<8) | rgba[2] | (rgba[3]<<24);
+	if (name)
+	{
+		jname = (*env)->NewStringUTF(env, name);
+		if (!jname) return NULL;
+	}
+
+	return (*env)->NewObject(env, cls_Separation, mid_Separation_init, jname, bgra, cmyk);
+}
+
+JNIEXPORT jboolean JNICALL
+FUN(Separations_areSeparationsControllable)(JNIEnv *env, jobject self)
+{
+	fz_context *ctx = get_context(env);
+	fz_separations *seps = from_Separations(env, self);
+	jobject jname = NULL;
+
+	if (!ctx || !seps) return 0;
+
+	return fz_separations_controllable(ctx, seps);
 }

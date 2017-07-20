@@ -23,21 +23,23 @@ fz_drop_pixmap_imp(fz_context *ctx, fz_storable *pix_)
 	fz_pixmap *pix = (fz_pixmap *)pix_;
 
 	fz_drop_colorspace(ctx, pix->colorspace);
-	if (pix->free_samples)
+	fz_drop_separations(ctx, pix->seps);
+	if (pix->flags & FZ_PIXMAP_FLAG_FREE_SAMPLES)
 		fz_free(ctx, pix->samples);
 	fz_free(ctx, pix);
 }
 
 fz_pixmap *
-fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h, int alpha, int stride, unsigned char *samples)
+fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h, fz_separations *seps, int alpha, int stride, unsigned char *samples)
 {
 	fz_pixmap *pix;
+	int s = fz_count_active_separations(ctx, seps);
 	int n;
 
 	if (w < 0 || h < 0)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "Illegal dimensions for pixmap %d %d", w, h);
 
-	n = alpha + fz_colorspace_n(ctx, colorspace);
+	n = alpha + s + fz_colorspace_n(ctx, colorspace);
 	if (stride < n*w && stride > -n*w)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "Illegal stride for pixmap (n=%d w=%d, stride=%d)", n, w, stride);
 	if (samples == NULL && stride < n*w)
@@ -50,11 +52,13 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 	pix->w = w;
 	pix->h = h;
 	pix->alpha = alpha = !!alpha;
-	pix->interpolate = 1;
+	pix->flags = FZ_PIXMAP_FLAG_INTERPOLATE;
 	pix->xres = 96;
 	pix->yres = 96;
 	pix->colorspace = NULL;
 	pix->n = n;
+	pix->s = s;
+	pix->seps = fz_keep_separations(ctx, seps);
 	pix->stride = stride;
 
 	if (colorspace)
@@ -63,15 +67,11 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 	}
 	else
 	{
-		assert(alpha);
+		assert(alpha || s);
 	}
 
 	pix->samples = samples;
-	if (samples)
-	{
-		pix->free_samples = 0;
-	}
-	else
+	if (!samples)
 	{
 		fz_try(ctx)
 		{
@@ -85,40 +85,42 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 			fz_free(ctx, pix);
 			fz_rethrow(ctx);
 		}
-		pix->free_samples = 1;
+		pix->flags |= FZ_PIXMAP_FLAG_FREE_SAMPLES;
 	}
 
 	return pix;
 }
 
 fz_pixmap *
-fz_new_pixmap(fz_context *ctx, fz_colorspace *colorspace, int w, int h, int alpha)
+fz_new_pixmap(fz_context *ctx, fz_colorspace *colorspace, int w, int h, fz_separations *seps, int alpha)
 {
 	int stride;
-	if (!colorspace) alpha = 1;
-	stride = (fz_colorspace_n(ctx, colorspace) + alpha) * w;
-	return fz_new_pixmap_with_data(ctx, colorspace, w, h, alpha, stride, NULL);
+	int s = fz_count_active_separations(ctx, seps);
+	if (!colorspace && s == 0) alpha = 1;
+	stride = (fz_colorspace_n(ctx, colorspace) + s + alpha) * w;
+	return fz_new_pixmap_with_data(ctx, colorspace, w, h, seps, alpha, stride, NULL);
 }
 
 fz_pixmap *
-fz_new_pixmap_with_bbox(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r, int alpha)
+fz_new_pixmap_with_bbox(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r, fz_separations *seps, int alpha)
 {
 	fz_pixmap *pixmap;
-	pixmap = fz_new_pixmap(ctx, colorspace, r->x1 - r->x0, r->y1 - r->y0, alpha);
+	pixmap = fz_new_pixmap(ctx, colorspace, r->x1 - r->x0, r->y1 - r->y0, seps, alpha);
 	pixmap->x = r->x0;
 	pixmap->y = r->y0;
 	return pixmap;
 }
 
 fz_pixmap *
-fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r, int alpha, unsigned char *samples)
+fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *r, fz_separations *seps, int alpha, unsigned char *samples)
 {
 	int w = r->x1 - r->x0;
 	int stride;
+	int s = fz_count_active_separations(ctx, seps);
 	fz_pixmap *pixmap;
-	if (!colorspace) alpha = 1;
-	stride = (fz_colorspace_n(ctx, colorspace) + alpha) * w;
-	pixmap = fz_new_pixmap_with_data(ctx, colorspace, w, r->y1 - r->y0, alpha, stride, samples);
+	if (!colorspace && s == 0) alpha = 1;
+	stride = (fz_colorspace_n(ctx, colorspace) + s + alpha) * w;
+	pixmap = fz_new_pixmap_with_data(ctx, colorspace, w, r->y1 - r->y0, seps, alpha, stride, samples);
 	pixmap->x = r->x0;
 	pixmap->y = r->y0;
 	return pixmap;
@@ -185,7 +187,19 @@ fz_pixmap_components(fz_context *ctx, fz_pixmap *pix)
 int
 fz_pixmap_colorants(fz_context *ctx, fz_pixmap *pix)
 {
-	return pix->n - pix->alpha;
+	return pix->n - pix->alpha - pix->s;
+}
+
+int
+fz_pixmap_spots(fz_context *ctx, fz_pixmap *pix)
+{
+	return pix->s;
+}
+
+int
+fz_pixmap_alpha(fz_context *ctx, fz_pixmap *pix)
+{
+	return pix->alpha;
 }
 
 int
@@ -417,7 +431,7 @@ fz_clear_pixmap(fz_context *ctx, fz_pixmap *pix)
 		stride *= h;
 		h = 1;
 	}
-	if (pix->alpha)
+	if (pix->alpha || fz_colorspace_is_subtractive(ctx, pix->colorspace))
 	{
 		while (h--)
 		{
@@ -427,7 +441,6 @@ fz_clear_pixmap(fz_context *ctx, fz_pixmap *pix)
 	}
 	else
 	{
-		/* FIXME: Not right for CMYK or other subtractive spaces */
 		while (h--)
 		{
 			memset(s, 0xff, (unsigned int)stride);
@@ -492,11 +505,11 @@ fz_clear_pixmap_with_value(fz_context *ctx, fz_pixmap *pix, int value)
 }
 
 void
-fz_copy_pixmap_rect(fz_context *ctx, fz_pixmap *dest, fz_pixmap *src, const fz_irect *b)
+fz_copy_pixmap_rect(fz_context *ctx, fz_pixmap *dest, fz_pixmap *src, const fz_irect *b, const fz_default_colorspaces *default_cs)
 {
-	const unsigned char *srcp;
+	unsigned char *srcp;
 	unsigned char *destp;
-	int x, y, w, destspan, srcspan;
+	int y, w, destspan, srcspan;
 	fz_irect local_b, bb;
 
 	local_b = *b;
@@ -523,81 +536,18 @@ fz_copy_pixmap_rect(fz_context *ctx, fz_pixmap *dest, fz_pixmap *src, const fz_i
 		}
 		while (--y);
 	}
-	else if (src->n == 2 && dest->n == 4)
-	{
-		/* Copy, and convert from grey+alpha to rgb+alpha */
-		srcspan -= w*2;
-		destspan -= w*4;
-		do
-		{
-			for (x = w; x > 0; x--)
-			{
-				unsigned char v = *srcp++;
-				unsigned char a = *srcp++;
-				*destp++ = v;
-				*destp++ = v;
-				*destp++ = v;
-				*destp++ = a;
-			}
-			srcp += srcspan;
-			destp += destspan;
-		}
-		while (--y);
-	}
-	else if (src->n == 1 + src->alpha && dest->n == 3 + dest->alpha)
-	{
-		assert("FIXME" == NULL);
-	}
-	else if (src->n == 4 && dest->n == 2)
-	{
-		/* Copy, and convert from rgb+alpha to grey+alpha */
-		srcspan -= w*4;
-		destspan -= w*2;
-		do
-		{
-			for (x = w; x > 0; x--)
-			{
-				int v;
-				v = *srcp++;
-				v += *srcp++;
-				v += *srcp++;
-				*destp++ = (unsigned char)((v+1)/3);
-				*destp++ = *srcp++;
-			}
-			srcp += srcspan;
-			destp += destspan;
-		}
-		while (--y);
-	}
-	else if (src->n == 3 + src->alpha && dest->n == 1 + dest->alpha)
-	{
-		assert("FIXME" == NULL);
-	}
 	else
 	{
-		/* FIXME: Crap conversion */
-		int z;
-		int sn = src->n-1;
-		int dn = dest->n-1;
+		fz_pixmap_converter *pc = fz_lookup_pixmap_converter(ctx, dest->colorspace, src->colorspace);
+		fz_pixmap fake_src = *src;
 
-		srcspan -= w*src->n;
-		destspan -= w*dest->n;
-		do
-		{
-			for (x = w; x > 0; x--)
-			{
-				int v = 0;
-				for (z = sn; z > 0; z--)
-					v += *srcp++;
-				v = (v * dn + (sn>>1)) / sn;
-				for (z = dn; z > 0; z--)
-					*destp++ = (unsigned char)v;
-				*destp++ = *srcp++;
-			}
-			srcp += srcspan;
-			destp += destspan;
-		}
-		while (--y);
+		fake_src.x = local_b.x0;
+		fake_src.y = local_b.y0;
+		fake_src.w = w;
+		fake_src.h = y;
+		fake_src.samples = srcp;
+
+		pc(ctx, dest, &fake_src, NULL, default_cs, fz_default_color_params(ctx));
 	}
 }
 
@@ -676,9 +626,6 @@ fz_premultiply_pixmap(fz_context *ctx, fz_pixmap *pix)
 	if (!pix->alpha)
 		return;
 
-	if (fz_colorspace_is_subtractive(ctx, pix->colorspace))
-		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot pre-multiply subtractive colors");
-
 	for (y = 0; y < pix->h; y++)
 	{
 		for (x = 0; x < pix->w; x++)
@@ -718,18 +665,6 @@ fz_unmultiply_pixmap(fz_context *ctx, fz_pixmap *pix)
 }
 
 fz_pixmap *
-fz_ensure_pixmap_is_additive(fz_context *ctx, fz_pixmap *pix)
-{
-	if (fz_colorspace_is_subtractive(ctx, pix->colorspace))
-	{
-		fz_pixmap *rgb = fz_convert_pixmap(ctx, pix, fz_device_rgb(ctx), NULL, NULL, NULL/* FIXME */, 1);
-		fz_drop_pixmap(ctx, pix);
-		return rgb;
-	}
-	return pix;
-}
-
-fz_pixmap *
 fz_alpha_from_gray(fz_context *ctx, fz_pixmap *gray)
 {
 	fz_pixmap *alpha;
@@ -739,7 +674,7 @@ fz_alpha_from_gray(fz_context *ctx, fz_pixmap *gray)
 
 	assert(gray->n == 1);
 
-	alpha = fz_new_pixmap_with_bbox(ctx, NULL, fz_pixmap_bbox(ctx, gray, &bbox), 1);
+	alpha = fz_new_pixmap_with_bbox(ctx, NULL, fz_pixmap_bbox(ctx, gray, &bbox), 0, 1);
 	dp = alpha->samples;
 	dstride = alpha->stride;
 	sp = gray->samples;
@@ -891,13 +826,16 @@ fz_convert_pixmap(fz_context *ctx, fz_pixmap *pix, fz_colorspace *ds, fz_colorsp
 	if (color_params == NULL)
 		color_params = fz_default_color_params(ctx);
 
-	cvt = fz_new_pixmap(ctx, ds, pix->w, pix->h, keep_alpha && pix->alpha);
+	cvt = fz_new_pixmap(ctx, ds, pix->w, pix->h, pix->seps, keep_alpha && pix->alpha);
 
 	cvt->xres = pix->xres;
 	cvt->yres = pix->yres;
 	cvt->x = pix->x;
 	cvt->y = pix->y;
-	cvt->interpolate = pix->interpolate;
+	if (pix->flags & FZ_PIXMAP_FLAG_INTERPOLATE)
+		cvt->flags |= FZ_PIXMAP_FLAG_INTERPOLATE;
+	else
+		cvt->flags &= ~FZ_PIXMAP_FLAG_INTERPOLATE;
 
 	fz_try(ctx)
 	{
@@ -916,7 +854,7 @@ fz_convert_pixmap(fz_context *ctx, fz_pixmap *pix, fz_colorspace *ds, fz_colorsp
 fz_pixmap *
 fz_new_pixmap_from_8bpp_data(fz_context *ctx, int x, int y, int w, int h, unsigned char *sp, int span)
 {
-	fz_pixmap *pixmap = fz_new_pixmap(ctx, NULL, w, h, 1);
+	fz_pixmap *pixmap = fz_new_pixmap(ctx, NULL, w, h, NULL, 1);
 	int stride = pixmap->stride;
 	unsigned char *s = pixmap->samples;
 	pixmap->x = x;
@@ -934,7 +872,7 @@ fz_new_pixmap_from_8bpp_data(fz_context *ctx, int x, int y, int w, int h, unsign
 fz_pixmap *
 fz_new_pixmap_from_1bpp_data(fz_context *ctx, int x, int y, int w, int h, unsigned char *sp, int span)
 {
-	fz_pixmap *pixmap = fz_new_pixmap(ctx, NULL, w, h, 1);
+	fz_pixmap *pixmap = fz_new_pixmap(ctx, NULL, w, h, NULL, 1);
 	int stride = pixmap->stride - pixmap->w;
 	pixmap->x = x;
 	pixmap->y = y;

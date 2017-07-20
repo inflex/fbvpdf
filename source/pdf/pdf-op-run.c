@@ -13,7 +13,7 @@
 typedef struct pdf_material_s pdf_material;
 typedef struct pdf_run_processor_s pdf_run_processor;
 
-static void pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf_obj *page_resources, const fz_matrix *transform);
+static void pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf_obj *page_resources, const fz_matrix *transform, int is_smask);
 
 enum
 {
@@ -150,7 +150,7 @@ begin_softmask(fz_context *ctx, pdf_run_processor *pr, softmask_save *save)
 	fz_try(ctx)
 	{
 		fz_begin_mask(ctx, pr->dev, &mask_bbox, gstate->luminosity, mask_colorspace, gstate->softmask_bc, &gstate->fill.color_params);
-		pdf_run_xobject(ctx, pr, softmask, save->page_resources, &fz_identity);
+		pdf_run_xobject(ctx, pr, softmask, save->page_resources, &fz_identity, 1);
 	}
 	fz_always(ctx)
 		fz_drop_colorspace(ctx, mask_colorspace);
@@ -193,7 +193,7 @@ pdf_begin_group(fz_context *ctx, pdf_run_processor *pr, const fz_rect *bbox, sof
 	pdf_gstate *gstate = begin_softmask(ctx, pr, softmask);
 
 	if (gstate->blendmode)
-		fz_begin_group(ctx, pr->dev, bbox, 1, 0, gstate->blendmode, 1);
+		fz_begin_group(ctx, pr->dev, bbox, NULL, 1, 0, gstate->blendmode, 1);
 
 	return pr->gstate + pr->gtop;
 }
@@ -527,7 +527,7 @@ pdf_show_image(fz_context *ctx, pdf_run_processor *pr, fz_image *image)
 	{
 		/* apply blend group even though we skip the soft mask */
 		if (gstate->blendmode)
-			fz_begin_group(ctx, pr->dev, &bbox, 0, 0, gstate->blendmode, 1);
+			fz_begin_group(ctx, pr->dev, &bbox, NULL, 0, 0, gstate->blendmode, 1);
 		fz_clip_image_mask(ctx, pr->dev, image->mask, &image_ctm, &bbox);
 	}
 	else
@@ -635,7 +635,7 @@ pdf_show_path(fz_context *ctx, pdf_run_processor *pr, int doclose, int dofill, i
 			else
 			{
 				knockout_group = 1;
-				fz_begin_group(ctx, pr->dev, &bbox, 0, 1, FZ_BLEND_NORMAL, 1);
+				fz_begin_group(ctx, pr->dev, &bbox, NULL, 0, 1, FZ_BLEND_NORMAL, 1);
 			}
 		}
 
@@ -780,7 +780,7 @@ pdf_flush_text(fz_context *ctx, pdf_run_processor *pr)
 			else
 			{
 				knockout_group = 1;
-				fz_begin_group(ctx, pr->dev, &tb, 0, 1, FZ_BLEND_NORMAL, 1);
+				fz_begin_group(ctx, pr->dev, &tb, NULL, 0, 1, FZ_BLEND_NORMAL, 1);
 			}
 		}
 
@@ -1197,7 +1197,7 @@ pdf_set_pattern(fz_context *ctx, pdf_run_processor *pr, int what, pdf_pattern *p
 }
 
 static void
-pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf_obj *page_resources, const fz_matrix *transform)
+pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf_obj *page_resources, const fz_matrix *transform, int is_smask)
 {
 	pdf_run_processor *pr = (pdf_run_processor *)proc;
 	pdf_gstate *gstate = NULL;
@@ -1214,6 +1214,7 @@ pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf
 	fz_matrix xobj_matrix;
 	int transparency;
 	pdf_document *doc;
+	fz_colorspace *cs = NULL;
 
 	/* Avoid infinite recursion */
 	if (xobj == NULL || pdf_mark_obj(ctx, xobj->obj))
@@ -1223,6 +1224,7 @@ pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf
 	fz_var(gstate);
 	fz_var(oldtop);
 	fz_var(oldbot);
+	fz_var(cs);
 
 	gparent_save = pr->gparent;
 	pr->gparent = pr->gtop;
@@ -1250,6 +1252,8 @@ pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf
 		if (transparency)
 		{
 			fz_rect bbox;
+			int isolated = pdf_xobject_isolated(ctx, xobj);
+
 			bbox = xobj_bbox;
 			fz_transform_rect(&bbox, &gstate->ctm);
 
@@ -1261,8 +1265,11 @@ pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf
 			/* Remember that we tried to call fz_begin_group. Even
 			 * if it throws an error, we must call fz_end_group. */
 			cleanup_state = 2;
+			if (isolated)
+				cs = pdf_xobject_colorspace(ctx, xobj);
 			fz_begin_group(ctx, pr->dev, &bbox,
-					pdf_xobject_isolated(ctx, xobj),
+					cs,
+					(is_smask ? 1 : isolated),
 					pdf_xobject_knockout(ctx, xobj),
 					gstate->blendmode, gstate->fill.alpha);
 
@@ -1300,6 +1307,8 @@ pdf_run_xobject(fz_context *ctx, pdf_run_processor *proc, pdf_xobject *xobj, pdf
 	}
 	fz_always(ctx)
 	{
+		fz_drop_colorspace(ctx, cs);
+
 		/* Undo any gstate mismatches due to the pdf_process_contents call */
 		if (oldbot != -1)
 		{
@@ -1983,7 +1992,7 @@ static void pdf_run_Do_image(fz_context *ctx, pdf_processor *proc, const char *n
 
 static void pdf_run_Do_form(fz_context *ctx, pdf_processor *proc, const char *name, pdf_xobject *xobj, pdf_obj *page_resources)
 {
-	pdf_run_xobject(ctx, (pdf_run_processor*)proc, xobj, page_resources, &fz_identity);
+	pdf_run_xobject(ctx, (pdf_run_processor*)proc, xobj, page_resources, &fz_identity, 0);
 }
 
 /* marked content */
