@@ -203,15 +203,15 @@ pdf_process_extgstate(fz_context *ctx, pdf_processor *proc, pdf_csi *csi, pdf_ob
 	/* overprint and color management */
 
 	obj = pdf_dict_get(ctx, dict, PDF_NAME_OP);
-	if (pdf_is_name(ctx, obj) && proc->op_gs_OP)
+	if (pdf_is_bool(ctx, obj) && proc->op_gs_OP)
 		proc->op_gs_OP(ctx, proc, pdf_to_bool(ctx, obj));
 
 	obj = pdf_dict_get(ctx, dict, PDF_NAME_op);
-	if (pdf_is_name(ctx, obj) && proc->op_gs_op)
+	if (pdf_is_bool(ctx, obj) && proc->op_gs_op)
 		proc->op_gs_op(ctx, proc, pdf_to_bool(ctx, obj));
 
 	obj = pdf_dict_get(ctx, dict, PDF_NAME_OPM);
-	if (pdf_is_name(ctx, obj) && proc->op_gs_OPM)
+	if (pdf_is_int(ctx, obj) && proc->op_gs_OPM)
 		proc->op_gs_OPM(ctx, proc, pdf_to_int(ctx, obj));
 
 	obj = pdf_dict_get(ctx, dict, PDF_NAME_UseBlackPtComp);
@@ -1086,6 +1086,9 @@ pdf_process_annot(fz_context *ctx, pdf_processor *proc, pdf_document *doc, pdf_p
 	int flags = pdf_to_int(ctx, pdf_dict_get(ctx, annot->obj, PDF_NAME_F));
 
 	if (flags & (PDF_ANNOT_IS_INVISIBLE | PDF_ANNOT_IS_HIDDEN))
+		return;
+
+	if (pdf_annot_has_open(ctx, annot) && !pdf_annot_is_open(ctx, annot))
 		return;
 
 	if (proc->usage)

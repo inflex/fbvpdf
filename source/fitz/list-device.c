@@ -432,17 +432,17 @@ fz_append_display_node(
 	}
 	if (ctm && (ctm->a != writer->ctm.a || ctm->b != writer->ctm.b || ctm->c != writer->ctm.c || ctm->d != writer->ctm.d || ctm->e != writer->ctm.e || ctm->f != writer->ctm.f))
 	{
-		int flags;
+		int ctm_flags;
 
 		ctm_off = size;
-		flags = CTM_UNCHANGED;
+		ctm_flags = CTM_UNCHANGED;
 		if (ctm->a != writer->ctm.a || ctm->d != writer->ctm.d)
-			flags = CTM_CHANGE_AD, size += SIZE_IN_NODES(2*sizeof(float));
+			ctm_flags = CTM_CHANGE_AD, size += SIZE_IN_NODES(2*sizeof(float));
 		if (ctm->b != writer->ctm.b || ctm->c != writer->ctm.c)
-			flags |= CTM_CHANGE_BC, size += SIZE_IN_NODES(2*sizeof(float));
+			ctm_flags |= CTM_CHANGE_BC, size += SIZE_IN_NODES(2*sizeof(float));
 		if (ctm->e != writer->ctm.e || ctm->f != writer->ctm.f)
-			flags |= CTM_CHANGE_EF, size += SIZE_IN_NODES(2*sizeof(float));
-		node.ctm = flags;
+			ctm_flags |= CTM_CHANGE_EF, size += SIZE_IN_NODES(2*sizeof(float));
+		node.ctm = ctm_flags;
 	}
 	if (stroke && (writer->stroke == NULL || stroke != writer->stroke))
 	{
@@ -1160,6 +1160,7 @@ struct fz_list_tile_data_s
 	float xstep;
 	float ystep;
 	fz_rect view;
+	int id;
 };
 
 static int
@@ -1170,6 +1171,7 @@ fz_list_begin_tile(fz_context *ctx, fz_device *dev, const fz_rect *area, const f
 	tile.xstep = xstep;
 	tile.ystep = ystep;
 	tile.view = *view;
+	tile.id = id;
 	fz_append_display_node(
 		ctx,
 		dev,
@@ -1758,7 +1760,7 @@ visible:
 				fz_rect tile_rect;
 				tiled++;
 				tile_rect = data->view;
-				cached = fz_begin_tile_id(ctx, dev, &rect, &tile_rect, data->xstep, data->ystep, &trans_ctm, n.flags);
+				cached = fz_begin_tile_id(ctx, dev, &rect, &tile_rect, data->xstep, data->ystep, &trans_ctm, data->id);
 				if (cached)
 					tile_skip_depth = 1;
 				break;
