@@ -277,8 +277,7 @@ CROSSCOMPILE=yes
 endif
 
 ifeq "$(HAVE_WIN32)" "yes"
-WIN32_LIBS=-lcomdlg32 -lgdi32
-LDFLAGS += -Wl,-subsystem,windows
+WIN32_LIBS=-lcomdlg32 -lgdi32 -Wl,-subsystem,windows
 endif
 
 # TODO: If crosscompiling, why not just call "make libs" instead of this exception?
