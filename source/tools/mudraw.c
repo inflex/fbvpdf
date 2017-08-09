@@ -31,7 +31,7 @@ enum {
 	OUT_NONE,
 	OUT_PNG, OUT_TGA, OUT_PNM, OUT_PGM, OUT_PPM, OUT_PAM,
 	OUT_PBM, OUT_PKM, OUT_PWG, OUT_PCL, OUT_PS, OUT_PSD,
-	OUT_TEXT, OUT_HTML, OUT_STEXT,
+	OUT_TEXT, OUT_HTML, OUT_XHTML, OUT_STEXT,
 	OUT_TRACE, OUT_SVG,
 #if FZ_ENABLE_PDF
 	OUT_PDF,
@@ -70,6 +70,7 @@ static const suffix_t suffix_table[] =
 	{ ".txt", OUT_TEXT, 0 },
 	{ ".text", OUT_TEXT, 0 },
 	{ ".html", OUT_HTML, 0 },
+	{ ".xhtml", OUT_XHTML, 0 },
 	{ ".stext", OUT_STEXT, 0 },
 
 	{ ".trace", OUT_TRACE, 0 },
@@ -131,6 +132,7 @@ static const format_cs_table_t format_cs_table[] =
 
 	{ OUT_TEXT, CS_RGB, { CS_RGB } },
 	{ OUT_HTML, CS_RGB, { CS_RGB } },
+	{ OUT_XHTML, CS_RGB, { CS_RGB } },
 	{ OUT_STEXT, CS_RGB, { CS_RGB } },
 };
 
@@ -227,9 +229,6 @@ static float min_line_width = 0.0f;
 
 static int showfeatures = 0;
 static int showtime = 0;
-static size_t memtrace_current = 0;
-static size_t memtrace_peak = 0;
-static size_t memtrace_total = 0;
 static int showmemory = 0;
 static int showmd5 = 0;
 
@@ -392,11 +391,13 @@ file_level_headers(fz_context *ctx)
 	if (output_format == OUT_STEXT || output_format == OUT_TRACE)
 		fz_write_printf(ctx, out, "<?xml version=\"1.0\"?>\n");
 
-	if (output_format == OUT_TEXT || output_format == OUT_HTML || output_format == OUT_STEXT)
+	if (output_format == OUT_TEXT || output_format == OUT_HTML || output_format == OUT_XHTML || output_format == OUT_STEXT)
 		sheet = fz_new_stext_sheet(ctx);
 
 	if (output_format == OUT_HTML)
 		fz_print_stext_header_as_html(ctx, out);
+	if (output_format == OUT_XHTML)
+		fz_print_stext_header_as_xhtml(ctx, out);
 
 	if (output_format == OUT_STEXT || output_format == OUT_TRACE)
 		fz_write_printf(ctx, out, "<document name=\"%s\">\n", filename);
@@ -416,6 +417,8 @@ file_level_trailers(fz_context *ctx)
 
 	if (output_format == OUT_HTML)
 		fz_print_stext_trailer_as_html(ctx, out);
+	if (output_format == OUT_XHTML)
+		fz_print_stext_trailer_as_xhtml(ctx, out);
 
 	if (output_format == OUT_PS)
 		fz_write_ps_file_trailer(ctx, out, output_pagenum);
@@ -519,7 +522,7 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 		}
 	}
 
-	else if (output_format == OUT_TEXT || output_format == OUT_HTML || output_format == OUT_STEXT)
+	else if (output_format == OUT_TEXT || output_format == OUT_HTML || output_format == OUT_XHTML || output_format == OUT_STEXT)
 	{
 		fz_stext_page *text = NULL;
 
@@ -529,7 +532,7 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 		{
 			fz_stext_options stext_options;
 
-			stext_options.flags = (output_format == OUT_HTML) ? FZ_STEXT_PRESERVE_IMAGES : 0;
+			stext_options.flags = (output_format == OUT_HTML || output_format == OUT_XHTML) ? FZ_STEXT_PRESERVE_IMAGES : 0;
 			text = fz_new_stext_page(ctx, &mediabox);
 			dev = fz_new_stext_device(ctx, sheet, text, &stext_options);
 			if (lowmemory)
@@ -549,6 +552,11 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 			{
 				fz_analyze_text(ctx, sheet, text);
 				fz_print_stext_page_as_html(ctx, out, text);
+			}
+			else if (output_format == OUT_XHTML)
+			{
+				fz_analyze_text(ctx, sheet, text);
+				fz_print_stext_page_as_xhtml(ctx, out, text);
 			}
 			else if (output_format == OUT_TEXT)
 			{
@@ -1177,9 +1185,17 @@ typedef struct
 #endif
 } trace_header;
 
+typedef struct
+{
+	size_t current;
+	size_t peak;
+	size_t total;
+} trace_info;
+
 static void *
 trace_malloc(void *arg, size_t size)
 {
+	trace_info *info = (trace_info *) arg;
 	trace_header *p;
 	if (size == 0)
 		return NULL;
@@ -1187,27 +1203,29 @@ trace_malloc(void *arg, size_t size)
 	if (p == NULL)
 		return NULL;
 	p[0].size = size;
-	memtrace_current += size;
-	memtrace_total += size;
-	if (memtrace_current > memtrace_peak)
-		memtrace_peak = memtrace_current;
+	info->current += size;
+	info->total += size;
+	if (info->current > info->peak)
+		info->peak = info->current;
 	return (void *)&p[1];
 }
 
 static void
 trace_free(void *arg, void *p_)
 {
+	trace_info *info = (trace_info *) arg;
 	trace_header *p = (trace_header *)p_;
 
 	if (p == NULL)
 		return;
-	memtrace_current -= p[-1].size;
+	info->current -= p[-1].size;
 	free(&p[-1]);
 }
 
 static void *
 trace_realloc(void *arg, void *p_, size_t size)
 {
+	trace_info *info = (trace_info *) arg;
 	trace_header *p = (trace_header *)p_;
 	size_t oldsize;
 
@@ -1222,11 +1240,11 @@ trace_realloc(void *arg, void *p_, size_t size)
 	p = realloc(&p[-1], size + sizeof(trace_header));
 	if (p == NULL)
 		return NULL;
-	memtrace_current += size - oldsize;
+	info->current += size - oldsize;
 	if (size > oldsize)
-		memtrace_total += size - oldsize;
-	if (memtrace_current > memtrace_peak)
-		memtrace_peak = memtrace_current;
+		info->total += size - oldsize;
+	if (info->current > info->peak)
+		info->peak = info->current;
 	p[0].size = size;
 	return &p[1];
 }
@@ -1392,7 +1410,8 @@ int mudraw_main(int argc, char **argv)
 	fz_document *doc = NULL;
 	int c;
 	fz_context *ctx;
-	fz_alloc_context alloc_ctx = { NULL, trace_malloc, trace_realloc, trace_free };
+	trace_info info = { 0, 0, 0 };
+	fz_alloc_context alloc_ctx = { &info, trace_malloc, trace_realloc, trace_free };
 	fz_locks_context *locks = NULL;
 	fz_colorspace *oi = NULL;
 
@@ -1870,9 +1889,9 @@ int mudraw_main(int argc, char **argv)
 
 	if (showmemory)
 	{
-		fprintf(stderr, "Total memory use = " FZ_FMT_zu " bytes\n", memtrace_total);
-		fprintf(stderr, "Peak memory use = " FZ_FMT_zu " bytes\n", memtrace_peak);
-		fprintf(stderr, "Current memory use = " FZ_FMT_zu " bytes\n", memtrace_current);
+		fprintf(stderr, "Total memory use = " FZ_FMT_zu " bytes\n", info.total);
+		fprintf(stderr, "Peak memory use = " FZ_FMT_zu " bytes\n", info.peak);
+		fprintf(stderr, "Current memory use = " FZ_FMT_zu " bytes\n", info.current);
 	}
 
 	return (errored != 0);
