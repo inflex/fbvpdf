@@ -193,6 +193,28 @@ fz_set_font_bbox(fz_context *ctx, fz_font *font, float xmin, float ymin, float x
 	}
 }
 
+float fz_font_ascender(fz_context *ctx, fz_font *font)
+{
+	if (font->t3procs)
+		return font->bbox.y1;
+	else
+	{
+		FT_Face face = font->ft_face;
+		return (float)face->ascender / face->units_per_EM;
+	}
+}
+
+float fz_font_descender(fz_context *ctx, fz_font *font)
+{
+	if (font->t3procs)
+		return font->bbox.y0;
+	else
+	{
+		FT_Face face = font->ft_face;
+		return (float)face->descender / face->units_per_EM;
+	}
+}
+
 /*
  * Freetype hooks
  */
@@ -542,6 +564,20 @@ fz_new_font_from_buffer(fz_context *ctx, const char *name, fz_buffer *buffer, in
 			FT_Sfnt_Table_Info(face, i, &tag, &size);
 			if (tag == TTAG_GDEF || tag == TTAG_GPOS || tag == TTAG_GSUB)
 				font->flags.has_opentype = 1;
+		}
+	}
+
+	if (name)
+	{
+		if (!font->flags.is_bold)
+		{
+			if (strstr(name, "Semibold")) font->flags.is_bold = 1;
+			if (strstr(name, "Bold")) font->flags.is_bold = 1;
+		}
+		if (!font->flags.is_italic)
+		{
+			if (strstr(name, "Italic")) font->flags.is_italic = 1;
+			if (strstr(name, "Oblique")) font->flags.is_italic = 1;
 		}
 	}
 
