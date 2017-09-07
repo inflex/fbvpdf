@@ -648,7 +648,7 @@ static void removeduplicateobjs(fz_context *ctx, pdf_document *doc, pdf_write_st
 		for (other = 1; other < num; other++)
 		{
 			pdf_obj *a, *b;
-			int differ, newnum, streama, streamb;
+			int newnum, streama = 0, streamb = 0, differ = 0;
 
 			if (num == other || !opts->use_list[num] || !opts->use_list[other])
 				continue;
@@ -1688,9 +1688,7 @@ static void copystream(fz_context *ctx, pdf_document *doc, pdf_write_state *opts
 	pdf_print_obj(ctx, opts->out, obj, opts->do_tight);
 	fz_write_string(ctx, opts->out, "\nstream\n");
 	fz_write_data(ctx, opts->out, data, len);
-	if (len > 0 && data[len-1] != '\n')
-		fz_write_byte(ctx, opts->out, '\n');
-	fz_write_string(ctx, opts->out, "endstream\nendobj\n\n");
+	fz_write_string(ctx, opts->out, "\nendstream\nendobj\n\n");
 
 	fz_drop_buffer(ctx, buf);
 	pdf_drop_obj(ctx, obj);
@@ -1753,9 +1751,7 @@ static void expandstream(fz_context *ctx, pdf_document *doc, pdf_write_state *op
 	pdf_print_obj(ctx, opts->out, obj, opts->do_tight);
 	fz_write_string(ctx, opts->out, "\nstream\n");
 	fz_write_data(ctx, opts->out, data, len);
-	if (len > 0 && data[len-1] != '\n')
-		fz_write_byte(ctx, opts->out, '\n');
-	fz_write_string(ctx, opts->out, "endstream\nendobj\n\n");
+	fz_write_string(ctx, opts->out, "\nendstream\nendobj\n\n");
 
 	fz_drop_buffer(ctx, buf);
 	pdf_drop_obj(ctx, obj);
@@ -1819,6 +1815,14 @@ static int is_font_stream(fz_context *ctx, pdf_obj *obj)
 		return 1;
 	if (o = pdf_dict_get(ctx, obj, PDF_NAME_Subtype), pdf_name_eq(ctx, o, PDF_NAME_CIDFontType0C))
 		return 1;
+	return 0;
+}
+
+static int is_xml_metadata(fz_context *ctx, pdf_obj *obj)
+{
+	if (pdf_name_eq(ctx, pdf_dict_get(ctx, obj, PDF_NAME_Type), PDF_NAME_Metadata))
+		if (pdf_name_eq(ctx, pdf_dict_get(ctx, obj, PDF_NAME_Subtype), PDF_NAME_XML))
+			return 1;
 	return 0;
 }
 
@@ -1888,6 +1892,8 @@ static void writeobject(fz_context *ctx, pdf_document *doc, pdf_write_state *opt
 				do_deflate = 1, do_expand = 0;
 			if (opts->do_compress_fonts && is_font_stream(ctx, obj))
 				do_deflate = 1, do_expand = 0;
+			if (is_xml_metadata(ctx, obj))
+				do_deflate = 0, do_expand = 0;
 			if (do_expand)
 				expandstream(ctx, doc, opts, obj, num, gen, do_deflate);
 			else
@@ -2219,7 +2225,7 @@ writeobjects(fz_context *ctx, pdf_document *doc, pdf_write_state *opts, int pass
 	if (!opts->do_incremental)
 	{
 		fz_write_printf(ctx, opts->out, "%%PDF-%d.%d\n", doc->version / 10, doc->version % 10);
-		fz_write_string(ctx, opts->out, "%%\316\274\341\277\246\n\n");
+		fz_write_string(ctx, opts->out, "%\xC2\xB5\xC2\xB6\n\n");
 	}
 
 	dowriteobject(ctx, doc, opts, opts->start, pass);

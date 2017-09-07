@@ -346,7 +346,7 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, unsigned char *data, size_t size
 		return NULL;
 	}
 
-	state->pix = fz_new_pixmap(ctx, state->cs, state->width, state->height, alphas);
+	state->pix = fz_new_pixmap(ctx, state->cs, state->width, state->height, NULL, alphas);
 	fz_clear_pixmap_with_value(ctx, state->pix, 0);
 
 	fz_try(ctx)
@@ -892,7 +892,7 @@ fz_pixmap *
 fz_load_jpx(fz_context *ctx, unsigned char *data, size_t size, fz_colorspace *defcs)
 {
 	fz_jpxd state = { 0 };
-	fz_pixmap *pix;
+	fz_pixmap *pix = NULL;
 
 	fz_try(ctx)
 	{
