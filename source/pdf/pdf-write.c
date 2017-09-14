@@ -796,8 +796,7 @@ static void renumberobj(fz_context *ctx, pdf_document *doc, pdf_write_state *opt
 					val = pdf_new_null(ctx, doc);
 				else
 					val = pdf_new_indirect(ctx, doc, opts->renumber_map[o], 0);
-				pdf_dict_put(ctx, obj, key, val);
-				pdf_drop_obj(ctx, val);
+				pdf_dict_put_drop(ctx, obj, key, val);
 			}
 			else
 			{
@@ -819,8 +818,7 @@ static void renumberobj(fz_context *ctx, pdf_document *doc, pdf_write_state *opt
 					val = pdf_new_null(ctx, doc);
 				else
 					val = pdf_new_indirect(ctx, doc, opts->renumber_map[o], 0);
-				pdf_array_put(ctx, obj, i, val);
-				pdf_drop_obj(ctx, val);
+				pdf_array_put_drop(ctx, obj, i, val);
 			}
 			else
 			{
@@ -1681,8 +1679,7 @@ static void copystream(fz_context *ctx, pdf_document *doc, pdf_write_state *opts
 	}
 
 	newlen = pdf_new_int(ctx, doc, (int)len);
-	pdf_dict_put(ctx, obj, PDF_NAME_Length, newlen);
-	pdf_drop_obj(ctx, newlen);
+	pdf_dict_put_drop(ctx, obj, PDF_NAME_Length, newlen);
 
 	fz_write_printf(ctx, opts->out, "%d %d obj\n", num, gen);
 	pdf_print_obj(ctx, opts->out, obj, opts->do_tight);
@@ -1744,8 +1741,7 @@ static void expandstream(fz_context *ctx, pdf_document *doc, pdf_write_state *op
 	}
 
 	newlen = pdf_new_int(ctx, doc, (int)len);
-	pdf_dict_put(ctx, obj, PDF_NAME_Length, newlen);
-	pdf_drop_obj(ctx, newlen);
+	pdf_dict_put_drop(ctx, obj, PDF_NAME_Length, newlen);
 
 	fz_write_printf(ctx, opts->out, "%d %d obj\n", num, gen);
 	pdf_print_obj(ctx, opts->out, obj, opts->do_tight);
@@ -1971,56 +1967,40 @@ static void writexref(fz_context *ctx, pdf_document *doc, pdf_write_state *opts,
 	fz_write_string(ctx, opts->out, "\n");
 
 	fz_var(trailer);
-	fz_var(nobj);
 
-	fz_try(ctx)
+	if (opts->do_incremental)
 	{
-		if (opts->do_incremental)
-		{
-			trailer = pdf_keep_obj(ctx, pdf_trailer(ctx, doc));
-			pdf_dict_put_drop(ctx, trailer, PDF_NAME_Size, pdf_new_int(ctx, doc, pdf_xref_len(ctx, doc)));
-			pdf_dict_put_drop(ctx, trailer, PDF_NAME_Prev, pdf_new_int(ctx, doc, doc->startxref));
-			doc->startxref = startxref;
-		}
-		else
-		{
-			trailer = pdf_new_dict(ctx, doc, 5);
-
-			nobj = pdf_new_int(ctx, doc, to);
-			pdf_dict_put(ctx, trailer, PDF_NAME_Size, nobj);
-			pdf_drop_obj(ctx, nobj);
-			nobj = NULL;
-
-			if (first)
-			{
-				obj = pdf_dict_get(ctx, pdf_trailer(ctx, doc), PDF_NAME_Info);
-				if (obj)
-					pdf_dict_put(ctx, trailer, PDF_NAME_Info, obj);
-
-				obj = pdf_dict_get(ctx, pdf_trailer(ctx, doc), PDF_NAME_Root);
-				if (obj)
-					pdf_dict_put(ctx, trailer, PDF_NAME_Root, obj);
-
-				obj = pdf_dict_get(ctx, pdf_trailer(ctx, doc), PDF_NAME_ID);
-				if (obj)
-					pdf_dict_put(ctx, trailer, PDF_NAME_ID, obj);
-			}
-			if (main_xref_offset != 0)
-			{
-				nobj = pdf_new_int(ctx, doc, main_xref_offset);
-				pdf_dict_put(ctx, trailer, PDF_NAME_Prev, nobj);
-				pdf_drop_obj(ctx, nobj);
-				nobj = NULL;
-			}
-		}
+		trailer = pdf_keep_obj(ctx, pdf_trailer(ctx, doc));
+		pdf_dict_put_drop(ctx, trailer, PDF_NAME_Size, pdf_new_int(ctx, doc, pdf_xref_len(ctx, doc)));
+		pdf_dict_put_drop(ctx, trailer, PDF_NAME_Prev, pdf_new_int(ctx, doc, doc->startxref));
+		doc->startxref = startxref;
 	}
-	fz_always(ctx)
+	else
 	{
-		pdf_drop_obj(ctx, nobj);
-	}
-	fz_catch(ctx)
-	{
-		fz_rethrow(ctx);
+		trailer = pdf_new_dict(ctx, doc, 5);
+
+		nobj = pdf_new_int(ctx, doc, to);
+		pdf_dict_put_drop(ctx, trailer, PDF_NAME_Size, nobj);
+
+		if (first)
+		{
+			obj = pdf_dict_get(ctx, pdf_trailer(ctx, doc), PDF_NAME_Info);
+			if (obj)
+				pdf_dict_put(ctx, trailer, PDF_NAME_Info, obj);
+
+			obj = pdf_dict_get(ctx, pdf_trailer(ctx, doc), PDF_NAME_Root);
+			if (obj)
+				pdf_dict_put(ctx, trailer, PDF_NAME_Root, obj);
+
+			obj = pdf_dict_get(ctx, pdf_trailer(ctx, doc), PDF_NAME_ID);
+			if (obj)
+				pdf_dict_put(ctx, trailer, PDF_NAME_ID, obj);
+		}
+		if (main_xref_offset != 0)
+		{
+			nobj = pdf_new_int(ctx, doc, main_xref_offset);
+			pdf_dict_put_drop(ctx, trailer, PDF_NAME_Prev, nobj);
+		}
 	}
 
 	fz_write_string(ctx, opts->out, "trailer\n");

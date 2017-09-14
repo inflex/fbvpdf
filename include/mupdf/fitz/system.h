@@ -335,10 +335,6 @@ extern void __gnu_mcount_nc(void);
 #endif
 
 #ifdef CLUSTER
-#define LOCAL_TRIG_FNS
-#endif
-
-#ifdef LOCAL_TRIG_FNS
 /*
  * Trig functions
  */
@@ -477,7 +473,5 @@ static inline float my_atan2f(float o, float a)
 #define cosf(x) my_sinf(FZ_PI / 2.0f + (x))
 #define atan2f(x,y) my_atan2f((x),(y))
 #endif
-
-int fz_strcasecmp(const char *a, const char *b);
 
 #endif

@@ -1308,7 +1308,7 @@ template_span_3_general(byte * restrict dp, int da, const byte * restrict sp, in
 					dp[1] = sp[1];
 					dp[2] = sp[2];
 					if (da)
-						dp[3] = (sa ? sp[3] : 255);
+						dp[3] = 255;
 				}
 				dp += 3+da; sp += 3+sa;
 			}
@@ -1906,6 +1906,11 @@ fz_paint_pixmap(fz_pixmap * restrict dst, const fz_pixmap * restrict src, int al
 	if (alpha == 0)
 		return;
 
+	if (dst->n - dst->alpha != src->n - src->alpha)
+	{
+		fprintf(stderr, "fz_paint_pixmap - FIXME\n");
+		return;
+	}
 	assert(dst->n - dst->alpha == src->n - src->alpha);
 
 	fz_pixmap_bbox_no_ctx(dst, &bbox);
