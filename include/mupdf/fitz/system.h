@@ -299,7 +299,10 @@ int fz_android_fprintf(FILE *file, const char *fmt, ...);
 
 /* GCC can do type checking of printf strings */
 #ifndef __printflike
-#if __GNUC__ > 2 || __GNUC__ == 2 && __GNUC_MINOR__ >= 7
+#if __GNUC__ > 4 || __GNUC__ == 4 && __GNUC_MINOR__ >= 4
+#define __printflike(fmtarg, firstvararg) \
+	__attribute__((__format__ (gnu_printf, fmtarg, firstvararg)))
+#elif __GNUC__ > 2 || __GNUC__ == 2 && __GNUC_MINOR__ >= 7
 #define __printflike(fmtarg, firstvararg) \
 	__attribute__((__format__ (__printf__, fmtarg, firstvararg)))
 #else
