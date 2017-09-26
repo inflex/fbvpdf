@@ -180,6 +180,7 @@ static int annot_count = 0;
 static int screen_w = 1280, screen_h = 720;
 static int window_w = 1, window_h = 1;
 
+static int oldinvert = 0, currentinvert = 0;
 static int oldpage = 0, currentpage = 0;
 static float oldzoom = DEFRES, currentzoom = DEFRES;
 static float oldrotate = 0, currentrotate = 0;
@@ -192,11 +193,17 @@ static int showsearch = 0;
 static int showinfo = 0;
 static int showhelp = 0;
 
+struct mark
+{
+	int page;
+	fz_point scroll;
+};
+
 static int history_count = 0;
-static int history[256];
+static struct mark history[256];
 static int future_count = 0;
-static int future[256];
-static int marks[10];
+static struct mark future[256];
+static struct mark marks[10];
 
 static int search_active = 0;
 static struct input search_input = { { 0 }, 0 };
@@ -283,6 +290,11 @@ void render_page(void)
 	links = fz_load_links(ctx, page);
 
 	pix = fz_new_pixmap_from_page_contents(ctx, page, &page_ctm, fz_device_rgb(ctx), 0);
+	if (currentinvert)
+	{
+		fz_invert_pixmap(ctx, pix);
+		fz_gamma_pixmap(ctx, pix, 1 / 1.4f);
+	}
 	texture_from_pixmap(&page_tex, pix);
 	fz_drop_pixmap(ctx, pix);
 
@@ -300,16 +312,34 @@ void render_page(void)
 	}
 }
 
+static struct mark save_mark()
+{
+	struct mark mark;
+	mark.page = currentpage;
+	mark.scroll.x = scroll_x;
+	mark.scroll.y = scroll_y;
+	fz_transform_point(&mark.scroll, &page_inv_ctm);
+	return mark;
+}
+
+static void restore_mark(struct mark mark)
+{
+	currentpage = mark.page;
+	fz_transform_point(&mark.scroll, &page_ctm);
+	scroll_x = mark.scroll.x;
+	scroll_y = mark.scroll.y;
+}
+
 static void push_history(void)
 {
 	if (history_count + 1 >= nelem(history))
 	{
 		memmove(history, history + 1, sizeof *history * (nelem(history) - 1));
-		history[history_count] = currentpage;
+		history[history_count] = save_mark();
 	}
 	else
 	{
-		history[history_count++] = currentpage;
+		history[history_count++] = save_mark();
 	}
 }
 
@@ -318,11 +348,11 @@ static void push_future(void)
 	if (future_count + 1 >= nelem(future))
 	{
 		memmove(future, future + 1, sizeof *future * (nelem(future) - 1));
-		future[future_count] = currentpage;
+		future[future_count] = save_mark();
 	}
 	else
 	{
-		future[future_count++] = currentpage;
+		future[future_count++] = save_mark();
 	}
 }
 
@@ -340,12 +370,25 @@ static void jump_to_page(int newpage)
 	push_history();
 }
 
+static void jump_to_page_xy(int newpage, float x, float y)
+{
+	fz_point p = { x, y };
+	newpage = fz_clampi(newpage, 0, fz_count_pages(ctx, doc) - 1);
+	fz_transform_point(&p, &page_ctm);
+	clear_future();
+	push_history();
+	currentpage = newpage;
+	scroll_x = p.x;
+	scroll_y = p.y;
+	push_history();
+}
+
 static void pop_history(void)
 {
 	int here = currentpage;
 	push_future();
 	while (history_count > 0 && currentpage == here)
-		currentpage = history[--history_count];
+		restore_mark(history[--history_count]);
 }
 
 static void pop_future(void)
@@ -353,7 +396,7 @@ static void pop_future(void)
 	int here = currentpage;
 	push_history();
 	while (future_count > 0 && currentpage == here)
-		currentpage = future[--future_count];
+		restore_mark(future[--future_count]);
 	push_history();
 }
 
@@ -483,7 +526,7 @@ static int do_outline_imp(fz_outline *node, int end, int x0, int x1, int x, int 
 				if (!ui.active && ui.down)
 				{
 					ui.active = node;
-					jump_to_page(p);
+					jump_to_page_xy(p, node->x, node->y);
 					ui_needs_update = 1; /* we changed the current page, so force a redraw */
 				}
 			}
@@ -559,6 +602,7 @@ static void do_links(fz_link *link, int xofs, int yofs)
 {
 	fz_rect r;
 	float x, y;
+	float link_x, link_y;
 
 	x = ui.x;
 	y = ui.y;
@@ -600,9 +644,9 @@ static void do_links(fz_link *link, int xofs, int yofs)
 					open_browser(link->uri);
 				else
 				{
-					int p = fz_resolve_link(ctx, doc, link->uri, NULL, NULL);
+					int p = fz_resolve_link(ctx, doc, link->uri, &link_x, &link_y);
 					if (p >= 0)
-						jump_to_page(p);
+						jump_to_page_xy(p, link_x, link_y);
 					else
 						fz_warn(ctx, "cannot find link destination '%s'", link->uri);
 					ui_needs_update = 1;
@@ -903,6 +947,7 @@ static void do_app(void)
 		case 'r': reload(); break;
 		case 'q': quit(); break;
 
+		case 'I': currentinvert = !currentinvert; break;
 		case 'f': toggle_fullscreen(); break;
 		case 'w': shrinkwrap(); break;
 		case 'W': auto_zoom_w(); break;
@@ -931,7 +976,7 @@ static void do_app(void)
 			if (number == 0)
 				push_history();
 			else if (number > 0 && number < nelem(marks))
-				marks[number] = currentpage;
+				marks[number] = save_mark();
 			break;
 		case 't':
 			if (number == 0)
@@ -941,7 +986,9 @@ static void do_app(void)
 			}
 			else if (number > 0 && number < nelem(marks))
 			{
-				jump_to_page(marks[number]);
+				struct mark mark = marks[number];
+				restore_mark(mark);
+				jump_to_page(mark.page);
 			}
 			break;
 		case 'T':
@@ -1085,7 +1132,7 @@ static void do_help(void)
 	int x = canvas_x + 4 * ui.lineheight;
 	int y = canvas_y + 4 * ui.lineheight;
 	int w = canvas_w - 8 * ui.lineheight;
-	int h = 37 * ui.lineheight;
+	int h = 38 * ui.lineheight;
 
 	glBegin(GL_TRIANGLE_STRIP);
 	{
@@ -1110,6 +1157,7 @@ static void do_help(void)
 	y = do_help_line(x, y, "r", "reload file");
 	y = do_help_line(x, y, "q", "quit");
 	y += ui.lineheight;
+	y = do_help_line(x, y, "I", "toggle inverted color mode");
 	y = do_help_line(x, y, "f", "fullscreen window");
 	y = do_help_line(x, y, "w", "shrink wrap window");
 	y = do_help_line(x, y, "W or H", "fit to width or height");
@@ -1147,13 +1195,14 @@ static void do_canvas(void)
 
 	float x, y;
 
-	if (oldpage != currentpage || oldzoom != currentzoom || oldrotate != currentrotate)
+	if (oldpage != currentpage || oldzoom != currentzoom || oldrotate != currentrotate || oldinvert != currentinvert)
 	{
 		render_page();
 		update_title();
 		oldpage = currentpage;
 		oldzoom = currentzoom;
 		oldrotate = currentrotate;
+		oldinvert = currentinvert;
 	}
 
 	if (ui.x >= canvas_x && ui.x < canvas_x + canvas_w && ui.y >= canvas_y && ui.y < canvas_y + canvas_h)
@@ -1441,6 +1490,7 @@ static void usage(const char *argv0)
 	fprintf(stderr, "usage: %s [options] document [page]\n", argv0);
 	fprintf(stderr, "\t-p -\tpassword\n");
 	fprintf(stderr, "\t-r -\tresolution\n");
+	fprintf(stderr, "\t-I\tinvert colors\n");
 	fprintf(stderr, "\t-W -\tpage width for EPUB layout\n");
 	fprintf(stderr, "\t-H -\tpage height for EPUB layout\n");
 	fprintf(stderr, "\t-S -\tfont size for EPUB layout\n");
@@ -1458,13 +1508,14 @@ int main(int argc, char **argv)
 	const GLFWvidmode *video_mode;
 	int c;
 
-	while ((c = fz_getopt(argc, argv, "p:r:W:H:S:U:X")) != -1)
+	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X")) != -1)
 	{
 		switch (c)
 		{
 		default: usage(argv[0]); break;
 		case 'p': password = fz_optarg; break;
 		case 'r': currentzoom = fz_atof(fz_optarg); break;
+		case 'I': currentinvert = !currentinvert; break;
 		case 'W': layout_w = fz_atof(fz_optarg); break;
 		case 'H': layout_h = fz_atof(fz_optarg); break;
 		case 'S': layout_em = fz_atof(fz_optarg); break;
