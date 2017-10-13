@@ -283,6 +283,7 @@ static fz_stream *
 pdf_open_raw_filter(fz_context *ctx, fz_stream *chain, pdf_document *doc, pdf_obj *stmobj, int num, int *orig_num, int *orig_gen, fz_off_t offset)
 {
 	pdf_xref_entry *x = NULL;
+	fz_stream *chain2;
 	int hascrypt;
 	int len;
 
@@ -302,15 +303,30 @@ pdf_open_raw_filter(fz_context *ctx, fz_stream *chain, pdf_document *doc, pdf_ob
 		*orig_gen = 0;
 	}
 
-	/* don't close chain when we close this filter */
-	fz_keep_stream(ctx, chain);
+	fz_var(chain);
 
-	len = pdf_to_int(ctx, pdf_dict_get(ctx, stmobj, PDF_NAME_Length));
-	chain = fz_open_null(ctx, chain, len, offset);
+	fz_try(ctx)
+	{
+		len = pdf_to_int(ctx, pdf_dict_get(ctx, stmobj, PDF_NAME_Length));
 
-	hascrypt = pdf_stream_has_crypt(ctx, stmobj);
-	if (doc->crypt && !hascrypt)
-		chain = pdf_open_crypt(ctx, chain, doc->crypt, *orig_num, *orig_gen);
+		/* don't close chain when we close this filter */
+		chain2 = fz_keep_stream(ctx, chain);
+		chain = NULL;
+		chain = fz_open_null(ctx, chain2, len, offset);
+
+		hascrypt = pdf_stream_has_crypt(ctx, stmobj);
+		if (doc->crypt && !hascrypt)
+		{
+			chain2 = chain;
+			chain = NULL;
+			chain = pdf_open_crypt(ctx, chain2, doc->crypt, *orig_num, *orig_gen);
+		}
+	}
+	fz_catch(ctx)
+	{
+		fz_drop_stream(ctx, chain);
+		fz_rethrow(ctx);
+	}
 
 	return chain;
 }
@@ -366,6 +382,7 @@ pdf_open_inline_stream(fz_context *ctx, pdf_document *doc, pdf_obj *stmobj, int 
 {
 	pdf_obj *filters;
 	pdf_obj *params;
+	fz_off_t offset;
 
 	filters = pdf_dict_geta(ctx, stmobj, PDF_NAME_Filter, PDF_NAME_F);
 	params = pdf_dict_geta(ctx, stmobj, PDF_NAME_DecodeParms, PDF_NAME_DP);
@@ -380,7 +397,16 @@ pdf_open_inline_stream(fz_context *ctx, pdf_document *doc, pdf_obj *stmobj, int 
 
 	if (imparams)
 		imparams->type = FZ_IMAGE_RAW;
-	return fz_open_null(ctx, chain, length, fz_tell(ctx, chain));
+
+	fz_try(ctx)
+		offset = fz_tell(ctx, chain);
+	fz_catch(ctx)
+	{
+		fz_drop_stream(ctx, chain);
+		fz_rethrow(ctx);
+	}
+
+	return fz_open_null(ctx, chain, length, offset);
 }
 
 void
