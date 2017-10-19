@@ -1545,6 +1545,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\source\fitz\compress.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\source\fitz\compressed-buffer.c"
 				>
 			</File>
@@ -1798,6 +1802,10 @@
 			</File>
 			<File
 				RelativePath="..\..\source\fitz\output-pcl.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\source\fitz\output-pclm.c"
 				>
 			</File>
 			<File
@@ -2312,6 +2320,10 @@
 					>
 				</File>
 				<File
+					RelativePath="..\..\include\mupdf\fitz\compress.h"
+					>
+				</File>
+				<File
 					RelativePath="..\..\include\mupdf\fitz\compressed-buffer.h"
 					>
 				</File>
@@ -2385,6 +2397,10 @@
 				</File>
 				<File
 					RelativePath="..\..\include\mupdf\fitz\output-pcl.h"
+					>
+				</File>
+				<File
+					RelativePath="..\..\include\mupdf\fitz\output-pclm.h"
 					>
 				</File>
 				<File

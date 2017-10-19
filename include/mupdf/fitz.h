@@ -23,6 +23,7 @@ extern "C" {
 /* I/O */
 #include "mupdf/fitz/buffer.h"
 #include "mupdf/fitz/stream.h"
+#include "mupdf/fitz/compress.h"
 #include "mupdf/fitz/compressed-buffer.h"
 #include "mupdf/fitz/filter.h"
 #include "mupdf/fitz/output.h"
@@ -64,6 +65,7 @@ extern "C" {
 #include "mupdf/fitz/output-png.h"
 #include "mupdf/fitz/output-pwg.h"
 #include "mupdf/fitz/output-pcl.h"
+#include "mupdf/fitz/output-pclm.h"
 #include "mupdf/fitz/output-ps.h"
 #include "mupdf/fitz/output-psd.h"
 #include "mupdf/fitz/output-svg.h"
