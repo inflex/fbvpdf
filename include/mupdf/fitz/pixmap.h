@@ -16,6 +16,7 @@
 */
 typedef struct fz_pixmap_s fz_pixmap;
 
+typedef struct fz_overprint_s fz_overprint;
 
 /*
 	fz_pixmap_bbox: Return the bounding box for a pixmap.
@@ -133,6 +134,19 @@ fz_pixmap *fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, i
 	allocate.
 */
 fz_pixmap *fz_new_pixmap_with_bbox_and_data(fz_context *ctx, fz_colorspace *colorspace, const fz_irect *rect, fz_separations *seps, int alpha, unsigned char *samples);
+
+/*
+	fz_new_pixmap_from_pixmap: Create a new pixmap that represents
+	a subarea of the specified pixmap. A reference is taken to his
+	pixmap that will be dropped on destruction.
+
+	The supplied rectangle must be wholly contained within the original
+	pixmap.
+
+	Returns a pointer to the new pixmap. Throws exception on failure to
+	allocate.
+*/
+fz_pixmap *fz_new_pixmap_from_pixmap(fz_context *ctx, fz_pixmap *pixmap, const fz_irect *rect);
 
 /*
 	fz_keep_pixmap: Take a reference to a pixmap.
@@ -318,8 +332,6 @@ fz_pixmap *fz_convert_pixmap(fz_context *ctx, fz_pixmap *pix, fz_colorspace *cs_
 		Bit 0: If set, draw the image with linear interpolation.
 		Bit 1: If set, free the samples buffer when the pixmap
 		is destroyed.
-		Bit 2: If set, all separations are enabled (ignore the
-		fields in the seps structure).
 
 	stride: The byte offset from the data for any given pixel
 	to the data for the same pixel on the row below.
@@ -350,12 +362,13 @@ struct fz_pixmap_s
 	int xres, yres;
 	fz_colorspace *colorspace;
 	unsigned char *samples;
+	fz_pixmap *underlying;
 };
 
 enum
 {
 	FZ_PIXMAP_FLAG_INTERPOLATE = 1,
-	FZ_PIXMAP_FLAG_FREE_SAMPLES = 2,
+	FZ_PIXMAP_FLAG_FREE_SAMPLES = 2
 };
 
 void fz_drop_pixmap_imp(fz_context *ctx, fz_storable *pix);
@@ -406,7 +419,7 @@ int fz_valgrind_pixmap(const fz_pixmap *pix);
 	fz_clone_pixmap_area_with_different_seps: Convert between
 	different separation results.
 */
-fz_pixmap *fz_clone_pixmap_area_with_different_seps(fz_context *ctx, fz_pixmap *src, const fz_irect *bbox, fz_colorspace *dcs, fz_separations *seps, const fz_color_params *color_params, fz_colorspace *prf, fz_default_colorspaces *default_cs);
+fz_pixmap *fz_clone_pixmap_area_with_different_seps(fz_context *ctx, fz_pixmap *src, const fz_irect *bbox, fz_colorspace *dcs, fz_separations *seps, const fz_color_params *color_params, fz_default_colorspaces *default_cs);
 
 fz_pixmap *fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *dst, fz_pixmap *src, const fz_color_params *color_params, fz_colorspace *prf, fz_default_colorspaces *default_cs);
 

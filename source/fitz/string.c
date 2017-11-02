@@ -287,7 +287,7 @@ int
 fz_chartorune(int *rune, const char *str)
 {
 	int c, c1, c2, c3;
-	long l;
+	int l;
 
 	/*
 	 * one character sequence
@@ -362,7 +362,7 @@ int
 fz_runetochar(char *str, int rune)
 {
 	/* Runes are signed, so convert to unsigned for range check. */
-	unsigned long c = (unsigned long)rune;
+	unsigned int c = (unsigned int)rune;
 
 	/*
 	 * one character sequence
@@ -459,11 +459,11 @@ int fz_atoi(const char *s)
 	return atoi(s);
 }
 
-fz_off_t fz_atoo(const char *s)
+int64_t fz_atoi64(const char *s)
 {
 	if (s == NULL)
 		return 0;
-	return fz_atoo_imp(s);
+	return atoll(s);
 }
 
 int fz_is_page_range(fz_context *ctx, const char *s)

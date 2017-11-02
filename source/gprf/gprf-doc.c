@@ -123,7 +123,7 @@ struct gprf_page_s
 typedef struct fz_image_gprf_s
 {
 	fz_image super;
-	fz_off_t offset[FZ_MAX_SEPARATIONS+3+1]; /* + RGB + END */
+	int64_t offset[FZ_MAX_SEPARATIONS+3+1]; /* + RGB + END */
 	gprf_file *file;
 	fz_separations *separations;
 } fz_image_gprf;
@@ -323,6 +323,20 @@ unsigned char undelta(unsigned char delta, unsigned char *ptr, int len)
 	return delta;
 }
 
+static int
+gprf_separations_all_enabled(fz_context *ctx, fz_separations *seps)
+{
+	int num_seps = fz_count_separations(ctx, seps);
+	int k;
+
+	for (k = 0; k < num_seps; k++)
+	{
+		if (fz_separation_current_behavior(ctx, seps, k) == FZ_SEPARATION_DISABLED)
+			return 0;
+	}
+	return 1;
+}
+
 static fz_pixmap *
 gprf_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *area, int w, int h, int *l2factor)
 {
@@ -355,7 +369,7 @@ gprf_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *area, int w, int h,
 		/* First off, figure out if we are doing RGB or separations
 		 * decoding. */
 		num_seps = 3 + fz_count_separations(ctx, image->separations);
-		if (fz_separations_all_enabled(ctx, image->separations))
+		if (gprf_separations_all_enabled(ctx, image->separations))
 		{
 			num_seps = 3;
 			for (i = 0; i < 3; i++)
@@ -365,7 +379,7 @@ gprf_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *area, int w, int h,
 		{
 			for (i = 3; i < num_seps; i++)
 			{
-				read_sep[i] = !FZ_SEPARATION_DISABLED(ctx, image->separations, i-3);
+				read_sep[i] = (fz_separation_current_behavior(ctx, image->separations, i - 3) != FZ_SEPARATION_DISABLED);
 				if (read_sep[i])
 				{
 					float cmyk[4];
@@ -462,7 +476,7 @@ gprf_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *area, int w, int h,
 }
 
 static fz_image *
-fz_new_gprf_image(fz_context *ctx, gprf_page *page, int imagenum, fz_off_t offsets[], fz_off_t end)
+fz_new_gprf_image(fz_context *ctx, gprf_page *page, int imagenum, int64_t offsets[], int64_t end)
 {
 	fz_image_gprf *image = fz_malloc_struct(ctx, fz_image_gprf);
 	int tile_x = imagenum % page->tile_width;
@@ -495,7 +509,7 @@ fz_new_gprf_image(fz_context *ctx, gprf_page *page, int imagenum, fz_off_t offse
 	image->super.yres = page->doc->res;
 	image->super.mask = NULL;
 	image->file = fz_keep_gprf_file(ctx, page->file);
-	memcpy(image->offset, offsets, sizeof(fz_off_t) * (3+seps));
+	memcpy(image->offset, offsets, sizeof(int64_t) * (3+seps));
 	image->offset[seps+3] = end;
 	image->separations = fz_keep_separations(ctx, page->separations);
 
@@ -748,7 +762,7 @@ read_tiles(fz_context *ctx, gprf_page *page)
 		}
 
 		/* Seek to the image data */
-		fz_seek(ctx, file, (fz_off_t)offset, SEEK_SET);
+		fz_seek(ctx, file, (int64_t)offset, SEEK_SET);
 
 		num_tiles = page->tile_width * page->tile_height;
 		page->tiles = fz_calloc(ctx, num_tiles, sizeof(fz_image *));
@@ -759,16 +773,16 @@ read_tiles(fz_context *ctx, gprf_page *page)
 		{
 			for (x = 0; x < page->tile_width; x++)
 			{
-				fz_off_t offsets[FZ_MAX_SEPARATIONS + 3]; /* SEPARATIONS + RGB */
+				int64_t offsets[FZ_MAX_SEPARATIONS + 3]; /* SEPARATIONS + RGB */
 				int j;
 
 				for (j = 0; j < num_seps+3; j++)
 				{
-					offsets[j] = (fz_off_t)off;
+					offsets[j] = (int64_t)off;
 					off = fz_read_int64_le(ctx, file);
 				}
 
-				page->tiles[i] = fz_new_gprf_image(ctx, page, i, offsets, (fz_off_t)off);
+				page->tiles[i] = fz_new_gprf_image(ctx, page, i, offsets, (int64_t)off);
 				i++;
 			}
 		}
@@ -831,27 +845,6 @@ gprf_run_page(fz_context *ctx, fz_page *page_, fz_device *dev, const fz_matrix *
 		}
 	}
 	fz_render_flags(ctx, dev, 0, FZ_DEVFLAG_GRIDFIT_AS_TILED);
-}
-
-static int gprf_count_separations(fz_context *ctx, fz_page *page_)
-{
-	gprf_page *page = (gprf_page *)page_;
-
-	return fz_count_separations(ctx, page->separations);
-}
-
-static void gprf_control_separation(fz_context *ctx, fz_page *page_, int sep, int disable)
-{
-	gprf_page *page = (gprf_page *)page_;
-
-	fz_control_separation(ctx, page->separations, sep, disable);
-}
-
-static int gprf_separation_disabled(fz_context *ctx, fz_page *page_, int sep)
-{
-	gprf_page *page = (gprf_page *)page_;
-
-	return FZ_SEPARATION_DISABLED(ctx, page->separations, sep);
 }
 
 static fz_separations *

@@ -1065,9 +1065,27 @@ tiff_read_ifd(fz_context *ctx, struct tiff *tiff)
 }
 
 static void
+tiff_cielab_to_icclab(fz_context *ctx, struct tiff *tiff)
+{
+	unsigned x, y;
+	int offset = tiff->samplesperpixel;
+
+	for (y = 0; y < tiff->imagelength; y++)
+	{
+		unsigned char * row = &tiff->samples[tiff->stride * y];
+		for (x = 0; x < tiff->imagewidth; x++)
+		{
+			row[x * offset + 1] ^= 0x80;
+			row[x * offset + 2] ^= 0x80;
+		}
+	}
+}
+
+static void
 tiff_ycc_to_rgb(fz_context *ctx, struct tiff *tiff)
 {
 	unsigned x, y;
+	int offset = tiff->samplesperpixel;
 
 	for (y = 0; y < tiff->imagelength; y++)
 	{
@@ -1075,13 +1093,13 @@ tiff_ycc_to_rgb(fz_context *ctx, struct tiff *tiff)
 		for (x = 0; x < tiff->imagewidth; x++)
 		{
 			int ycc[3];
-			ycc[0] = row[x * 3 + 0];
-			ycc[1] = row[x * 3 + 1] - 128;
-			ycc[2] = row[x * 3 + 2] - 128;
+			ycc[0] = row[x * offset + 0];
+			ycc[1] = row[x * offset + 1] - 128;
+			ycc[2] = row[x * offset + 2] - 128;
 
-			row[x * 3 + 0] = fz_clampi(ycc[0] + 1.402f * ycc[2], 0, 255);
-			row[x * 3 + 1] = fz_clampi(ycc[0] - 0.34413f * ycc[1] - 0.71414f * ycc[2], 0, 255);
-			row[x * 3 + 2] = fz_clampi(ycc[0] + 1.772f * ycc[1], 0, 255);
+			row[x * offset + 0] = fz_clampi(ycc[0] + 1.402f * ycc[2], 0, 255);
+			row[x * offset + 1] = fz_clampi(ycc[0] - 0.34413f * ycc[1] - 0.71414f * ycc[2], 0, 255);
+			row[x * offset + 2] = fz_clampi(ycc[0] + 1.772f * ycc[1], 0, 255);
 		}
 	}
 }
@@ -1115,44 +1133,67 @@ tiff_decode_ifd(fz_context *ctx, struct tiff *tiff)
 	tiff->stride = (tiff->imagewidth * tiff->samplesperpixel * tiff->bitspersample + 7) / 8;
 	tiff->tilestride = (tiff->tilewidth * tiff->samplesperpixel * tiff->bitspersample + 7) / 8;
 
-	switch (tiff->photometric)
+	if (tiff->profile)
 	{
-	case 0: /* WhiteIsZero -- inverted */
-		tiff->colorspace = fz_device_gray(ctx);
-		break;
-	case 1: /* BlackIsZero */
-		tiff->colorspace = fz_device_gray(ctx);
-		break;
-	case 2: /* RGB */
-		tiff->colorspace = fz_device_rgb(ctx);
-		break;
-	case 3: /* RGBPal */
-		tiff->colorspace = fz_device_rgb(ctx);
-		break;
-	case 5: /* CMYK */
-		tiff->colorspace = fz_device_cmyk(ctx);
-		break;
-	case 6: /* YCbCr */
-		/* it's probably a jpeg ... we let jpeg convert to rgb */
-		tiff->colorspace = fz_device_rgb(ctx);
-		break;
-	case 8: /* 1976 CIE L*a*b* */
-		tiff->colorspace = fz_device_lab(ctx);
-		break;
-	case 32844: /* SGI CIE Log 2 L (16bpp Greyscale) */
-		tiff->colorspace = fz_device_gray(ctx);
-		if (tiff->bitspersample != 8)
-			tiff->bitspersample = 8;
-		tiff->stride >>= 1;
-		break;
-	case 32845: /* SGI CIE Log 2 L, u, v (24bpp or 32bpp) */
-		tiff->colorspace = fz_device_rgb(ctx);
-		if (tiff->bitspersample != 8)
-			tiff->bitspersample = 8;
-		tiff->stride >>= 1;
-		break;
-	default:
-		fz_throw(ctx, FZ_ERROR_GENERIC, "unknown photometric: %d", tiff->photometric);
+		fz_buffer *buff = NULL;
+
+		fz_try(ctx)
+		{
+			buff = fz_new_buffer_from_copied_data(ctx, tiff->profile, tiff->profilesize);
+			tiff->colorspace = fz_new_icc_colorspace(ctx, NULL, 0, buff);
+		}
+		fz_always(ctx)
+			fz_drop_buffer(ctx, buff);
+		fz_catch(ctx)
+		{
+			fz_warn(ctx, "Failed to read ICC Profile from tiff");
+			fz_drop_colorspace(ctx, tiff->colorspace);
+			tiff->colorspace = NULL;
+		}
+	}
+
+	if (tiff->colorspace == NULL)
+	{
+		switch (tiff->photometric)
+		{
+		case 0: /* WhiteIsZero -- inverted */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_gray(ctx));
+			break;
+		case 1: /* BlackIsZero */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_gray(ctx));
+			break;
+		case 2: /* RGB */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_rgb(ctx));
+			break;
+		case 3: /* RGBPal */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_rgb(ctx));
+			break;
+		case 5: /* CMYK */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_cmyk(ctx));
+			break;
+		case 6: /* YCbCr */
+				/* it's probably a jpeg ... we let jpeg convert to rgb */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_rgb(ctx));
+			break;
+		case 8: /* Direct L*a*b* encoding. a*, b* signed values */
+		case 9: /* ICC Style L*a*b* encoding */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_lab(ctx));
+			break;
+		case 32844: /* SGI CIE Log 2 L (16bpp Greyscale) */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_gray(ctx));
+			if (tiff->bitspersample != 8)
+				tiff->bitspersample = 8;
+			tiff->stride >>= 1;
+			break;
+		case 32845: /* SGI CIE Log 2 L, u, v (24bpp or 32bpp) */
+			tiff->colorspace = fz_keep_colorspace(ctx, fz_device_rgb(ctx));
+			if (tiff->bitspersample != 8)
+				tiff->bitspersample = 8;
+			tiff->stride >>= 1;
+			break;
+		default:
+			fz_throw(ctx, FZ_ERROR_GENERIC, "unknown photometric: %d", tiff->photometric);
+		}
 	}
 
 	switch (tiff->resolutionunit)
@@ -1248,6 +1289,10 @@ tiff_decode_samples(fz_context *ctx, struct tiff *tiff)
 			p += tiff->stride;
 		}
 	}
+
+	/* CIE Lab to ICC Lab */
+	if (tiff->photometric == 8)
+		tiff_cielab_to_icclab(ctx, tiff);
 
 	/* YCbCr -> RGB, but JPEG already has done this conversion  */
 	if (tiff->photometric == 6 && tiff->compression != 6 && tiff->compression != 7)
@@ -1371,9 +1416,11 @@ fz_load_tiff_info_subimage(fz_context *ctx, const unsigned char *buf, size_t len
 		*xresp = (tiff.xresolution ? tiff.xresolution : 96);
 		*yresp = (tiff.yresolution ? tiff.yresolution : 96);
 		if (tiff.extrasamples /* == 2 */)
-			*cspacep = fz_device_rgb(ctx);
-		else
-			*cspacep = tiff.colorspace;
+		{
+			fz_drop_colorspace(ctx, tiff.colorspace);
+			tiff.colorspace = fz_keep_colorspace(ctx, fz_device_rgb(ctx));
+		}
+		*cspacep = tiff.colorspace;
 	}
 	fz_always(ctx)
 	{

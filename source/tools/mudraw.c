@@ -39,7 +39,7 @@ enum {
 	OUT_GPROOF
 };
 
-enum { CS_INVALID, CS_UNSET, CS_MONO, CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA, CS_CMYK, CS_CMYK_ALPHA };
+enum { CS_INVALID, CS_UNSET, CS_MONO, CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA, CS_CMYK, CS_CMYK_ALPHA, CS_ICC };
 
 enum { SPOTS_NONE, SPOTS_OVERPRINT_SIM, SPOTS_FULL };
 
@@ -108,12 +108,12 @@ typedef struct
 {
 	int format;
 	int default_cs;
-	int permitted_cs[6];
+	int permitted_cs[7];
 } format_cs_table_t;
 
 static const format_cs_table_t format_cs_table[] =
 {
-	{ OUT_PNG, CS_RGB, { CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA } },
+	{ OUT_PNG, CS_RGB, { CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA, CS_ICC } },
 	{ OUT_PPM, CS_RGB, { CS_GRAY, CS_RGB } },
 	{ OUT_PNM, CS_GRAY, { CS_GRAY, CS_RGB } },
 	{ OUT_PAM, CS_RGB_ALPHA, { CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA, CS_CMYK, CS_CMYK_ALPHA } },
@@ -124,7 +124,7 @@ static const format_cs_table_t format_cs_table[] =
 	{ OUT_PCL, CS_MONO, { CS_MONO, CS_RGB } },
 	{ OUT_PCLM, CS_RGB, { CS_RGB, CS_GRAY } },
 	{ OUT_PS, CS_RGB, { CS_GRAY, CS_RGB, CS_CMYK } },
-	{ OUT_PSD, CS_CMYK, { CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA, CS_CMYK, CS_CMYK_ALPHA } },
+	{ OUT_PSD, CS_CMYK, { CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA, CS_CMYK, CS_CMYK_ALPHA, CS_ICC } },
 	{ OUT_TGA, CS_RGB, { CS_GRAY, CS_GRAY_ALPHA, CS_RGB, CS_RGB_ALPHA } },
 
 	{ OUT_TRACE, CS_RGB, { CS_RGB } },
@@ -246,6 +246,9 @@ static int alphabits_text = 8;
 static int alphabits_graphics = 8;
 
 static int out_cs = CS_UNSET;
+static const char *proof_filename = NULL;
+fz_colorspace *proof_cs = NULL;
+static const char *icc_filename = NULL;
 static float gamma_value = 1;
 static int invert = 0;
 static int band_height = 0;
@@ -253,7 +256,12 @@ static int lowmemory = 0;
 
 static int errored = 0;
 static fz_colorspace *colorspace;
+static fz_colorspace *oi = NULL;
+#ifdef FZ_ENABLE_SPOT_RENDERING
+static int spots = SPOTS_OVERPRINT_SIM;
+#else
 static int spots = SPOTS_NONE;
+#endif
 static int alpha;
 static char *filename;
 static int files = 0;
@@ -332,7 +340,8 @@ static void usage(void)
 		"\t-U -\tfile name of user stylesheet for EPUB layout\n"
 		"\t-X\tdisable document styles for EPUB layout\n"
 		"\n"
-		"\t-c -\tcolorspace (mono, gray, grayalpha, rgb, rgba, cmyk, cmykalpha)\n"
+		"\t-c -\tcolorspace (mono, gray, grayalpha, rgb, rgba, cmyk, cmykalpha, filename of ICC profile)\n"
+		"\t-e -\tproof icc profile (filename of ICC profile)\n"
 		"\t-G -\tapply gamma correction\n"
 		"\t-I\tinvert colors\n"
 		"\n"
@@ -348,12 +357,14 @@ static void usage(void)
 		"\t-P\tparallel interpretation/rendering (disabled in this non-threading build)\n"
 #endif
 		"\t-N\tdisable ICC workflow (\"N\"o color management)\n"
-		"\t-O -\tControl spot rendering\n"
+		"\t-O -\tControl spot/overprint rendering\n"
 		"\t\t 0 = No spot rendering\n"
 #ifdef FZ_ENABLE_SPOT_RENDERING
-		"\t\t 1 = Overprint simulation\n"
+		"\t\t 0 = No spot rendering\n"
+		"\t\t 1 = Overprint simulation (default)\n"
 		"\t\t 2 = Full spot rendering\n"
 #else
+		"\t\t 0 = No spot rendering (default)\n"
 		"\t\t 1 = Overprint simulation (Disabled in this build)\n"
 		"\t\t 2 = Full spot rendering (Disabled in this build)\n"
 #endif
@@ -461,7 +472,7 @@ static void drawband(fz_context *ctx, fz_page *page, fz_display_list *list, cons
 		else
 			fz_clear_pixmap_with_value(ctx, pix, 255);
 
-		dev = fz_new_draw_device(ctx, NULL, pix);
+		dev = fz_new_draw_device_with_proof(ctx, NULL, pix, proof_cs);
 		if (lowmemory)
 			fz_enable_device_hints(ctx, dev, FZ_NO_CACHE);
 		if (alphabits_graphics == 0)
@@ -1023,7 +1034,7 @@ static void drawpage(fz_context *ctx, fz_document *doc, int pagenum)
 
 	page = fz_load_page(ctx, doc, pagenum - 1);
 
-	if (spots)
+	if (spots != SPOTS_NONE)
 	{
 		fz_try(ctx)
 		{
@@ -1037,6 +1048,20 @@ static void drawpage(fz_context *ctx, fz_document *doc, int pagenum)
 				else
 					for (i = 0; i < n; i++)
 						fz_set_separation_behavior(ctx, seps, i, FZ_SEPARATION_COMPOSITE);
+			}
+			else if (fz_page_uses_overprint(ctx, page))
+			{
+				/* This page uses overprint, so we need an empty
+				 * sep object to force the overprint simulation on. */
+				seps = fz_new_separations(ctx, 0);
+			}
+			else if (oi && fz_colorspace_n(ctx, oi) != fz_colorspace_n(ctx, colorspace))
+			{
+				/* We have an output intent, and it's incompatible
+				 * with the colorspace our device needs. Force the
+				 * overprint simulation on, because this ensures that
+				 * we 'simulate' the output intent too. */
+				seps = fz_new_separations(ctx, 0);
 			}
 		}
 		fz_catch(ctx)
@@ -1193,8 +1218,10 @@ parse_colorspace(const char *name)
 		if (!strcmp(name, cs_name_table[i].name))
 			return cs_name_table[i].colorspace;
 	}
-	fprintf(stderr, "Unknown colorspace \"%s\"\n", name);
-	exit(1);
+
+	/* Assume ICC. We will error out later if not the case. */
+	icc_filename = name;
+	return CS_ICC;
 }
 
 typedef struct
@@ -1433,11 +1460,10 @@ int mudraw_main(int argc, char **argv)
 	trace_info info = { 0, 0, 0 };
 	fz_alloc_context alloc_ctx = { &info, trace_malloc, trace_realloc, trace_free };
 	fz_locks_context *locks = NULL;
-	fz_colorspace *oi = NULL;
 
 	fz_var(doc);
 
-	while ((c = fz_getopt(argc, argv, "p:o:F:R:r:w:h:fB:c:G:Is:A:DiW:H:S:T:U:XLvPl:y:NO:")) != -1)
+	while ((c = fz_getopt(argc, argv, "p:o:F:R:r:w:h:fB:c:e:G:Is:A:DiW:H:S:T:U:XLvPl:y:NO:")) != -1)
 	{
 		switch (c)
 		{
@@ -1456,6 +1482,7 @@ int mudraw_main(int argc, char **argv)
 		case 'B': band_height = atoi(fz_optarg); break;
 
 		case 'c': out_cs = parse_colorspace(fz_optarg); break;
+		case 'e': proof_filename = fz_optarg; break;
 		case 'G': gamma_value = fz_atof(fz_optarg); break;
 		case 'I': invert++; break;
 
@@ -1557,6 +1584,9 @@ int mudraw_main(int argc, char **argv)
 		fprintf(stderr, "cannot initialise context\n");
 		exit(1);
 	}
+
+	if (proof_filename)
+		proof_cs = fz_new_icc_colorspace_from_file(ctx, NULL, proof_filename);
 
 	fz_set_text_aa_level(ctx, alphabits_text);
 	fz_set_graphics_aa_level(ctx, alphabits_graphics);
@@ -1718,12 +1748,70 @@ int mudraw_main(int argc, char **argv)
 		colorspace = fz_device_cmyk(ctx);
 		alpha = (out_cs == CS_CMYK_ALPHA);
 		break;
+	case CS_ICC:
+		fz_try(ctx)
+			colorspace = fz_new_icc_colorspace_from_file(ctx, NULL, icc_filename);
+		fz_catch(ctx)
+		{
+			fprintf(stderr, "Invalid ICC destination color space\n");
+			exit(1);
+		}
+		if (colorspace == NULL)
+		{
+			fprintf(stderr, "Invalid ICC destination color space\n");
+			exit(1);
+		}
+		alpha = 0;
+		break;
 	default:
 		fprintf(stderr, "Unknown colorspace!\n");
 		exit(1);
 		break;
 	}
-	colorspace = fz_keep_colorspace(ctx, colorspace);
+
+	if (out_cs != CS_ICC)
+		colorspace = fz_keep_colorspace(ctx, colorspace);
+	else
+	{
+		int i, j, okay;
+
+		/* Check to make sure this icc profile is ok with the output format */
+		okay = 0;
+		for (i = 0; i < nelem(format_cs_table); i++)
+		{
+			if (format_cs_table[i].format == output_format)
+			{
+				for (j = 0; j < nelem(format_cs_table[i].permitted_cs); j++)
+				{
+					switch (format_cs_table[i].permitted_cs[j])
+					{
+					case CS_MONO:
+					case CS_GRAY:
+					case CS_GRAY_ALPHA:
+						if (fz_colorspace_n(ctx, colorspace) == 1)
+							okay = 1;
+						break;
+					case CS_RGB:
+					case CS_RGB_ALPHA:
+						if (fz_colorspace_n(ctx, colorspace) == 3)
+							okay = 1;
+						break;
+					case CS_CMYK:
+					case CS_CMYK_ALPHA:
+						if (fz_colorspace_n(ctx, colorspace) == 4)
+							okay = 1;
+						break;
+					}
+				}
+			}
+		}
+
+		if (!okay)
+		{
+			fprintf(stderr, "ICC profile uses a colorspace that cannot be used for this format\n");
+			exit(1);
+		}
+	}
 
 #if FZ_ENABLE_PDF
 	if (output_format == OUT_PDF)
@@ -1780,10 +1868,16 @@ int mudraw_main(int argc, char **argv)
 				oi = fz_document_output_intent(ctx, doc);
 				if (oi)
 				{
-					if (fz_colorspace_n(ctx, oi) == fz_colorspace_n(ctx, colorspace))
+					/* See if we had explicitly set a profile to render */
+					if (out_cs != CS_ICC)
 					{
-						fz_drop_colorspace(ctx, colorspace);
-						colorspace = fz_keep_colorspace(ctx, oi);
+						/* In this case, we want to render to the output intent
+						 * color space if the number of channels is the same */
+						if (fz_colorspace_n(ctx, oi) == fz_colorspace_n(ctx, colorspace))
+						{
+							fz_drop_colorspace(ctx, colorspace);
+							colorspace = fz_keep_colorspace(ctx, oi);
+						}
 					}
 				}
 
@@ -1919,6 +2013,7 @@ int mudraw_main(int argc, char **argv)
 #endif /* DISABLE_MUTHREADS */
 
 	fz_drop_colorspace(ctx, colorspace);
+	fz_drop_colorspace(ctx, proof_cs);
 	fz_drop_context(ctx);
 
 #ifndef DISABLE_MUTHREADS
@@ -1927,9 +2022,9 @@ int mudraw_main(int argc, char **argv)
 
 	if (showmemory)
 	{
-		fprintf(stderr, "Total memory use = " FZ_FMT_zu " bytes\n", info.total);
-		fprintf(stderr, "Peak memory use = " FZ_FMT_zu " bytes\n", info.peak);
-		fprintf(stderr, "Current memory use = " FZ_FMT_zu " bytes\n", info.current);
+		char buf[100];
+		fz_snprintf(buf, sizeof buf, "Memory use total=%zu peak=%zu current=%zu", info.total, info.peak, info.current);
+		fprintf(stderr, "%s\n", buf);
 	}
 
 	return (errored != 0);

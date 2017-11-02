@@ -803,9 +803,22 @@ fz_new_image_of_size(fz_context *ctx, int w, int h, int bpc, fz_colorspace *colo
 			image->decode[2*i+1] = maxval;
 		}
 	}
+	/* ICC spaces have the default decode arrays pickled into them.
+	 * For most spaces this is fine, because [ 0 1 0 1 0 1 ] is
+	 * idempotent. For Lab, however, we need to adjust it. */
+	if (fz_colorspace_is_lab_icc(ctx, colorspace))
+	{
+		/* Undo the default decode array of [0 100 -128 127 -128 127] */
+		image->decode[0] = image->decode[0]/100.0f;
+		image->decode[1] = image->decode[1]/100.0f;
+		image->decode[2] = (image->decode[2]+128)/255.0f;
+		image->decode[3] = (image->decode[3]+128)/255.0f;
+		image->decode[4] = (image->decode[4]+128)/255.0f;
+		image->decode[5] = (image->decode[5]+128)/255.0f;
+	}
 	for (i = 0; i < image->n; i++)
 	{
-		if (image->decode[i * 2] * 255 != 0 || image->decode[i * 2 + 1] * 255 != 255)
+		if (image->decode[i * 2] != 0 || image->decode[i * 2 + 1] != 1)
 			break;
 	}
 	if (i != image->n)
@@ -935,8 +948,6 @@ fz_new_image_from_buffer(fz_context *ctx, fz_buffer *buffer)
 	if (len < 8)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "unknown image file format");
 
-	/* Note: cspace is only ever a borrowed reference here */
-
 	type = fz_recognize_image_format(ctx, buf);
 	switch (type)
 	{
@@ -968,12 +979,19 @@ fz_new_image_from_buffer(fz_context *ctx, fz_buffer *buffer)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "unknown image file format");
 	}
 
-	bc = fz_malloc_struct(ctx, fz_compressed_buffer);
-	bc->buffer = fz_keep_buffer(ctx, buffer);
-	bc->params.type = type;
-	if (type == FZ_IMAGE_JPEG)
-		bc->params.u.jpeg.color_transform = -1;
-	image = fz_new_image_from_compressed_buffer(ctx, w, h, 8, cspace, xres, yres, 0, 0, NULL, NULL, bc, NULL);
+	fz_try(ctx)
+	{
+		bc = fz_malloc_struct(ctx, fz_compressed_buffer);
+		bc->buffer = fz_keep_buffer(ctx, buffer);
+		bc->params.type = type;
+		if (type == FZ_IMAGE_JPEG)
+			bc->params.u.jpeg.color_transform = -1;
+		image = fz_new_image_from_compressed_buffer(ctx, w, h, 8, cspace, xres, yres, 0, 0, NULL, NULL, bc, NULL);
+	}
+	fz_always(ctx)
+		fz_drop_colorspace(ctx, cspace);
+	fz_catch(ctx)
+		fz_rethrow(ctx);
 
 	return image;
 }

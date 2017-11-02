@@ -71,6 +71,24 @@ int fz_colorspace_is_subtractive(fz_context *ctx, const fz_colorspace *cs);
 int fz_colorspace_is_device_n(fz_context *ctx, const fz_colorspace *cs);
 
 /*
+	fz_colorspace_device_n_has_only_cmyk: Return true if devicen color space
+	has only colorants from the cmyk set.
+*/
+int fz_colorspace_device_n_has_only_cmyk(fz_context *ctx, const fz_colorspace *cs);
+
+/*
+	fz_colorspace_device_n_has_cmyk: Return true if devicen color space has cyan
+	magenta yellow or black as one of its colorants.
+*/
+int fz_colorspace_device_n_has_cmyk(fz_context *ctx, const fz_colorspace *cs);
+
+/*
+	fz_colorspace_is_device_gray: Return true if the color space is
+	device gray.
+*/
+int fz_colorspace_is_device_gray(fz_context *ctx, const fz_colorspace *cs);
+
+/*
 	fz_device_gray: Get colorspace representing device specific gray.
 */
 fz_colorspace *fz_device_gray(fz_context *ctx);
@@ -108,7 +126,16 @@ typedef fz_colorspace *(fz_colorspace_base_fn)(const fz_colorspace *cs);
 
 typedef void (fz_colorspace_clamp_fn)(const fz_colorspace *cs, const float *src, float *dst);
 
-fz_colorspace *fz_new_colorspace(fz_context *ctx, const char *name, int n, int is_subtractive, int is_device_n, fz_colorspace_convert_fn *to_ccs, fz_colorspace_convert_fn *from_ccs, fz_colorspace_base_fn *base, fz_colorspace_clamp_fn *clamp, fz_colorspace_destruct_fn *destruct, void *data, size_t size);
+enum
+{
+	FZ_CS_DEVICE_GRAY = 1,
+	FZ_CS_DEVICE_N = 2,
+	FZ_CS_SUBTRACTIVE = 4,
+
+	FZ_CS_LAST_PUBLIC_FLAG = 4
+};
+
+fz_colorspace *fz_new_colorspace(fz_context *ctx, const char *name, int n, int flags, fz_colorspace_convert_fn *to_ccs, fz_colorspace_convert_fn *from_ccs, fz_colorspace_base_fn *base, fz_colorspace_clamp_fn *clamp, fz_colorspace_destruct_fn *destruct, void *data, size_t size);
 void fz_colorspace_name_colorant(fz_context *ctx, fz_colorspace *cs, int n, const char *name);
 const char *fz_colorspace_colorant(fz_context *ctx, const fz_colorspace *cs, int n);
 fz_colorspace *fz_new_indexed_colorspace(fz_context *ctx, fz_colorspace *base, int high, unsigned char *lookup);
@@ -121,9 +148,11 @@ void fz_drop_colorspace_imp(fz_context *ctx, fz_storable *colorspace);
 
 fz_colorspace *fz_colorspace_base(fz_context *ctx, const fz_colorspace *cs);
 int fz_colorspace_is_icc(fz_context *ctx, const fz_colorspace *cs);
+int fz_colorspace_is_lab(fz_context *ctx, const fz_colorspace *cs);
 int fz_colorspace_is_lab_icc(fz_context *ctx, const fz_colorspace *cs);
 int fz_colorspace_is_cal(fz_context *ctx, const fz_colorspace *cs);
 int fz_colorspace_is_indexed(fz_context *ctx, const fz_colorspace *cs);
+void fz_set_icc_bgr(fz_context *ctx, fz_colorspace *cs);
 int fz_colorspace_n(fz_context *ctx, const fz_colorspace *cs);
 int fz_colorspace_devicen_n(fz_context *ctx, const fz_colorspace *cs);
 const char *fz_colorspace_name(fz_context *ctx, const fz_colorspace *cs);
@@ -168,6 +197,8 @@ struct fz_cal_colorspace_s {
 	icc methods
 */
 fz_colorspace *fz_new_icc_colorspace(fz_context *ctx, const char *name, int num, fz_buffer *buf);
+fz_colorspace *fz_new_icc_colorspace_from_file(fz_context *ctx, const char *name, const char *path);
+fz_colorspace *fz_new_icc_colorspace_from_stream(fz_context *ctx, const char *name, fz_stream *in);
 fz_colorspace *fz_new_cal_colorspace(fz_context *ctx, const char *name, float *wp, float *bp, float *gamma, float *matrix);
 fz_buffer *fz_new_icc_data_from_cal_colorspace(fz_context *ctx, fz_cal_colorspace *cal);
 fz_buffer *fz_icc_data_from_icc_colorspace(fz_context *ctx, const fz_colorspace *cs);
@@ -176,6 +207,7 @@ fz_buffer *fz_icc_data_from_icc_colorspace(fz_context *ctx, const fz_colorspace 
 fz_default_colorspaces *fz_new_default_colorspaces(fz_context *ctx);
 fz_default_colorspaces* fz_keep_default_colorspaces(fz_context *ctx, fz_default_colorspaces *default_cs);
 void fz_drop_default_colorspaces(fz_context *ctx, fz_default_colorspaces *default_cs);
+fz_default_colorspaces *fz_clone_default_colorspaces(fz_context *ctx, fz_default_colorspaces *base);
 
 /* Do we want to make fz_default_colorspaces public and get rid of these? */
 void fz_set_default_gray(fz_context *ctx, fz_default_colorspaces *default_cs, fz_colorspace *cs);
