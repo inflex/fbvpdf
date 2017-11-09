@@ -327,7 +327,7 @@ static void usage(void)
 		"\t-w -\twidth (in pixels) (maximum width if -r is specified)\n"
 		"\t-h -\theight (in pixels) (maximum height if -r is specified)\n"
 		"\t-f -\tfit width and/or height exactly; ignore original aspect ratio\n"
-		"\t-B -\tmaximum band_height (pgm, ppm, pam, png output only)\n"
+		"\t-B -\tmaximum band_height (pXm, pcl, pclm, ps, psd and png output only)\n"
 #ifndef DISABLE_MUTHREADS
 		"\t-T -\tnumber of threads to use for rendering (banded mode only)\n"
 #else
@@ -490,9 +490,6 @@ static void drawband(fz_context *ctx, fz_page *page, fz_display_list *list, cons
 		if (gamma_value != 1)
 			fz_gamma_pixmap(ctx, pix, gamma_value);
 
-		if (pix->alpha)
-			fz_unmultiply_pixmap(ctx, pix);
-
 		if (((output_format == OUT_PCL || output_format == OUT_PWG) && out_cs == CS_MONO) || (output_format == OUT_PBM) || (output_format == OUT_PKM))
 			*bit = fz_new_bitmap_from_pixmap_band(ctx, pix, NULL, band_start);
 	}
@@ -559,6 +556,11 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 	else if (output_format == OUT_TEXT || output_format == OUT_HTML || output_format == OUT_XHTML || output_format == OUT_STEXT)
 	{
 		fz_stext_page *text = NULL;
+		float zoom;
+		fz_matrix ctm;
+
+		zoom = resolution / 72;
+		fz_pre_scale(fz_rotate(&ctm, rotation), zoom, zoom);
 
 		fz_var(text);
 
@@ -572,9 +574,9 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 			if (lowmemory)
 				fz_enable_device_hints(ctx, dev, FZ_NO_CACHE);
 			if (list)
-				fz_run_display_list(ctx, list, dev, &fz_identity, &fz_infinite_rect, cookie);
+				fz_run_display_list(ctx, list, dev, &ctm, &fz_infinite_rect, cookie);
 			else
-				fz_run_page(ctx, page, dev, &fz_identity, cookie);
+				fz_run_page(ctx, page, dev, &ctm, cookie);
 			fz_close_device(ctx, dev);
 			fz_drop_device(ctx, dev);
 			dev = NULL;
@@ -685,6 +687,7 @@ static void dodrawpage(fz_context *ctx, fz_page *page, fz_display_list *list, in
 			else
 				fz_run_page(ctx, page, dev, &ctm, cookie);
 			fz_close_device(ctx, dev);
+			fz_close_output(ctx, out);
 		}
 		fz_always(ctx)
 		{
@@ -1136,6 +1139,7 @@ static void drawpage(fz_context *ctx, fz_document *doc, int pagenum)
 		char text_buffer[512];
 
 		bgprint_flush();
+		fz_close_output(ctx, out);
 		fz_drop_output(ctx, out);
 		fz_snprintf(text_buffer, sizeof(text_buffer), output, pagenum);
 		out = fz_new_output_with_path(ctx, text_buffer, output_append);
@@ -1694,9 +1698,9 @@ int mudraw_main(int argc, char **argv)
 
 	if (band_height)
 	{
-		if (output_format != OUT_PAM && output_format != OUT_PGM && output_format != OUT_PPM && output_format != OUT_PNM && output_format != OUT_PNG && output_format != OUT_PBM && output_format != OUT_PKM && output_format != OUT_PCL && output_format != OUT_PCLM && output_format != OUT_PS && output_format != OUT_PSD)
+		if (output_format != OUT_PAM && output_format != OUT_PGM && output_format != OUT_PPM && output_format != OUT_PNM && output_format != OUT_PNG && output_format != OUT_PBM && output_format != OUT_PKM && output_format != OUT_PCL && output_format != OUT_PCLM && output_format != OUT_PS && output_format != OUT_PSD && output_format != OUT_TGA)
 		{
-			fprintf(stderr, "Banded operation only possible with PAM, PBM, PGM, PKM, PPM, PNM, PCL, PCLM, PS, PSD and PNG outputs\n");
+			fprintf(stderr, "Banded operation only possible with PxM, PCL, PCLM, PS, PSD, PNG and TGA outputs\n");
 			exit(1);
 		}
 		if (showmd5)
@@ -1948,6 +1952,7 @@ int mudraw_main(int argc, char **argv)
 	}
 	else
 	{
+		fz_close_output(ctx, out);
 		fz_drop_output(ctx, out);
 		out = NULL;
 	}

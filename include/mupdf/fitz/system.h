@@ -131,7 +131,6 @@ static __inline int signbit(double x)
 
 #define hypotf _hypotf
 #define atoll _atoi64
-#define stat _stat
 
 #endif
 
