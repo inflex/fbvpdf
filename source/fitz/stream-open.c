@@ -106,14 +106,18 @@ static int next_file(fz_context *ctx, fz_stream *stm, size_t n)
 static void seek_file(fz_context *ctx, fz_stream *stm, int64_t offset, int whence)
 {
 	fz_file_stream *state = stm->state;
-#if defined(_WIN32) || defined(_WIN64)
+#ifdef __MINGW32__
+	int64_t n = fseeko64(state->file, offset, whence);
+#elif defined(_WIN32) || defined(_WIN64)
 	int64_t n = _fseeki64(state->file, offset, whence);
 #else
 	int64_t n = fseeko(state->file, offset, whence);
 #endif
 	if (n < 0)
 		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot seek: %s", strerror(errno));
-#if defined(_WIN32) || defined(_WIN64)
+#ifdef __MINGW32__
+	stm->pos = ftello64(state->file);
+#elif defined(_WIN32) || defined(_WIN64)
 	stm->pos = _ftelli64(state->file);
 #else
 	stm->pos = ftello(state->file);
