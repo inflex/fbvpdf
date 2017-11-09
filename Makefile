@@ -398,6 +398,9 @@ endif
 ifeq "$(HAVE_GLUT)" "yes"
 MUVIEW_GLUT_EXE := $(OUT)/mupdf-gl
 MUVIEW_GLUT_OBJ := $(addprefix $(OUT)/platform/gl/, gl-font.o gl-input.o gl-main.o)
+ifeq "$(HAVE_WIN32)" "yes"
+MUVIEW_GLUT_OBJ += $(addprefix $(OUT)/platform/gl/, gl-win32.o gl-winres.o)
+endif
 $(MUVIEW_GLUT_OBJ) : $(FITZ_HDR) $(PDF_HDR) platform/gl/gl-app.h
 $(MUVIEW_GLUT_EXE) : $(MUVIEW_GLUT_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(GLUT_LIB)
 	$(LINK_CMD) $(GLUT_LIB) $(GLUT_LIBS)

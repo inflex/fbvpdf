@@ -712,21 +712,57 @@ GLUT_X11_SRC := \
 	fg_window_x11_glx.c \
 	fg_xinput_x11.c
 
+GLUT_WIN32_SRC := \
+	fg_cursor_mswin.c \
+	fg_display_mswin.c \
+	fg_ext_mswin.c \
+	fg_gamemode_mswin.c \
+	fg_init_mswin.c \
+	fg_input_devices_mswin.c \
+	fg_joystick_mswin.c \
+	fg_main_mswin.c \
+	fg_menu_mswin.c \
+	fg_spaceball_mswin.c \
+	fg_state_mswin.c \
+	fg_structure_mswin.c \
+	fg_window_mswin.c
+
 GLUT_OBJ := $(addprefix $(GLUT_OUT)/, $(GLUT_SRC:%.c=%.o))
+ifeq "$(HAVE_WIN32)" "yes"
+GLUT_OBJ += $(addprefix $(GLUT_OUT)/, $(GLUT_WIN32_SRC:%.c=%.o))
+GLUT_OBJ += $(GLUT_OUT)/xparsegeometry_repl.o
+else
 GLUT_OBJ += $(addprefix $(GLUT_OUT)/, $(GLUT_X11_SRC:%.c=%.o))
+endif # HAVE_WIN32
 
 $(GLUT_LIB): $(GLUT_OBJ)
 $(GLUT_OUT):
 	$(MKDIR_CMD)
+ifeq "$(HAVE_WIN32)" "yes"
+$(GLUT_OUT)/%.o: $(GLUT_DIR)/src/%.c | $(GLUT_OUT)
+	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src -Wno-unused-const-variable \
+		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DFREEGLUT_STATIC -DNEED_XPARSEGEOMETRY_IMPL
+$(GLUT_OUT)/%.o: $(GLUT_DIR)/src/util/%.c | $(GLUT_OUT)
+	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src -Wno-unused-const-variable \
+		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DFREEGLUT_STATIC
+$(GLUT_OUT)/%.o: $(GLUT_DIR)/src/mswin/%.c | $(GLUT_OUT)
+	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src \
+		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DFREEGLUT_STATIC
+else
 $(GLUT_OUT)/%.o: $(GLUT_DIR)/src/%.c | $(GLUT_OUT)
 	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src -Wno-unused-const-variable \
 		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DHAVE_X11_EXTENSIONS_XRANDR_H
 $(GLUT_OUT)/%.o: $(GLUT_DIR)/src/x11/%.c | $(GLUT_OUT)
 	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src \
 		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DHAVE_X11_EXTENSIONS_XRANDR_H
+endif # HAVE_WIN32
 
 GLUT_CFLAGS := -I$(GLUT_DIR)/include
+ifeq "$(HAVE_WIN32)" "yes"
+GLUT_LIBS := -lopengl32 -mwindows -lwinmm
+else
 GLUT_LIBS := -lGL -lX11 -lXrandr
+endif # HAVE_WIN32
 else
 GLUT_CFLAGS := $(SYS_GLUT_CFLAGS)
 GLUT_LIBS := $(SYS_GLUT_LIBS)

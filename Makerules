@@ -72,8 +72,6 @@ CC=gcc
 # Add flags required for Harfbuzz because of missing strdup
 CFLAGS+= -U__STRICT_ANSI__
 
-CFLAGS += -I$(GLFW_DIR)/deps/mingw
-
 # Mac OS X doesn't have pkg-config so we hard code paths.
 else ifeq "$(OS)" "MACOS"
 
@@ -280,6 +278,7 @@ endif
 
 ifeq "$(HAVE_WIN32)" "yes"
 WIN32_LIBS=-lcomdlg32 -lgdi32 -Wl,-subsystem,windows
+CFLAGS += -DFREEGLUT_STATIC
 endif
 
 # TODO: If crosscompiling, why not just call "make libs" instead of this exception?
