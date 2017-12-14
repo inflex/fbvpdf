@@ -7,7 +7,11 @@ int win_open_file(char *buf, int len);
 #include "mupdf/fitz.h"
 #include "mupdf/ucdn.h"
 
+#ifndef __APPLE__
 #include <GL/freeglut.h>
+#else
+#include <GLUT/glut.h>
+#endif
 
 extern fz_context *ctx;
 
@@ -18,6 +22,7 @@ enum
 	KEY_ENTER = '\r',
 	KEY_TAB = '\t',
 	KEY_BACKSPACE = '\b',
+	KEY_DELETE = 127,
 
 	KEY_CTL_A = 'A' - 64,
 	KEY_CTL_B, KEY_CTL_C, KEY_CTL_D, KEY_CTL_E, KEY_CTL_F,
@@ -27,8 +32,7 @@ enum
 	KEY_CTL_Y, KEY_CTL_Z,
 
 	/* reuse control characters > 127 for special keys */
-	KEY_INSERT = 127,
-	KEY_DELETE,
+	KEY_INSERT = 128,
 	KEY_PAGE_UP,
 	KEY_PAGE_DOWN,
 	KEY_HOME,

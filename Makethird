@@ -575,8 +575,7 @@ $(LCMS2_OUT)/%.o: $(LCMS2_DIR)/src/%.c | $(LCMS2_OUT)
 
 LCMS2_CFLAGS := -I$(LCMS2_DIR)/include
 else
-LCMS2_CFLAGS := $(SYS_LCMS2_CFLAGS)
-LCMS2_LIBS := $(SYS_LCMS2_LIBS)
+LCMS2_CFLAGS := -DNO_ICC
 endif
 
 # --- cURL ---
@@ -663,10 +662,15 @@ endif
 
 ifneq "$(wildcard $(GLUT_DIR)/README)" ""
 
+ifeq "$(OS)" "MACOS"
+GLUT_CFLAGS := $(SYS_GLUT_CFLAGS)
+GLUT_LIBS := $(SYS_GLUT_LIBS)
+else
+
 HAVE_GLUT := yes
 
 GLUT_LIB := $(OUT)/libfreeglut.a
-GLUT_OUT := $(OUT)/freeglut
+GLUT_OUT := $(OUT)/thirdparty/freeglut
 GLUT_SRC := \
 	fg_callbacks.c \
 	fg_cursor.c \
@@ -750,10 +754,10 @@ $(GLUT_OUT)/%.o: $(GLUT_DIR)/src/mswin/%.c | $(GLUT_OUT)
 		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DFREEGLUT_STATIC
 else
 $(GLUT_OUT)/%.o: $(GLUT_DIR)/src/%.c | $(GLUT_OUT)
-	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src -Wno-unused-const-variable \
+	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src -Wno-unused-function -Wno-unused-const-variable \
 		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DHAVE_X11_EXTENSIONS_XRANDR_H
 $(GLUT_OUT)/%.o: $(GLUT_DIR)/src/x11/%.c | $(GLUT_OUT)
-	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src \
+	$(CC_CMD) -I$(GLUT_DIR)/include -I$(GLUT_DIR)/src -Wno-unused-function \
 		-DHAVE_UNISTD_H -DHAVE_STDINT_H -DHAVE_X11_EXTENSIONS_XRANDR_H
 endif # HAVE_WIN32
 
@@ -763,6 +767,8 @@ GLUT_LIBS := -lopengl32 -mwindows -lwinmm
 else
 GLUT_LIBS := -lGL -lX11 -lXrandr
 endif # HAVE_WIN32
+
+endif
 else
 GLUT_CFLAGS := $(SYS_GLUT_CFLAGS)
 GLUT_LIBS := $(SYS_GLUT_LIBS)

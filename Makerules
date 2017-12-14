@@ -77,6 +77,10 @@ else ifeq "$(OS)" "MACOS"
 
 HAVE_X11 ?= no
 
+HAVE_GLUT ?= yes
+SYS_GLUT_CFLAGS := -Wno-deprecated-declarations
+SYS_GLUT_LIBS := -framework GLUT -framework OpenGL
+
 CC = xcrun cc
 AR = xcrun ar
 LD = xcrun ld
@@ -130,11 +134,6 @@ endif
 ifeq "$(shell pkg-config --exists libopenjp2 && echo yes)" "yes"
 SYS_OPENJPEG_CFLAGS := $(shell pkg-config --cflags libopenjp2)
 SYS_OPENJPEG_LIBS := $(shell pkg-config --libs libopenjp2)
-endif
-
-ifeq "$(shell pkg-config --exists lcms2 && echo yes)" "yes"
-SYS_LCMS2_CFLAGS := $(shell pkg-config --cflags lcms2)
-SYS_LCMS2_LIBS := $(shell pkg-config --libs lcms2)
 endif
 
 SYS_JBIG2DEC_LIBS := -ljbig2dec

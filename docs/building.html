@@ -13,12 +13,12 @@
 </header>
 
 <nav>
-<a href="http://mupdf.com/index.html">ABOUT</a>
-<a href="http://mupdf.com/news.html">NEWS</a>
-<a href="index.html">DOCUMENTATION</a>
-<a href="http://mupdf.com/downloads/">DOWNLOAD</a>
-<a href="http://git.ghostscript.com/?p=mupdf.git;a=summary">SOURCE</a>
-<a href="https://bugs.ghostscript.com/">BUGS</a>
+<a href="http://mupdf.com/index.html">About</a>
+<a href="http://mupdf.com/news.html">News</a>
+<a href="index.html">Documentation</a>
+<a href="http://mupdf.com/downloads/">Downloads</a>
+<a href="http://git.ghostscript.com/?p=mupdf.git;a=summary">Source</a>
+<a href="https://bugs.ghostscript.com/">Bugs</a>
 </nav>
 
 <article>
@@ -83,10 +83,10 @@ only want the command line tools, you can build with HAVE_X11=no.
 
 <p>
 The new OpenGL-based viewer also needs OpenGL headers and libraries. If you're
-building on Linux, install the mesa-common-dev and libgl1-mesa-dev packages.
-You'll also need several X11 development packages: xorg-dev, libxcursor-dev,
-libxrandr-dev, and libxinerama-dev. To skip building the OpenGL viewer, build
-with HAVE_GLFW=no.
+building on Linux, install the mesa-common-dev, libgl1-mesa-dev packages, and
+libglu1-mesa-dev packages. You'll also need several X11 development packages:
+xorg-dev, libxcursor-dev, libxrandr-dev, and libxinerama-dev. To skip building
+the OpenGL viewer, build with HAVE_GLUT=no.
 
 <p>
 To install the viewer, command line tools, libraries, and header files on your system:
@@ -99,7 +99,7 @@ make prefix=/usr/local install
 To install only the command line tools, libraries, and headers invoke make like this:
 
 <pre>
-make HAVE_X11=no HAVE_GLFW=no prefix=/usr/local install
+make HAVE_X11=no HAVE_GLUT=no prefix=/usr/local install
 </pre>
 
 </article>
