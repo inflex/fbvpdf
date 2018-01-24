@@ -1506,6 +1506,38 @@ JNIEXPORT void JNICALL Java_com_artifex_mupdf_fitz_PDFAnnotation_setInteriorColo
 
 /*
  * Class:     com_artifex_mupdf_fitz_PDFAnnotation
+ * Method:    getAuthor
+ * Signature: ()Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_artifex_mupdf_fitz_PDFAnnotation_getAuthor
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_artifex_mupdf_fitz_PDFAnnotation
+ * Method:    setAuthor
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_artifex_mupdf_fitz_PDFAnnotation_setAuthor
+  (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     com_artifex_mupdf_fitz_PDFAnnotation
+ * Method:    getModificationDateNative
+ * Signature: ()J
+ */
+JNIEXPORT jlong JNICALL Java_com_artifex_mupdf_fitz_PDFAnnotation_getModificationDateNative
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_artifex_mupdf_fitz_PDFAnnotation
+ * Method:    setModificationDate
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_com_artifex_mupdf_fitz_PDFAnnotation_setModificationDate
+  (JNIEnv *, jobject, jlong);
+
+/*
+ * Class:     com_artifex_mupdf_fitz_PDFAnnotation
  * Method:    getLineEndingStyles
  * Signature: ()[I
  */
@@ -1690,6 +1722,14 @@ JNIEXPORT jobject JNICALL Java_com_artifex_mupdf_fitz_PDFDocument_newReal
  */
 JNIEXPORT jobject JNICALL Java_com_artifex_mupdf_fitz_PDFDocument_newString
   (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     com_artifex_mupdf_fitz_PDFDocument
+ * Method:    newByteString
+ * Signature: ([B)Lcom/artifex/mupdf/fitz/PDFObject;
+ */
+JNIEXPORT jobject JNICALL Java_com_artifex_mupdf_fitz_PDFDocument_newByteString
+  (JNIEnv *, jobject, jbyteArray);
 
 /*
  * Class:     com_artifex_mupdf_fitz_PDFDocument
@@ -2039,14 +2079,6 @@ JNIEXPORT jint JNICALL Java_com_artifex_mupdf_fitz_PDFObject_asIndirect
  * Signature: ()Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_artifex_mupdf_fitz_PDFObject_asName
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_artifex_mupdf_fitz_PDFObject
- * Method:    asByteName
- * Signature: ()[B
- */
-JNIEXPORT jbyteArray JNICALL Java_com_artifex_mupdf_fitz_PDFObject_asByteName
   (JNIEnv *, jobject);
 
 /*
