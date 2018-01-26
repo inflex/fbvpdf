@@ -74,6 +74,97 @@ static const char AdobeCA_p7c[] = {
 #include "openssl/pem.h"
 #include "openssl/pkcs7.h"
 #include "openssl/pkcs12.h"
+#include "openssl/opensslv.h"
+
+#ifndef OPENSSL_VERSION_NUMBER
+#warning detect version of openssl at compile time
+#endif
+
+typedef struct
+{
+	fz_context *ctx;
+	fz_stream *stm;
+} BIO_stream_data;
+
+static int stream_read(BIO *b, char *buf, int size)
+{
+	BIO_stream_data *data = (BIO_stream_data *)BIO_get_data(b);
+	return fz_read(data->ctx, data->stm, buf, size);
+}
+
+static long stream_ctrl(BIO *b, int cmd, long arg1, void *arg2)
+{
+	BIO_stream_data *data = (BIO_stream_data *)BIO_get_data(b);
+	switch (cmd)
+	{
+	case BIO_C_FILE_SEEK:
+		fz_seek(data->ctx, data->stm, arg1, SEEK_SET);
+		return 0;
+	default:
+		return 1;
+	}
+}
+
+static int stream_new(BIO *b)
+{
+	BIO_stream_data *data = (BIO_stream_data *)malloc(sizeof(BIO_stream_data));
+	if (!data)
+		return 0;
+
+	data->ctx = NULL;
+	data->stm = NULL;
+
+	BIO_set_init(b, 1);
+	BIO_set_data(b, data);
+	BIO_clear_flags(b, INT_MAX);
+
+	return 1;
+}
+
+static int stream_free(BIO *b)
+{
+	if (b == NULL)
+		return 0;
+
+	free(BIO_get_data(b));
+	BIO_set_data(b, NULL);
+	BIO_set_init(b, 0);
+	BIO_clear_flags(b, INT_MAX);
+
+	return 1;
+}
+
+static long stream_callback_ctrl(BIO *b, int cmd, bio_info_cb *fp)
+{
+	return 1;
+}
+
+static BIO *BIO_new_stream(fz_context *ctx, fz_stream *stm)
+{
+	static BIO_METHOD *methods = NULL;
+	BIO *bio;
+	BIO_stream_data *data;
+
+	if (!methods)
+	{
+		methods = BIO_meth_new(BIO_TYPE_NONE, "segment reader");
+		if (!methods)
+			return NULL;
+
+		BIO_meth_set_read(methods, stream_read);
+		BIO_meth_set_ctrl(methods, stream_ctrl);
+		BIO_meth_set_create(methods, stream_new);
+		BIO_meth_set_destroy(methods, stream_free);
+		BIO_meth_set_callback_ctrl(methods, stream_callback_ctrl);
+	}
+
+	bio = BIO_new(methods);
+	data = BIO_get_data(bio);
+	data->ctx = ctx;
+	data->stm = stm;
+
+	return bio;
+}
 
 enum
 {
@@ -91,7 +182,7 @@ typedef struct bsegs_struct
 
 static int bsegs_read(BIO *b, char *buf, int size)
 {
-	BIO_SEGS_CTX *ctx = (BIO_SEGS_CTX *)b->ptr;
+	BIO_SEGS_CTX *ctx = (BIO_SEGS_CTX *) BIO_get_data(b);
 	int read = 0;
 
 	while (size > 0 && ctx->current_seg < ctx->nsegs)
@@ -104,9 +195,15 @@ static int bsegs_read(BIO *b, char *buf, int size)
 		if (nb > 0)
 		{
 			if (ctx->seg_pos == 0)
-				(void)BIO_seek(b->next_bio, ctx->seg[ctx->current_seg][SEG_START]);
+			{
+				if (BIO_seek(BIO_next(b), ctx->seg[ctx->current_seg][SEG_START]) < 0)
+					return read;
+			}
 
-			(void)BIO_read(b->next_bio, buf, nb);
+			nb = BIO_read(BIO_next(b), buf, nb);
+			if (nb <= 0)
+				return read;
+
 			ctx->seg_pos += nb;
 			read += nb;
 			buf += nb;
@@ -126,7 +223,7 @@ static int bsegs_read(BIO *b, char *buf, int size)
 
 static long bsegs_ctrl(BIO *b, int cmd, long arg1, void *arg2)
 {
-	return BIO_ctrl(b->next_bio, cmd, arg1, arg2);
+	return BIO_ctrl(BIO_next(b), cmd, arg1, arg2);
 }
 
 static int bsegs_new(BIO *b)
@@ -142,10 +239,9 @@ static int bsegs_new(BIO *b)
 	ctx->seg = NULL;
 	ctx->nsegs = 0;
 
-	b->init = 1;
-	b->ptr = (char *)ctx;
-	b->flags = 0;
-	b->num = 0;
+	BIO_set_init(b, 1);
+	BIO_set_data(b, ctx);
+	BIO_clear_flags(b, INT_MAX);
 
 	return 1;
 }
@@ -155,82 +251,75 @@ static int bsegs_free(BIO *b)
 	if (b == NULL)
 		return 0;
 
-	free(b->ptr);
-	b->ptr = NULL;
-	b->init = 0;
-	b->flags = 0;
+	free(BIO_get_data(b));
+	BIO_set_data(b, NULL);
+	BIO_set_init(b, 0);
+	BIO_clear_flags(b, INT_MAX);
 
 	return 1;
 }
 
 static long bsegs_callback_ctrl(BIO *b, int cmd, bio_info_cb *fp)
 {
-	return BIO_callback_ctrl(b->next_bio, cmd, fp);
+	return BIO_callback_ctrl(BIO_next(b), cmd, fp);
 }
 
-static BIO_METHOD methods_bsegs =
-{
-	0,"segment reader",
-	NULL,
-	bsegs_read,
-	NULL,
-	NULL,
-	bsegs_ctrl,
-	bsegs_new,
-	bsegs_free,
-	bsegs_callback_ctrl,
-};
+static BIO_METHOD *methods_bsegs = NULL;
 
 static BIO_METHOD *BIO_f_segments(void)
 {
-	return &methods_bsegs;
+	if (methods_bsegs)
+		return methods_bsegs;
+
+	methods_bsegs = BIO_meth_new(BIO_TYPE_NONE, "segment reader");
+	if (!methods_bsegs)
+		return NULL;
+
+	if (!BIO_meth_set_read(methods_bsegs, bsegs_read) ||
+			!BIO_meth_set_ctrl(methods_bsegs, bsegs_ctrl) ||
+			!BIO_meth_set_create(methods_bsegs, bsegs_new) ||
+			!BIO_meth_set_destroy(methods_bsegs, bsegs_free) ||
+			!BIO_meth_set_callback_ctrl(methods_bsegs, bsegs_callback_ctrl))
+
+	{
+		BIO_meth_free(methods_bsegs);
+		methods_bsegs = NULL;
+	}
+
+	return methods_bsegs;
 }
 
 static void BIO_set_segments(BIO *b, int (*seg)[2], int nsegs)
 {
-	BIO_SEGS_CTX *ctx = (BIO_SEGS_CTX *)b->ptr;
+	BIO_SEGS_CTX *ctx = (BIO_SEGS_CTX *) BIO_get_data(b);
 
 	ctx->seg = seg;
 	ctx->nsegs = nsegs;
 }
 
-typedef struct verify_context_s
-{
-	X509_STORE_CTX x509_ctx;
-	char certdesc[256];
-	int err;
-} verify_context;
-
 static int verify_callback(int ok, X509_STORE_CTX *ctx)
 {
-	verify_context *vctx;
-	X509 *err_cert;
 	int err, depth;
 
-	vctx = (verify_context *)ctx;
-
-	err_cert = X509_STORE_CTX_get_current_cert(ctx);
 	err = X509_STORE_CTX_get_error(ctx);
 	depth = X509_STORE_CTX_get_error_depth(ctx);
-
-	X509_NAME_oneline(X509_get_subject_name(err_cert), vctx->certdesc, sizeof(vctx->certdesc));
 
 	if (!ok && depth >= 6)
 	{
 		X509_STORE_CTX_set_error(ctx, X509_V_ERR_CERT_CHAIN_TOO_LONG);
 	}
 
-	switch (ctx->error)
+	switch (err)
 	{
 	case X509_V_ERR_INVALID_PURPOSE:
 	case X509_V_ERR_CERT_HAS_EXPIRED:
 	case X509_V_ERR_KEYUSAGE_NO_CERTSIGN:
-		err = X509_V_OK;
 		X509_STORE_CTX_set_error(ctx, X509_V_OK);
 		ok = 1;
 		break;
 
 	case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
+	case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
 		/*
 			In this case, don't reset err to X509_V_OK, so that it can be reported,
 			although we do return 1, so that the digest will still be checked
@@ -242,37 +331,65 @@ static int verify_callback(int ok, X509_STORE_CTX *ctx)
 		break;
 	}
 
-	if (ok && vctx->err == X509_V_OK)
-		vctx->err = err;
 	return ok;
+}
+
+/* Get the certificates from a PKCS7 object */
+static STACK_OF(X509) *pk7_certs(PKCS7 *pk7)
+{
+	if (pk7 == NULL)
+		return NULL;
+
+	if (PKCS7_type_is_signed(pk7))
+		return pk7->d.sign->cert;
+	else if (PKCS7_type_is_signedAndEnveloped(pk7))
+		return pk7->d.signed_and_enveloped->cert;
+	else
+		return NULL;
+}
+
+/* Get the signing certificate from a PKCS7 object */
+static X509 *pk7_signer(PKCS7 *pk7, PKCS7_SIGNER_INFO *si)
+{
+	PKCS7_ISSUER_AND_SERIAL *ias = si->issuer_and_serial;
+	STACK_OF(X509) *certs = pk7_certs(pk7);
+	if (certs == NULL)
+		return NULL;
+
+	return X509_find_by_issuer_and_serial(certs, ias->issuer, ias->serial);
 }
 
 static int pk7_verify(X509_STORE *cert_store, PKCS7 *p7, BIO *detached, char *ebuf, int ebufsize)
 {
-	PKCS7_SIGNER_INFO *si;
-	verify_context vctx;
 	BIO *p7bio=NULL;
 	char readbuf[1024*4];
 	int res = 1;
 	int i;
 	STACK_OF(PKCS7_SIGNER_INFO) *sk;
+	X509_STORE_CTX *ctx;
 
-	vctx.err = X509_V_OK;
 	ebuf[0] = 0;
+
+	ctx = X509_STORE_CTX_new();
 
 	OpenSSL_add_all_algorithms();
 
-	EVP_add_digest(EVP_md5());
-	EVP_add_digest(EVP_sha1());
+	if (!EVP_add_digest(EVP_md5()) ||
+		!EVP_add_digest(EVP_sha1()) ||
+		!ERR_load_crypto_strings())
+		goto exit;
 
-	ERR_load_crypto_strings();
 
 	ERR_clear_error();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_X509_strings();
 
-	X509_VERIFY_PARAM_set_flags(cert_store->param, X509_V_FLAG_CB_ISSUER_CHECK);
 	X509_STORE_set_verify_cb_func(cert_store, verify_callback);
 
 	p7bio = PKCS7_dataInit(p7, detached);
+	if (!p7bio)
+		goto exit;
 
 	/* We now have to 'read' from p7bio to calculate digests etc. */
 	while (BIO_read(p7bio, readbuf, sizeof(readbuf)) > 0)
@@ -291,20 +408,49 @@ static int pk7_verify(X509_STORE *cert_store, PKCS7 *p7, BIO *detached, char *eb
 	for (i=0; i<sk_PKCS7_SIGNER_INFO_num(sk); i++)
 	{
 		int rc;
-		si = sk_PKCS7_SIGNER_INFO_value(sk, i);
-		rc = PKCS7_dataVerify(cert_store, &vctx.x509_ctx, p7bio,p7, si);
-		if (rc <= 0 || vctx.err != X509_V_OK)
+		int ctx_err;
+		PKCS7_SIGNER_INFO *si = sk_PKCS7_SIGNER_INFO_value(sk, i);
+		X509 *cert = pk7_signer(p7, si);
+		if (cert == NULL)
 		{
-			char tbuf[120];
+			res = 0;
+			fz_strlcpy(ebuf, "Certificate missing", ebufsize);
+			goto exit;
+		}
 
+		/* Acrobat reader creates self-signed certificates that don't list
+		 * certificate signing within the key usage parameters. openssl does
+		 * not recognise those as self signed. We work around this by removing
+		 * the key usage parameters before the verification check */
+		{
+			int i = X509_get_ext_by_NID(cert, NID_key_usage, -1);
+			if (i >= 0)
+			{
+				X509_EXTENSION *ext = X509_get_ext(cert, i);
+				X509_delete_ext(cert, i);
+				X509_EXTENSION_free(ext);
+			}
+		}
+
+		rc = PKCS7_dataVerify(cert_store, ctx, p7bio, p7, si);
+		ctx_err = X509_STORE_CTX_get_error(ctx);
+
+		if (rc <= 0 || ctx_err != X509_V_OK)
+		{
 			if (rc <= 0)
 			{
-				fz_strlcpy(ebuf, ERR_error_string(ERR_get_error(), tbuf), ebufsize);
+				/* dataVerify failed */
+				ERR_error_string_n(ERR_get_error(), ebuf, ebufsize);
 			}
 			else
 			{
-				/* Error while checking the certificate chain */
-				fz_snprintf(ebuf, ebufsize, "%s(%d): %s", X509_verify_cert_error_string(vctx.err), vctx.err, vctx.certdesc);
+				int used;
+				/* dataVerify passed, but only because our verify callback
+				   skipped over some problems during the certificate trust
+				   checking stage. */
+				fz_snprintf(ebuf, ebufsize, "%s(%d): ", X509_verify_cert_error_string(ctx_err), ctx_err);
+				used = strlen(ebuf);
+				X509_NAME_oneline(X509_get_subject_name(cert), ebuf + used, ebufsize - used);
 			}
 
 			res = 0;
@@ -313,13 +459,13 @@ static int pk7_verify(X509_STORE *cert_store, PKCS7 *p7, BIO *detached, char *eb
 	}
 
 exit:
-	X509_STORE_CTX_cleanup(&vctx.x509_ctx);
+	X509_STORE_CTX_cleanup(ctx);
 	ERR_free_strings();
 
 	return res;
 }
 
-static int verify_sig(char *sig, int sig_len, char *file, int (*byte_range)[2], int byte_range_len, char *ebuf, int ebufsize)
+static int verify_sig(fz_context *ctx, fz_stream *stm, char *sig, int sig_len, int (*byte_range)[2], int byte_range_len, char *ebuf, int ebufsize)
 {
 	PKCS7 *pk7sig = NULL;
 	PKCS7 *pk7cert = NULL;
@@ -329,7 +475,6 @@ static int verify_sig(char *sig, int sig_len, char *file, int (*byte_range)[2], 
 	BIO *bdata = NULL;
 	BIO *bsegs = NULL;
 	STACK_OF(X509) *certs = NULL;
-	int t;
 	int res = 0;
 
 	bsig = BIO_new_mem_buf(sig, sig_len);
@@ -337,16 +482,15 @@ static int verify_sig(char *sig, int sig_len, char *file, int (*byte_range)[2], 
 	if (pk7sig == NULL)
 		goto exit;
 
-	bdata = BIO_new(BIO_s_file());
+	bdata = BIO_new_stream(ctx, stm);
 	if (bdata == NULL)
 		goto exit;
-	BIO_read_filename(bdata, file);
 
 	bsegs = BIO_new(BIO_f_segments());
 	if (bsegs == NULL)
 		goto exit;
 
-	bsegs->next_bio = bdata;
+	BIO_set_next(bsegs, bdata);
 	BIO_set_segments(bsegs, byte_range, byte_range_len);
 
 	/* Find the certificates in the pk7 file */
@@ -355,20 +499,7 @@ static int verify_sig(char *sig, int sig_len, char *file, int (*byte_range)[2], 
 	if (pk7cert == NULL)
 		goto exit;
 
-	t = OBJ_obj2nid(pk7cert->type);
-	switch (t)
-	{
-	case NID_pkcs7_signed:
-		certs = pk7cert->d.sign->cert;
-		break;
-
-	case NID_pkcs7_signedAndEnveloped:
-		certs = pk7cert->d.sign->cert;
-		break;
-
-	default:
-		break;
-	}
+	certs = pk7_certs(pk7cert);
 
 	st = X509_STORE_new();
 	if (st == NULL)
@@ -418,26 +549,29 @@ void pdf_drop_designated_name(fz_context *ctx, pdf_designated_name *dn)
 	fz_free(ctx, dn);
 }
 
-static void add_from_bags(X509 **pX509, EVP_PKEY **pPkey, STACK_OF(PKCS12_SAFEBAG) *bags, const char *pw);
+static void add_from_bags(X509 **pX509, EVP_PKEY **pPkey, const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pw);
 
 static void add_from_bag(X509 **pX509, EVP_PKEY **pPkey, PKCS12_SAFEBAG *bag, const char *pw)
 {
 	EVP_PKEY *pkey = NULL;
 	X509 *x509 = NULL;
-	PKCS8_PRIV_KEY_INFO *p8 = NULL;
 	switch (M_PKCS12_bag_type(bag))
 	{
 	case NID_keyBag:
-		p8 = bag->value.keybag;
-		pkey = EVP_PKCS82PKEY(p8);
+		{
+			const PKCS8_PRIV_KEY_INFO *p8 = PKCS12_SAFEBAG_get0_p8inf(bag);
+			pkey = EVP_PKCS82PKEY(p8);
+		}
 		break;
 
 	case NID_pkcs8ShroudedKeyBag:
-		p8 = PKCS12_decrypt_skey(bag, pw, (int)strlen(pw));
-		if (p8)
 		{
-			pkey = EVP_PKCS82PKEY(p8);
-			PKCS8_PRIV_KEY_INFO_free(p8);
+			PKCS8_PRIV_KEY_INFO *p8 = PKCS12_decrypt_skey(bag, pw, (int)strlen(pw));
+			if (p8)
+			{
+				pkey = EVP_PKCS82PKEY(p8);
+				PKCS8_PRIV_KEY_INFO_free(p8);
+			}
 		}
 		break;
 
@@ -447,7 +581,7 @@ static void add_from_bag(X509 **pX509, EVP_PKEY **pPkey, PKCS12_SAFEBAG *bag, co
 		break;
 
 	case NID_safeContentsBag:
-		add_from_bags(pX509, pPkey, bag->value.safes, pw);
+		add_from_bags(pX509, pPkey, PKCS12_SAFEBAG_get0_safes(bag), pw);
 		break;
 	}
 
@@ -468,7 +602,7 @@ static void add_from_bag(X509 **pX509, EVP_PKEY **pPkey, PKCS12_SAFEBAG *bag, co
 	}
 }
 
-static void add_from_bags(X509 **pX509, EVP_PKEY **pPkey, STACK_OF(PKCS12_SAFEBAG) *bags, const char *pw)
+static void add_from_bags(X509 **pX509, EVP_PKEY **pPkey, const STACK_OF(PKCS12_SAFEBAG) *bags, const char *pw)
 {
 	int i;
 
@@ -501,7 +635,7 @@ pdf_signer *pdf_read_pfx(fz_context *ctx, const char *pfile, const char *pw)
 
 		ERR_clear_error();
 
-		pfxbio = BIO_new_file(pfile, "r");
+		pfxbio = BIO_new_file(pfile, "rb");
 		if (pfxbio == NULL)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "Can't open pfx file: %s", pfile);
 
@@ -601,31 +735,33 @@ pdf_designated_name *pdf_signer_designated_name(fz_context *ctx, pdf_signer *sig
 	return (pdf_designated_name *)dn;
 }
 
-void pdf_write_digest(fz_context *ctx, pdf_document *doc, const char *filename, pdf_obj *byte_range, int digest_offset, int digest_length, pdf_signer *signer)
+void pdf_write_digest(fz_context *ctx, fz_output *out, pdf_obj *byte_range, int digest_offset, int digest_length, pdf_signer *signer)
 {
+	fz_stream *in = NULL;
 	BIO *bdata = NULL;
 	BIO *bsegs = NULL;
 	BIO *bp7in = NULL;
 	BIO *bp7 = NULL;
 	PKCS7 *p7 = NULL;
 	PKCS7_SIGNER_INFO *si;
-	FILE *f = NULL;
 
 	int (*brange)[2] = NULL;
 	int brange_len = pdf_array_len(ctx, byte_range)/2;
 
+	fz_var(in);
 	fz_var(bdata);
 	fz_var(bsegs);
 	fz_var(bp7in);
 	fz_var(bp7);
 	fz_var(p7);
-	fz_var(f);
 
 	fz_try(ctx)
 	{
 		unsigned char *p7_ptr;
 		int p7_len;
 		int i;
+
+		in = fz_stream_from_output(ctx, out);
 
 		brange = fz_calloc(ctx, brange_len, sizeof(*brange));
 		for (i = 0; i < brange_len; i++)
@@ -634,16 +770,15 @@ void pdf_write_digest(fz_context *ctx, pdf_document *doc, const char *filename, 
 			brange[i][1] = pdf_to_int(ctx, pdf_array_get(ctx, byte_range, 2*i+1));
 		}
 
-		bdata = BIO_new(BIO_s_file());
+		bdata = BIO_new_stream(ctx, in);
 		if (bdata == NULL)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create file BIO");
-		BIO_read_filename(bdata, filename);
 
 		bsegs = BIO_new(BIO_f_segments());
 		if (bsegs == NULL)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create segment filter");
 
-		bsegs->next_bio = bdata;
+		BIO_set_next(bsegs, bdata);
 		BIO_set_segments(bsegs, brange, brange_len);
 
 		p7 = PKCS7_new();
@@ -681,6 +816,8 @@ void pdf_write_digest(fz_context *ctx, pdf_document *doc, const char *filename, 
 		bsegs = NULL;
 		BIO_free(bdata);
 		bdata = NULL;
+		fz_drop_stream(ctx, in);
+		in = NULL;
 
 		bp7 = BIO_new(BIO_s_mem());
 		if (bp7 == NULL || !i2d_PKCS7_bio(bp7, p7))
@@ -690,24 +827,19 @@ void pdf_write_digest(fz_context *ctx, pdf_document *doc, const char *filename, 
 		if (p7_len*2 + 2 > digest_length)
 			fz_throw(ctx, FZ_ERROR_GENERIC, "Insufficient space for digest");
 
-		f = fopen(filename, "rb+");
-		if (f == NULL)
-			fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to write digest");
-
-		fseek(f, digest_offset+1, SEEK_SET);
+		fz_seek_output(ctx, out, digest_offset+1, SEEK_SET);
 
 		for (i = 0; i < p7_len; i++)
-			fprintf(f, "%02x", p7_ptr[i]);
+			fz_write_printf(ctx, out, "%02x", p7_ptr[i]);
 	}
 	fz_always(ctx)
 	{
+		fz_drop_stream(ctx, in);
 		PKCS7_free(p7);
 		BIO_free(bsegs);
 		BIO_free(bdata);
 		BIO_free(bp7in);
 		BIO_free(bp7);
-		if (f)
-			fclose(f);
 	}
 	fz_catch(ctx)
 	{
@@ -715,7 +847,7 @@ void pdf_write_digest(fz_context *ctx, pdf_document *doc, const char *filename, 
 	}
 }
 
-int pdf_check_signature(fz_context *ctx, pdf_document *doc, pdf_widget *widget, char *file, char *ebuf, int ebufsize)
+int pdf_check_signature(fz_context *ctx, pdf_document *doc, pdf_widget *widget, char *ebuf, int ebufsize)
 {
 	int (*byte_range)[2] = NULL;
 	int byte_range_len;
@@ -745,7 +877,7 @@ int pdf_check_signature(fz_context *ctx, pdf_document *doc, pdf_widget *widget, 
 		contents_len = pdf_signature_widget_contents(ctx, doc, widget, &contents);
 		if (byte_range && contents)
 		{
-			res = verify_sig(contents, contents_len, file, byte_range, byte_range_len, ebuf, ebufsize);
+			res = verify_sig(ctx, doc->file, contents, contents_len, byte_range, byte_range_len, ebuf, ebufsize);
 		}
 		else
 		{
@@ -829,7 +961,7 @@ int pdf_signatures_supported(fz_context *ctx)
 
 #else /* HAVE_LIBCRYPTO */
 
-int pdf_check_signature(fz_context *ctx, pdf_document *doc, pdf_widget *widget, char *file, char *ebuf, int ebufsize)
+int pdf_check_signature(fz_context *ctx, pdf_document *doc, pdf_widget *widget, char *ebuf, int ebufsize)
 {
 	fz_strlcpy(ebuf, "This version of MuPDF was built without signature support", ebufsize);
 	return 0;
@@ -848,7 +980,7 @@ void pdf_drop_signer(fz_context *ctx, pdf_signer *signer)
 {
 }
 
-void pdf_write_digest(fz_context *ctx, pdf_document *doc, const char *filename, pdf_obj *byte_range, int digest_offset, int digest_length, pdf_signer *signer)
+void pdf_write_digest(fz_context *ctx, fz_output *out, pdf_obj *byte_range, int digest_offset, int digest_length, pdf_signer *signer)
 {
 }
 
