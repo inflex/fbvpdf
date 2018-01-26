@@ -6,7 +6,38 @@
 
 #ifdef _WIN32
 #define timegm _mkgmtime
-#endif
+
+// TODO: Remove this section when all MinGW targeting build tools
+//       fully support '_mkgmtime()'.
+#if defined(__MINGW32__) && !defined(HAVE_MKGMTIME)
+
+#include <windows.h>
+
+typedef time_t (__cdecl *TIMEGMPROC)(struct tm*);
+
+static time_t _mkgmtime(struct tm* timeptr)
+{
+	HINSTANCE h_libc;
+	static TIMEGMPROC timegm_proc = NULL;
+
+	if (timegm_proc == NULL)
+	{
+		h_libc = LoadLibraryA("msvcrt.dll");
+		if (h_libc != NULL)
+		{
+			timegm_proc = (TIMEGMPROC) GetProcAddress(h_libc, "_mkgmtime");
+		}
+	}
+
+	if (timegm_proc != NULL)
+		return (timegm_proc)(timeptr);
+
+	return -1;
+}
+
+#endif // __MINGW32__
+
+#endif // _WIN32
 
 #define TEXT_ANNOT_SIZE (25.0f)
 
