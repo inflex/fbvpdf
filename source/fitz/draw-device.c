@@ -570,21 +570,21 @@ push_group_for_separations(fz_context *ctx, fz_draw_device *dev, const fz_color_
 	fz_colorspace *dcs = fz_device_cmyk(ctx);
 
 	/* Pick sep target CMYK based upon proof and output intent settings.  Priority
-	 * is oi, proof, devicecmyk. */
-	/* FIXME: Look into non-CMYK proofing profiles */
-	if (dev->proof_cs && fz_colorspace_n(ctx, dev->proof_cs) == 4)
+	* is oi, proof, devicecmyk. */
+	if (dev->proof_cs)
 	{
 		dcs = dev->proof_cs;
 	}
-	/* FIXME : We need to create a file with an RGB output intent at some point and test a few things */
-	if (oi && fz_colorspace_n(ctx, oi) == 4)
+
+	if (oi)
 	{
 		dcs = oi;
 	}
 
-	/* Not needed */
-	if (clone == NULL && dev->proof_cs == NULL && fz_colorspace_n(ctx, dev->stack[0].dest->colorspace) == 4)
+	/* Not needed if dest has the seps, and we are not using a proof or the target is the same as the prooof and we don't have an oi or the target is the same as the oi */
+	if ((clone == dev->stack[0].dest->seps) && (dev->proof_cs == NULL || dev->proof_cs == dev->stack[0].dest->colorspace) && (oi == NULL || oi == dev->stack[0].dest->colorspace))
 	{
+		fz_drop_separations(ctx, clone);
 		dev->resolve_spots = 0;
 		return &dev->stack[0];
 	}
@@ -1714,8 +1714,6 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, const fz_m
 		state = push_group_for_separations(ctx, dev, color_params, dev->default_cs);
 	model = state->dest->colorspace;
 
-	model = state->dest->colorspace;
-
 	fz_intersect_irect(fz_pixmap_bbox(ctx, state->dest, &clip), &state->scissor);
 
 	if (image->w == 0 || image->h == 0)
@@ -1992,15 +1990,8 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, const
 		state[1].mask = fz_new_pixmap_with_bbox(ctx, NULL, &bbox, NULL, 1);
 		fz_clear_pixmap(ctx, state[1].mask);
 
-		/* When there is no alpha in the current destination (state[0].dest->alpha == 0)
-		 * we have a choice. We can either create the new destination WITH alpha, or
-		 * we can copy the old pixmap contents in. We opt for the latter here, but
-		 * may want to revisit this decision in the future. */
 		state[1].dest = fz_new_pixmap_with_bbox(ctx, model, &bbox, state[0].dest->seps, state[0].dest->alpha);
-		if (state[0].dest->alpha)
-			fz_clear_pixmap(ctx, state[1].dest);
-		else
-			fz_copy_pixmap_rect(ctx, state[1].dest, state[0].dest, &bbox, dev->default_cs);
+		fz_copy_pixmap_rect(ctx, state[1].dest, state[0].dest, &bbox, dev->default_cs);
 		if (state[0].shape)
 		{
 			state[1].shape = fz_new_pixmap_with_bbox(ctx, NULL, &bbox, NULL, 1);
