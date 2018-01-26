@@ -184,6 +184,7 @@ endif
 
 ifeq "$(OS)" "w64_x86-cross-mingw32"
 CC = i686-w64-mingw32-gcc
+CXX = i686-w64-mingw32-g++
 LD = i686-w64-mingw32-gcc
 AR = i686-w64-mingw32-ar
 WINDRES = i686-w64-mingw32-windres
@@ -193,6 +194,7 @@ endif
 
 ifeq "$(OS)" "w64_amd64-cross-mingw32"
 CC = x86_64-w64-mingw32-gcc
+CXX = x86_64-w64-mingw32-g++
 LD = x86_64-w64-mingw32-gcc
 AR = x86_64-w64-mingw32-ar
 WINDRES = x86-64-mingw32-windres
