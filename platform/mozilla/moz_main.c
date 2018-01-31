@@ -1,6 +1,8 @@
 #include "mupdf/fitz.h"
 #include "mupdf/pdf.h"
 
+#include <stdio.h>
+
 #include <windows.h>
 
 #include <npapi.h>
