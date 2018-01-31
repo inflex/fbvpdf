@@ -21,6 +21,7 @@ LIBS += $(FREETYPE_LIBS)
 LIBS += $(HARFBUZZ_LIBS)
 LIBS += $(JBIG2DEC_LIBS)
 LIBS += $(JPEGXR_LIB)
+LIBS += $(LCMS2_LIBS)
 LIBS += $(LIBCRYPTO_LIBS)
 LIBS += $(LIBJPEG_LIBS)
 LIBS += $(LURATECH_LIBS)
@@ -32,6 +33,7 @@ CFLAGS += $(FREETYPE_CFLAGS)
 CFLAGS += $(HARFBUZZ_CFLAGS)
 CFLAGS += $(JBIG2DEC_CFLAGS)
 CFLAGS += $(JPEGXR_CFLAGS)
+CFLAGS += $(LCMS2_CFLAGS)
 CFLAGS += $(LIBCRYPTO_CFLAGS)
 CFLAGS += $(LIBJPEG_CFLAGS)
 CFLAGS += $(LURATECH_CFLAGS)
@@ -91,14 +93,11 @@ $(OUT)/%.a :
 $(OUT)/%.exe: $(OUT)/%.o | $(ALL_DIR)
 	$(LINK_CMD)
 
-$(OUT)/%.o : %.c | $(ALL_DIR)
-	$(CC_CMD)
-
-$(OUT)/%.o : %.cpp | $(ALL_DIR)
-	$(CXX_CMD)
-
 $(OUT)/source/helpers/%.o : source/helpers/%.c | $(ALL_DIR)
-	$(CC_CMD) $(PTHREAD_CFLAGS) -DHAVE_PTHREAD
+	$(CC_CMD) $(THREADING_CFLAGS)
+
+$(OUT)/source/tools/%.o : source/tools/%.c | $(ALL_DIR)
+	$(CC_CMD) $(THREADING_CFLAGS)
 
 $(OUT)/generated/%.o : $(OUT)/generated/%.c | $(ALL_DIR)
 	$(CC_CMD) -O0
@@ -113,10 +112,16 @@ $(OUT)/platform/x11/curl/%.o : platform/x11/%.c | $(ALL_DIR)
 	$(CC_CMD) $(X11_CFLAGS) $(CURL_CFLAGS) -DHAVE_CURL
 
 $(OUT)/platform/gl/%.o : platform/gl/%.c | $(ALL_DIR)
-	$(CC_CMD)
+	$(CC_CMD) $(GLUT_CFLAGS)
  
 $(OUT)/platform/gl/%.o: platform/gl/%.rc | $(ALL_DIR)
 	$(WINDRES_CMD)
+
+$(OUT)/%.o : %.c | $(ALL_DIR)
+	$(CC_CMD)
+
+$(OUT)/%.o : %.cpp | $(ALL_DIR)
+	$(CXX_CMD)
 
 .PRECIOUS : $(OUT)/%.o # Keep intermediates from chained rules
 
@@ -124,18 +129,16 @@ $(OUT)/platform/gl/%.o: platform/gl/%.rc | $(ALL_DIR)
 
 FITZ_HDR := include/mupdf/fitz.h $(wildcard include/mupdf/fitz/*.h)
 PDF_HDR := include/mupdf/pdf.h $(wildcard include/mupdf/pdf/*.h)
-SVG_HDR := include/mupdf/svg.h
-HTML_HDR := include/mupdf/html.h
 THREAD_HDR := include/mupdf/helpers/mu-threads.h
 
-FITZ_SRC := $(wildcard source/fitz/*.c)
-PDF_SRC := $(wildcard source/pdf/*.c)
-XPS_SRC := $(wildcard source/xps/*.c)
-SVG_SRC := $(wildcard source/svg/*.c)
-CBZ_SRC := $(wildcard source/cbz/*.c)
-HTML_SRC := $(wildcard source/html/*.c)
-GPRF_SRC := $(wildcard source/gprf/*.c)
-THREAD_SRC := $(wildcard source/helpers/mu-threads/*.c)
+FITZ_SRC := $(sort $(wildcard source/fitz/*.c))
+PDF_SRC := $(sort $(wildcard source/pdf/*.c))
+XPS_SRC := $(sort $(wildcard source/xps/*.c))
+SVG_SRC := $(sort $(wildcard source/svg/*.c))
+CBZ_SRC := $(sort $(wildcard source/cbz/*.c))
+HTML_SRC := $(sort $(wildcard source/html/*.c))
+GPRF_SRC := $(sort $(wildcard source/gprf/*.c))
+THREAD_SRC := $(sort $(wildcard source/helpers/mu-threads/*.c))
 
 FITZ_SRC_HDR := $(wildcard source/fitz/*.h)
 PDF_SRC_HDR := $(wildcard source/pdf/*.h) $(OUT)/generated/pdf-name-table.h
@@ -155,7 +158,9 @@ THREAD_OBJ := $(THREAD_SRC:%.c=$(OUT)/%.o)
 
 $(FITZ_OBJ) : $(FITZ_HDR) $(FITZ_SRC_HDR)
 $(PDF_OBJ) : $(FITZ_HDR) $(PDF_HDR) $(PDF_SRC_HDR)
+$(PDF_OBJ) : $(FITZ_SRC_HDR) # ugh, ugly hack for fitz-imp.h + colorspace-imp.h
 $(XPS_OBJ) : $(FITZ_HDR) $(XPS_HDR) $(XPS_SRC_HDR)
+$(XPS_OBJ) : $(FITZ_SRC_HDR) # ugh, ugly hack for fitz-imp.h
 $(SVG_OBJ) : $(FITZ_HDR) $(SVG_HDR) $(SVG_SRC_HDR)
 $(CBZ_OBJ) : $(FITZ_HDR) $(CBZ_HDR) $(CBZ_SRC_HDR)
 $(HTML_OBJ) : $(FITZ_HDR) $(HTML_HDR) $(HTML_SRC_HDR)
@@ -183,11 +188,11 @@ generate: $(NAME_GEN)
 
 HEXDUMP_EXE := $(OUT)/scripts/hexdump.exe
 
-FONT_BIN_DROID := $(wildcard resources/fonts/droid/*.ttf)
-FONT_BIN_NOTO := $(wildcard resources/fonts/noto/*.ttf)
-FONT_BIN_HAN := $(wildcard resources/fonts/han/*.otf)
-FONT_BIN_URW := $(wildcard resources/fonts/urw/*.cff)
-FONT_BIN_SIL := $(wildcard resources/fonts/sil/*.cff)
+FONT_BIN_DROID := $(sort $(wildcard resources/fonts/droid/*.ttf))
+FONT_BIN_NOTO := $(sort $(wildcard resources/fonts/noto/*.ttf))
+FONT_BIN_HAN := $(sort $(wildcard resources/fonts/han/*.otf))
+FONT_BIN_URW := $(sort $(wildcard resources/fonts/urw/*.cff))
+FONT_BIN_SIL := $(sort $(wildcard resources/fonts/sil/*.cff))
 
 FONT_GEN_DROID := $(subst resources/fonts/droid/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_DROID))))
 FONT_GEN_NOTO := $(subst resources/fonts/noto/, $(OUT)/generated/, $(addsuffix .c, $(basename $(FONT_BIN_NOTO))))
@@ -200,15 +205,15 @@ FONT_GEN := $(FONT_GEN_DROID) $(FONT_GEN_NOTO) $(FONT_GEN_HAN) $(FONT_GEN_URW) $
 FONT_OBJ := $(FONT_GEN:%.c=%.o)
 
 $(OUT)/generated/%.c : resources/fonts/droid/%.ttf $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/noto/%.ttf $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/han/%.otf $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/urw/%.cff $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 $(OUT)/generated/%.c : resources/fonts/sil/%.cff $(HEXDUMP_EXE) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $<
+	$(QUIET_GEN) $(HEXDUMP_EXE) -s $@ $<
 
 $(FONT_OBJ) : $(FONT_GEN)
 $(FONT_GEN_DROID) : $(FONT_BIN_DROID)
@@ -223,29 +228,54 @@ endif
 
 generate: $(FONT_GEN)
 
+# --- Generated ICC profiles ---
+
+ICC_BIN := resources/icc/gray.icc resources/icc/rgb.icc resources/icc/cmyk.icc resources/icc/lab.icc
+ICC_GEN := $(OUT)/generated/icc-profiles.c
+ICC_OBJ := $(ICC_GEN:%.c=%.o)
+
+$(ICC_OBJ) : $(ICC_GEN)
+$(ICC_GEN) : $(ICC_BIN) | $(ALL_DIR)
+	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(ICC_BIN)
+
+ifneq "$(CROSSCOMPILE)" "yes"
+$(ICC_GEN) : $(HEXDUMP_EXE)
+endif
+
+generate: $(ICC_GEN)
+
 # --- Generated CMap files ---
 
 CMAPDUMP_EXE := $(OUT)/scripts/cmapdump.exe
 
-CMAP_CJK_SRC := $(wildcard resources/cmaps/cjk/*)
-CMAP_EXTRA_SRC := $(wildcard resources/cmaps/extra/*)
-CMAP_UTF8_SRC := $(wildcard resources/cmaps/utf8/*)
-CMAP_UTF32_SRC := $(wildcard resources/cmaps/utf32/*)
+CMAP_CJK_SRC := $(sort $(wildcard resources/cmaps/cjk/*))
+CMAP_EXTRA_SRC := $(sort $(wildcard resources/cmaps/extra/*))
+CMAP_UTF8_SRC := $(sort $(wildcard resources/cmaps/utf8/*))
+CMAP_UTF32_SRC := $(sort $(wildcard resources/cmaps/utf32/*))
 
-$(OUT)/generated/gen_cmap_cjk.h : $(CMAP_CJK_SRC) | $(ALL_DIR)
+CMAP_GEN := \
+	$(OUT)/generated/pdf-cmap-cjk.c \
+	$(OUT)/generated/pdf-cmap-extra.c \
+	$(OUT)/generated/pdf-cmap-utf8.c \
+	$(OUT)/generated/pdf-cmap-utf32.c
+CMAP_OBJ := $(CMAP_GEN:%.c=%.o)
+
+$(OUT)/generated/pdf-cmap-cjk.c : $(CMAP_CJK_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_CJK_SRC)
-$(OUT)/generated/gen_cmap_extra.h : $(CMAP_EXTRA_SRC) | $(ALL_DIR)
+$(OUT)/generated/pdf-cmap-extra.c : $(CMAP_EXTRA_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_EXTRA_SRC)
-$(OUT)/generated/gen_cmap_utf8.h : $(CMAP_UTF8_SRC) | $(ALL_DIR)
+$(OUT)/generated/pdf-cmap-utf8.c : $(CMAP_UTF8_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_UTF8_SRC)
-$(OUT)/generated/gen_cmap_utf32.h : $(CMAP_UTF32_SRC) | $(ALL_DIR)
+$(OUT)/generated/pdf-cmap-utf32.c : $(CMAP_UTF32_SRC) | $(ALL_DIR)
 	$(QUIET_GEN) $(CMAPDUMP_EXE) $@ $(CMAP_UTF32_SRC)
 
-CMAP_GEN := $(addprefix $(OUT)/generated/, gen_cmap_cjk.h gen_cmap_extra.h gen_cmap_utf8.h gen_cmap_utf32.h)
+$(CMAP_OBJ) : $(CMAP_GEN)
 
 ifneq "$(CROSSCOMPILE)" "yes"
 $(CMAP_GEN) : $(CMAPDUMP_EXE)
 endif
+
+generate: $(CMAP_GEN)
 
 $(OUT)/scripts/cmapdump.o : \
 	$(NAME_GEN) \
@@ -258,7 +288,6 @@ $(OUT)/scripts/cmapdump.o : \
 	source/fitz/buffer.c \
 	source/fitz/stream-open.c \
 	source/fitz/stream-read.c \
-	source/fitz/strtod.c \
 	source/fitz/strtof.c \
 	source/fitz/ftoa.c \
 	source/fitz/printf.c \
@@ -267,37 +296,20 @@ $(OUT)/scripts/cmapdump.o : \
 	source/pdf/pdf-cmap.c \
 	source/pdf/pdf-cmap-parse.c \
 
-$(OUT)/source/pdf/pdf-cmap-table.o : $(CMAP_GEN)
-
-generate: $(CMAP_GEN)
-
-# --- Generated embedded certificate files ---
-
-ADOBECA_SRC := resources/certs/AdobeCA.p7c
-ADOBECA_GEN := $(OUT)/generated/gen_adobe_ca.h
-$(ADOBECA_GEN) : $(ADOBECA_SRC) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(ADOBECA_SRC)
-
-ifneq "$(CROSSCOMPILE)" "yes"
-$(ADOBECA_GEN) : $(HEXDUMP_EXE)
-endif
-
-$(OUT)/source/pdf/pdf-pkcs7.o : $(ADOBECA_GEN)
-
-generate: $(ADOBECA_GEN)
-
 # --- Generated embedded javascript files ---
 
 JAVASCRIPT_SRC := source/pdf/pdf-js-util.js
-JAVASCRIPT_GEN := $(OUT)/generated/gen_js_util.h
+JAVASCRIPT_GEN := $(OUT)/generated/pdf-js-util.c
+JAVASCRIPT_OBJ := $(JAVASCRIPT_GEN:%.c=%.o)
+
 $(JAVASCRIPT_GEN) : $(JAVASCRIPT_SRC) | $(ALL_DIR)
-	$(QUIET_GEN) $(HEXDUMP_EXE) $@ $(JAVASCRIPT_SRC)
+	$(QUIET_GEN) $(HEXDUMP_EXE) -0 $@ $(JAVASCRIPT_SRC)
 
 ifneq "$(CROSSCOMPILE)" "yes"
 $(JAVASCRIPT_GEN) : $(HEXDUMP_EXE)
 endif
 
-$(OUT)/source/pdf/pdf-js.o : $(JAVASCRIPT_GEN)
+$(JAVASCRIPT_OBJ) : $(JAVASCRIPT_GEN)
 
 generate: $(JAVASCRIPT_GEN)
 
@@ -307,8 +319,31 @@ MUPDF_LIB = $(OUT)/libmupdf.a
 THIRD_LIB = $(OUT)/libmupdfthird.a
 THREAD_LIB = $(OUT)/libmuthreads.a
 
-MUPDF_OBJ := $(FITZ_OBJ) $(FONT_OBJ) $(PDF_OBJ) $(XPS_OBJ) $(SVG_OBJ) $(CBZ_OBJ) $(HTML_OBJ) $(GPRF_OBJ)
-THIRD_OBJ := $(FREETYPE_OBJ) $(HARFBUZZ_OBJ) $(JBIG2DEC_OBJ) $(LIBJPEG_OBJ) $(JPEGXR_OBJ) $(LURATECH_OBJ) $(MUJS_OBJ) $(OPENJPEG_OBJ) $(ZLIB_OBJ)
+MUPDF_OBJ := \
+	$(FITZ_OBJ) \
+	$(PDF_OBJ) \
+	$(CMAP_OBJ) \
+	$(FONT_OBJ) \
+	$(JAVASCRIPT_OBJ) \
+	$(XPS_OBJ) \
+	$(SVG_OBJ) \
+	$(CBZ_OBJ) \
+	$(HTML_OBJ) \
+	$(GPRF_OBJ) \
+	$(ICC_OBJ)
+
+THIRD_OBJ := \
+	$(FREETYPE_OBJ) \
+	$(HARFBUZZ_OBJ) \
+	$(JBIG2DEC_OBJ) \
+	$(JPEGXR_OBJ) \
+	$(LIBJPEG_OBJ) \
+	$(LURATECH_OBJ) \
+	$(MUJS_OBJ) \
+	$(OPENJPEG_OBJ) \
+	$(ZLIB_OBJ) \
+	$(LCMS2_OBJ)
+
 THREAD_OBJ := $(THREAD_OBJ)
 
 $(MUPDF_LIB) : $(MUPDF_OBJ)
@@ -320,18 +355,18 @@ INSTALL_LIBS := $(MUPDF_LIB) $(THIRD_LIB)
 # --- Tools and Apps ---
 
 MUTOOL_EXE := $(OUT)/mutool
-MUTOOL_SRC := source/tools/mutool.c source/tools/muconvert.c source/tools/mudraw.c source/tools/murun.c
-MUTOOL_SRC += $(wildcard source/tools/pdf*.c)
+MUTOOL_SRC := source/tools/mutool.c source/tools/muconvert.c source/tools/mudraw.c source/tools/murun.c source/tools/mutrace.c
+MUTOOL_SRC += $(sort $(wildcard source/tools/pdf*.c))
 MUTOOL_OBJ := $(MUTOOL_SRC:%.c=$(OUT)/%.o)
 $(MUTOOL_OBJ) : $(FITZ_HDR) $(PDF_HDR)
 $(MUTOOL_EXE) : $(MUTOOL_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(THREAD_LIB)
-	$(LINK_CMD) $(PTHREAD_LIBS)
+	$(LINK_CMD) $(THREADING_LIBS)
 
 MURASTER_EXE := $(OUT)/muraster
 MURASTER_OBJ := $(OUT)/source/tools/muraster.o
 $(MURASTER_OBJ) : $(FITZ_HDR)
 $(MURASTER_EXE) : $(MURASTER_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(THREAD_LIB)
-	$(LINK_CMD) $(PTHREAD_LIBS)
+	$(LINK_CMD) $(THREADING_LIBS)
 
 MJSGEN_EXE := $(OUT)/mjsgen
 MJSGEN_OBJ := $(OUT)/source/tools/mjsgen.o
@@ -361,20 +396,15 @@ $(MUVIEW_X11_CURL_EXE) : $(MUVIEW_X11_CURL_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(CURL
 endif
 endif
 
-ifeq "$(HAVE_GLFW)" "yes"
-CFLAGS += $(GLFW_CFLAGS)
-MUVIEW_GLFW_EXE := $(OUT)/mupdf-gl
-MUVIEW_GLFW_OBJ := $(addprefix $(OUT)/platform/gl/, gl-font.o gl-input.o gl-main.o)
+ifeq "$(HAVE_GLUT)" "yes"
+MUVIEW_GLUT_EXE := $(OUT)/mupdf-gl
+MUVIEW_GLUT_OBJ := $(addprefix $(OUT)/platform/gl/, gl-font.o gl-input.o gl-main.o)
 ifeq "$(HAVE_WIN32)" "yes"
-MUVIEW_GLFW_OBJ += $(addprefix $(OUT)/platform/gl/, gl-win32.o gl-winres.o)
+MUVIEW_GLUT_OBJ += $(addprefix $(OUT)/platform/gl/, gl-win32.o gl-winres.o)
 endif
-$(MUVIEW_GLFW_OBJ) : $(FITZ_HDR) $(PDF_HDR) platform/gl/gl-app.h
-$(MUVIEW_GLFW_EXE) : $(MUVIEW_GLFW_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(GLFW_LIB)
-ifneq "$(HAVE_WIN32)" "yes"
-	$(LINK_CMD) $(GLFW_LIBS)
-else
-	$(LINK_CMD) $(GLFW_LIBS) $(WIN32_LIBS)
-endif
+$(MUVIEW_GLUT_OBJ) : $(FITZ_HDR) $(PDF_HDR) platform/gl/gl-app.h
+$(MUVIEW_GLUT_EXE) : $(MUVIEW_GLUT_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(GLUT_LIB)
+	$(LINK_CMD) $(GLUT_LIB) $(GLUT_LIBS)
 endif
 
 ifeq "$(HAVE_WIN32)" "yes"
@@ -402,22 +432,23 @@ $(MUPLUGIN) : $(MUPLUGIN_OBJ)
 endif
 endif
 
-MUVIEW_EXE := $(MUVIEW_X11_EXE) $(MUVIEW_WIN32_EXE) $(MUVIEW_GLFW_EXE)
+MUVIEW_EXE := $(MUVIEW_X11_EXE) $(MUVIEW_WIN32_EXE) $(MUVIEW_GLUT_EXE)
 MUVIEW_CURL_EXE := $(MUVIEW_X11_CURL_EXE) $(MUVIEW_WIN32_CURL_EXE)
 
 INSTALL_APPS := $(MUTOOL_EXE) $(MUVIEW_EXE)
 INSTALL_APPS += $(MURASTER_EXE)
 INSTALL_APPS += $(MUVIEW_CURL_EXE)
 INSTALL_APPS += $(MUJSTEST_EXE)
+INSTALL_APPS += $(MJSGEN_EXE)
 INSTALL_APPS += $(MUPLUGIN)
 
 # --- Examples ---
 
 examples: $(OUT)/example $(OUT)/multi-threaded
 
-$(OUT)/example: docs/example.c $(MUPDF_LIB) $(THIRD_LIB)
+$(OUT)/example: docs/examples/example.c $(MUPDF_LIB) $(THIRD_LIB)
 	$(LINK_CMD) $(CFLAGS)
-$(OUT)/multi-threaded: docs/multi-threaded.c $(MUPDF_LIB) $(THIRD_LIB)
+$(OUT)/multi-threaded: docs/examples/multi-threaded.c $(MUPDF_LIB) $(THIRD_LIB)
 	$(LINK_CMD) $(CFLAGS) -lpthread
 
 # --- Update version string header ---
@@ -447,7 +478,7 @@ mandir ?= $(prefix)/share/man
 docdir ?= $(prefix)/share/doc/mupdf
 
 third: $(THIRD_LIB)
-extra: $(CURL_LIB) $(GLFW_LIB)
+extra: $(CURL_LIB) $(GLUT_LIB)
 libs: $(INSTALL_LIBS)
 apps: $(INSTALL_APPS)
 
@@ -469,12 +500,19 @@ install: libs apps
 	install docs/man/*.1 $(DESTDIR)$(mandir)/man1
 
 	install -d $(DESTDIR)$(docdir)
-	install README COPYING CHANGES docs/*.txt $(DESTDIR)$(docdir)
+	install -d $(DESTDIR)$(docdir)/examples
+	install README COPYING CHANGES $(DESTDIR)$(docdir)
+	install docs/*.html docs/*.css docs/*.png $(DESTDIR)$(docdir)
+	install docs/examples/* $(DESTDIR)$(docdir)/examples
 
 tarball:
 	bash scripts/archive.sh
 
 # --- Clean and Default ---
+
+WATCH_SRCS := $(shell find include source platform -type f -name '*.[ch]')
+watch:
+	@ while ! inotifywait -q -e modify $(WATCH_SRCS) ; do time -p $(MAKE) ; done
 
 java:
 	$(MAKE) -C platform/java
