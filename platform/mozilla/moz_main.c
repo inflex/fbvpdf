@@ -388,8 +388,15 @@ static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	if (page_n->contents || page_n->annotations)
 	{
 		idev = fz_new_draw_device(moz->ctx, NULL, page_n->image);
-		pdfmoz_runpage(moz->ctx, page_n, idev, &ctm, &bounds, &cookie);
-		fz_drop_device(moz->ctx, idev);
+		fz_try(moz->ctx)
+		{
+			pdfmoz_runpage(moz->ctx, page_n, idev, &ctm, &bounds, &cookie);
+			fz_close_device(moz->ctx, idev);
+		}
+		fz_always(moz->ctx)
+			fz_drop_device(moz->ctx, idev);
+		fz_catch(moz->ctx)
+			fz_rethrow(moz->ctx);
 	}
 
 	if (cookie.errors && page_n->errored == 0)
