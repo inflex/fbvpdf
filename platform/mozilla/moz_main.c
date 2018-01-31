@@ -383,7 +383,7 @@ static void pdfmoz_drawpage(pdfmoz_t *moz, int pagenum)
 	bounds = page_n->bbox;
 	fz_round_rect(&ibounds, fz_transform_rect(&bounds, &ctm));
 	fz_rect_from_irect(&bounds, &ibounds);
-	page_n->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, &ibounds, 1);
+	page_n->image = fz_new_pixmap_with_bbox(moz->ctx, colorspace, &ibounds, NULL, 1);
 	fz_clear_pixmap_with_value(moz->ctx, page_n->image, 255);
 	if (page_n->contents || page_n->annotations)
 	{
