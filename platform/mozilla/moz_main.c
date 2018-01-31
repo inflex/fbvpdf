@@ -798,6 +798,7 @@ NPError
 NPP_Destroy(NPP inst, NPSavedData **saved)
 {
 	pdfmoz_t *moz = inst->pdata;
+	fz_context *ctx = moz->ctx;
 
 	inst->pdata = NULL;
 
@@ -810,7 +811,6 @@ NPP_Destroy(NPP inst, NPSavedData **saved)
 	if (moz->doc)
 		pdfmoz_close(moz);
 
-	fz_context *ctx = moz->ctx;
 	fz_free(ctx, moz);
 	moz = NULL;
 	fz_drop_context(ctx);
