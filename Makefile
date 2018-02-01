@@ -40,6 +40,7 @@ CFLAGS += $(LURATECH_CFLAGS)
 CFLAGS += $(MUJS_CFLAGS)
 CFLAGS += $(OPENJPEG_CFLAGS)
 CFLAGS += $(ZLIB_CFLAGS)
+CFLAGS += $(NPAPI_CFLAGS)
 
 ALL_DIR := $(OUT)/generated
 ALL_DIR += $(OUT)/scripts
@@ -56,6 +57,7 @@ ALL_DIR += $(OUT)/source/helpers/mu-threads
 ALL_DIR += $(OUT)/platform/x11
 ALL_DIR += $(OUT)/platform/x11/curl
 ALL_DIR += $(OUT)/platform/gl
+ALL_DIR += $(OUT)/platform/mozilla
 
 # --- Commands ---
 
@@ -417,15 +419,12 @@ $(MUVIEW_WIN32_EXE) : $(MUVIEW_WIN32_OBJ) $(MUPDF_LIB) $(THIRD_LIB)
 ifeq "$(HAVE_NPAPI)" "yes"
 TAG = ${shell  sed -ne "s/\\\#define FZ_VERSION \"\([^\"]*\)\"/\1/p" include/mupdf/fitz/version.h}
 MUPLUGIN := $(OUT)/npmupdf-$(TAG).dll
-MOZILLA_OUT := $(OUT)/platform/mozilla
-$(MOZILLA_OUT):
-	$(MKDIR_CMD)
-$(MOZILLA_OUT)/%.o : platform/mozilla/%.c | $(MOZILLA_OUT)
-	$(CC_CMD) $(NPAPI_CFLAGS)
-$(MOZILLA_OUT)/%.o : platform/mozilla/%.rc
+$(OUT)/platform/mozilla/%.o : platform/mozilla/%.c | $(ALL_DIR)
+	$(CC_CMD)
+$(OUT)/platform/mozilla/%.o : platform/mozilla/%.rc
 	$(WINDRES_CMD) --include-dir=include
-MUPLUGIN_OBJ := $(addprefix $(MOZILLA_OUT)/, moz_entry.o moz_main.o moz_winres.o)
-$(MUPLUGIN_OBJ) :  $(FITZ_HDR) $(PDF_HDR)
+MUPLUGIN_OBJ := $(addprefix $(OUT)/platform/mozilla/, moz_entry.o moz_main.o moz_winres.o)
+$(MUPLUGIN_OBJ) : $(FITZ_HDR) $(PDF_HDR)
 $(MUPLUGIN) : $(MUPDF_LIB) $(THIRD_LIB)
 $(MUPLUGIN) : $(MUPLUGIN_OBJ)
 	$(LINK_CMD) -shared platform/mozilla/moz_export.def -Wl,--kill-at $(WIN32_LIBS)
