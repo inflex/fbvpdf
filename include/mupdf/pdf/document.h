@@ -535,7 +535,54 @@ void pdf_update_page(fz_context *ctx, pdf_page *page);
 */
 int pdf_has_unsaved_changes(fz_context *ctx, pdf_document *doc);
 
-typedef struct pdf_signer_s pdf_signer;
+typedef enum
+{
+	SignatureError_Okay,
+	SignatureError_NoSignatures,
+	SignatureError_NoCertificate,
+	SignatureError_DocumentChanged,
+	SignatureError_SelfSigned,
+	SignatureError_SelfSignedInChain,
+	SignatureError_NotTrusted,
+	SignatureError_Unknown
+} SignatureError;
+
+typedef struct pdf_pkcs7_designated_name_s
+{
+	char *cn;
+	char *o;
+	char *ou;
+	char *email;
+	char *c;
+}
+pdf_pkcs7_designated_name;
+
+/* Object that can perform the cryptographic operation necessary for document signing */
+typedef struct pdf_pkcs7_signer_s pdf_pkcs7_signer;
+
+/* Increment the reference count for a signer object */
+typedef pdf_pkcs7_signer *(pdf_pkcs7_keep_fn)(pdf_pkcs7_signer *signer);
+
+/* Drop a reference for a signer object */
+typedef void (pdf_pkcs7_drop_fn)(pdf_pkcs7_signer *signer);
+
+/* Obtain the designated name information from a signer object */
+typedef pdf_pkcs7_designated_name *(pdf_pkcs7_designated_name_fn)(pdf_pkcs7_signer *signer);
+
+/* Free the resources associated with previously obtained designated name information */
+typedef void (pdf_pkcs7_drop_designated_name_fn)(pdf_pkcs7_signer *signer, pdf_pkcs7_designated_name *name);
+
+/* Create a signature based on ranges of bytes drawn from a steam */
+typedef int (pdf_pkcs7_create_digest_fn)(pdf_pkcs7_signer *signer, fz_stream *in, unsigned char *digest, int *digest_len);
+
+struct pdf_pkcs7_signer_s
+{
+	pdf_pkcs7_keep_fn *keep;
+	pdf_pkcs7_drop_fn *drop;
+	pdf_pkcs7_designated_name_fn *designated_name;
+	pdf_pkcs7_drop_designated_name_fn *drop_designated_name;
+	pdf_pkcs7_create_digest_fn *create_digest;
+};
 
 /* Unsaved signature fields */
 typedef struct pdf_unsaved_sig_s pdf_unsaved_sig;
@@ -547,7 +594,7 @@ struct pdf_unsaved_sig_s
 	int byte_range_end;
 	int contents_start;
 	int contents_end;
-	pdf_signer *signer;
+	pdf_pkcs7_signer *signer;
 	pdf_unsaved_sig *next;
 };
 
