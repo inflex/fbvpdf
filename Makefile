@@ -144,7 +144,10 @@ CBZ_SRC := $(sort $(wildcard source/cbz/*.c))
 HTML_SRC := $(sort $(wildcard source/html/*.c))
 GPRF_SRC := $(sort $(wildcard source/gprf/*.c))
 THREAD_SRC := $(sort $(wildcard source/helpers/mu-threads/*.c))
-PKCS7_SRC := $(sort $(wildcard source/helpers/pkcs7/*.c))
+PKCS7_SRC := $(wildcard source/helpers/pkcs7/pkcs7-check.c)
+ifeq "$(HAVE_LIBCRYPTO)" "yes"
+PKCS7_SRC += $(wildcard source/helpers/pkcs7/pkcs7-openssl.c)
+endif
 
 FITZ_SRC_HDR := $(wildcard source/fitz/*.h)
 PDF_SRC_HDR := $(wildcard source/pdf/*.h) $(OUT)/generated/pdf-name-table.h
@@ -328,9 +331,7 @@ generate: $(JAVASCRIPT_GEN)
 MUPDF_LIB = $(OUT)/libmupdf.a
 THIRD_LIB = $(OUT)/libmupdfthird.a
 THREAD_LIB = $(OUT)/libmuthreads.a
-ifeq "$(HAVE_LIBCRYPTO)" "yes"
 PKCS7_LIB = $(OUT)/libmupkcs7.a
-endif
 
 MUPDF_OBJ := \
 	$(FITZ_OBJ) \
@@ -360,9 +361,7 @@ THIRD_OBJ := \
 $(MUPDF_LIB) : $(MUPDF_OBJ)
 $(THIRD_LIB) : $(THIRD_OBJ)
 $(THREAD_LIB) : $(THREAD_OBJ)
-ifeq "$(HAVE_LIBCRYPTO)" "yes"
 $(PKCS7_LIB) : $(PKCS7_OBJ)
-endif
 
 INSTALL_LIBS := $(MUPDF_LIB) $(THIRD_LIB)
 

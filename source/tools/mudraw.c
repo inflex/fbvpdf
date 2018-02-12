@@ -363,7 +363,6 @@ static void usage(void)
 #endif
 		"\t-N\tdisable ICC workflow (\"N\"o color management)\n"
 		"\t-O -\tControl spot/overprint rendering\n"
-		"\t\t 0 = No spot rendering\n"
 #ifdef FZ_ENABLE_SPOT_RENDERING
 		"\t\t 0 = No spot rendering\n"
 		"\t\t 1 = Overprint simulation (default)\n"
@@ -1144,8 +1143,11 @@ static void drawpage(fz_context *ctx, fz_document *doc, int pagenum)
 		char text_buffer[512];
 
 		bgprint_flush();
-		fz_close_output(ctx, out);
-		fz_drop_output(ctx, out);
+		if (out)
+		{
+			fz_close_output(ctx, out);
+			fz_drop_output(ctx, out);
+		}
 		fz_snprintf(text_buffer, sizeof(text_buffer), output, pagenum);
 		out = fz_new_output_with_path(ctx, text_buffer, 0);
 	}
