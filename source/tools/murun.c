@@ -4247,7 +4247,7 @@ static void ffi_PDFAnnotation_getInkList(js_State *J)
 	fz_context *ctx = js_getcontext(J);
 	pdf_annot *annot = js_touserdata(J, 0, "pdf_annot");
 	int i, k, m = 0, n = 0;
-	float v[2] = { 0 };
+	fz_point pt;
 
 	js_newarray(J);
 
@@ -4265,12 +4265,12 @@ static void ffi_PDFAnnotation_getInkList(js_State *J)
 		js_newarray(J);
 		for (k = 0; k < m; ++k) {
 			fz_try(ctx)
-				pdf_annot_ink_list_stroke_vertex(ctx, annot, i, k, v);
+				pt = pdf_annot_ink_list_stroke_vertex(ctx, annot, i, k);
 			fz_catch(ctx)
 				rethrow(J);
-			js_pushnumber(J, v[0]);
+			js_pushnumber(J, pt.x);
 			js_setindex(J, -2, k * 2 + 0);
-			js_pushnumber(J, v[1]);
+			js_pushnumber(J, pt.y);
 			js_setindex(J, -2, k * 2 + 1);
 		}
 		js_setindex(J, -2, i);
@@ -4281,7 +4281,7 @@ static void ffi_PDFAnnotation_setInkList(js_State *J)
 {
 	fz_context *ctx = js_getcontext(J);
 	pdf_annot *annot = js_touserdata(J, 0, "pdf_annot");
-	float *points = NULL;
+	fz_point *points = NULL;
 	int *counts = NULL;
 	int n, nv, k, i, v;
 
@@ -4298,7 +4298,7 @@ static void ffi_PDFAnnotation_setInkList(js_State *J)
 
 	fz_try(ctx) {
 		counts = fz_malloc(ctx, n * sizeof(int));
-		points = fz_malloc(ctx, nv * 2 * sizeof(float));
+		points = fz_malloc(ctx, nv * sizeof(fz_point));
 	} fz_catch(ctx) {
 		fz_free(ctx, counts);
 		fz_free(ctx, points);
@@ -4313,10 +4313,14 @@ static void ffi_PDFAnnotation_setInkList(js_State *J)
 	for (i = v = 0; i < n; ++i) {
 		js_getindex(J, 1, i);
 		counts[i] = js_getlength(J, -1) / 2;
-		for (k = 0; k < counts[i] * 2; ++k) {
-			js_getindex(J, -1, k);
-			points[v++] = js_tonumber(J, -1);
+		for (k = 0; k < counts[i]; ++k) {
+			js_getindex(J, -1, k*2);
+			points[v].x = js_tonumber(J, -1);
 			js_pop(J, 1);
+			js_getindex(J, -1, k*2+1);
+			points[v].y = js_tonumber(J, -1);
+			js_pop(J, 1);
+			++v;
 		}
 		js_pop(J, 1);
 	}
