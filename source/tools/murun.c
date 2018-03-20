@@ -3251,10 +3251,38 @@ static void ffi_PDFDocument_addSimpleFont(js_State *J)
 	fz_context *ctx = js_getcontext(J);
 	pdf_document *pdf = js_touserdata(J, 0, "pdf_document");
 	fz_font *font = js_touserdata(J, 1, "fz_font");
+	const char *encname = js_tostring(J, 2);
 	pdf_obj *ind = NULL;
+	int enc = PDF_SIMPLE_ENCODING_LATIN;
+
+	if (!strcmp(encname, "Latin")) enc = PDF_SIMPLE_ENCODING_LATIN;
+	else if (!strcmp(encname, "Greek")) enc = PDF_SIMPLE_ENCODING_GREEK;
+	else if (!strcmp(encname, "Cyrillic")) enc = PDF_SIMPLE_ENCODING_CYRILLIC;
 
 	fz_try(ctx)
-		ind = pdf_add_simple_font(ctx, pdf, font);
+		ind = pdf_add_simple_font(ctx, pdf, font, enc);
+	fz_catch(ctx)
+		rethrow(J);
+
+	ffi_pushobj(J, ind);
+}
+
+static void ffi_PDFDocument_addCJKFont(js_State *J)
+{
+	fz_context *ctx = js_getcontext(J);
+	pdf_document *pdf = js_touserdata(J, 0, "pdf_document");
+	fz_font *font = js_touserdata(J, 1, "fz_font");
+	const char *on = js_tostring(J, 2);
+	int ord = FZ_ADOBE_JAPAN_1;
+	pdf_obj *ind = NULL;
+
+	if (!strcmp(on, "CNS1") || !strcmp(on, "CN")) ord = FZ_ADOBE_CNS_1;
+	else if (!strcmp(on, "GB1") || !strcmp(on, "TW")) ord = FZ_ADOBE_GB_1;
+	else if (!strcmp(on, "Korea1") || !strcmp(on, "KR") || !strcmp(on, "KO")) ord = FZ_ADOBE_KOREA_1;
+	else if (!strcmp(on, "Japan1") || !strcmp(on, "JP") || !strcmp(on, "JA")) ord = FZ_ADOBE_JAPAN_1;
+
+	fz_try(ctx)
+		ind = pdf_add_cjk_font(ctx, pdf, font, ord);
 	fz_catch(ctx)
 		rethrow(J);
 
@@ -4675,7 +4703,8 @@ int murun_main(int argc, char **argv)
 		jsB_propfun(J, "PDFDocument.addObject", ffi_PDFDocument_addObject, 1);
 		jsB_propfun(J, "PDFDocument.addStream", ffi_PDFDocument_addStream, 2);
 		jsB_propfun(J, "PDFDocument.addRawStream", ffi_PDFDocument_addRawStream, 2);
-		jsB_propfun(J, "PDFDocument.addSimpleFont", ffi_PDFDocument_addSimpleFont, 1);
+		jsB_propfun(J, "PDFDocument.addSimpleFont", ffi_PDFDocument_addSimpleFont, 2);
+		jsB_propfun(J, "PDFDocument.addCJKFont", ffi_PDFDocument_addCJKFont, 2);
 		jsB_propfun(J, "PDFDocument.addFont", ffi_PDFDocument_addFont, 1);
 		jsB_propfun(J, "PDFDocument.addImage", ffi_PDFDocument_addImage, 1);
 		jsB_propfun(J, "PDFDocument.addPage", ffi_PDFDocument_addPage, 4);

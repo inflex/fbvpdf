@@ -302,9 +302,7 @@ pdf_copy_annot_contents(fz_context *ctx, pdf_annot *annot)
 void
 pdf_set_annot_contents(fz_context *ctx, pdf_annot *annot, const char *text)
 {
-	pdf_document *doc = annot->page->doc;
-	pdf_dict_put_drop(ctx, annot->obj, PDF_NAME_Contents,
-			pdf_new_text_string(ctx, doc, text));
+	pdf_dict_put_text_string(ctx, annot->obj, PDF_NAME_Contents, text);
 	pdf_dirty_annot(ctx, annot);
 }
 
@@ -473,6 +471,20 @@ pdf_annot_line_ending_styles(fz_context *ctx, pdf_annot *annot,
 	*end_style = pdf_line_ending_from_name(ctx, pdf_array_get(ctx, style, 1));
 }
 
+enum pdf_line_ending
+pdf_annot_line_start_style(fz_context *ctx, pdf_annot *annot)
+{
+	pdf_obj *le = pdf_dict_get(ctx, annot->obj, PDF_NAME_LE);
+	return pdf_line_ending_from_name(ctx, pdf_array_get(ctx, le, 0));
+}
+
+enum pdf_line_ending
+pdf_annot_line_end_style(fz_context *ctx, pdf_annot *annot)
+{
+	pdf_obj *le = pdf_dict_get(ctx, annot->obj, PDF_NAME_LE);
+	return pdf_line_ending_from_name(ctx, pdf_array_get(ctx, le, 1));
+}
+
 void
 pdf_set_annot_line_ending_styles(fz_context *ctx, pdf_annot *annot,
 		enum pdf_line_ending start_style,
@@ -488,13 +500,24 @@ pdf_set_annot_line_ending_styles(fz_context *ctx, pdf_annot *annot,
 	pdf_dirty_annot(ctx, annot);
 }
 
+void
+pdf_set_annot_line_start_style(fz_context *ctx, pdf_annot *annot, enum pdf_line_ending s)
+{
+	enum pdf_line_ending e = pdf_annot_line_end_style(ctx, annot);
+	pdf_set_annot_line_ending_styles(ctx, annot, s, e);
+}
+
+void
+pdf_set_annot_line_end_style(fz_context *ctx, pdf_annot *annot, enum pdf_line_ending e)
+{
+	enum pdf_line_ending s = pdf_annot_line_start_style(ctx, annot);
+	pdf_set_annot_line_ending_styles(ctx, annot, s, e);
+}
+
 float
 pdf_annot_border(fz_context *ctx, pdf_annot *annot)
 {
-	pdf_obj *border, *bs, *bs_w;
-	border = pdf_dict_get(ctx, annot->obj, PDF_NAME_Border);
-	if (pdf_is_array(ctx, border))
-		return pdf_to_real(ctx, pdf_array_get(ctx, border, 2));
+	pdf_obj *bs, *bs_w;
 	bs = pdf_dict_get(ctx, annot->obj, PDF_NAME_BS);
 	bs_w = pdf_dict_get(ctx, bs, PDF_NAME_W);
 	if (pdf_is_number(ctx, bs_w))
@@ -506,21 +529,42 @@ void
 pdf_set_annot_border(fz_context *ctx, pdf_annot *annot, float w)
 {
 	pdf_document *doc = annot->page->doc;
-	pdf_obj *border = pdf_dict_get(ctx, annot->obj, PDF_NAME_Border);
-	if (pdf_is_array(ctx, border))
-		pdf_array_put_drop(ctx, border, 2, pdf_new_real(ctx, doc, w));
-	else
-	{
-		border = pdf_new_array(ctx, doc, 3);
-		pdf_array_push_drop(ctx, border, pdf_new_real(ctx, doc, 0));
-		pdf_array_push_drop(ctx, border, pdf_new_real(ctx, doc, 0));
-		pdf_array_push_drop(ctx, border, pdf_new_real(ctx, doc, w));
-		pdf_dict_put_drop(ctx, annot->obj, PDF_NAME_Border, border);
-	}
+	pdf_obj *bs = pdf_dict_get(ctx, annot->obj, PDF_NAME_BS);
+	if (!pdf_is_dict(ctx, bs))
+		pdf_dict_put_drop(ctx, annot->obj, PDF_NAME_BS, bs = pdf_new_dict(ctx, doc, 1));
+	pdf_dict_put_real(ctx, bs, PDF_NAME_W, w);
+	pdf_dirty_annot(ctx, annot);
+}
 
-	/* Remove border style and effect dictionaries so they won't interfere. */
-	pdf_dict_del(ctx, annot->obj, PDF_NAME_BS);
-	pdf_dict_del(ctx, annot->obj, PDF_NAME_BE);
+int
+pdf_annot_quadding(fz_context *ctx, pdf_annot *annot)
+{
+	int q = pdf_to_int(ctx, pdf_dict_get(ctx, annot->obj, PDF_NAME_Q));
+	return (q < 0 || q > 2) ? 0 : q;
+}
+
+void
+pdf_set_annot_quadding(fz_context *ctx, pdf_annot *annot, int q)
+{
+	q = (q < 0 || q > 2) ? 0 : q;
+	pdf_dict_put_int(ctx, annot->obj, PDF_NAME_Q, q);
+	pdf_dirty_annot(ctx, annot);
+}
+
+float pdf_annot_opacity(fz_context *ctx, pdf_annot *annot)
+{
+	pdf_obj *ca = pdf_dict_get(ctx, annot->obj, PDF_NAME_CA);
+	if (pdf_is_number(ctx, ca))
+		return pdf_to_real(ctx, ca);
+	return 1;
+}
+
+void pdf_set_annot_opacity(fz_context *ctx, pdf_annot *annot, float opacity)
+{
+	if (opacity != 1)
+		pdf_dict_put_real(ctx, annot->obj, PDF_NAME_CA, opacity);
+	else
+		pdf_dict_del(ctx, annot->obj, PDF_NAME_CA);
 	pdf_dirty_annot(ctx, annot);
 }
 

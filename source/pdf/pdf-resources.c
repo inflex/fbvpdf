@@ -100,7 +100,7 @@ pdf_insert_image_resource(fz_context *ctx, pdf_document *doc, unsigned char dige
 		fz_warn(ctx, "warning: image resource already present");
 	else
 		res = pdf_keep_obj(ctx, obj);
-	return res;
+	return pdf_keep_obj(ctx, res);
 }
 
 /* We do need to come up with an effective way to see what is already in the
@@ -109,7 +109,7 @@ pdf_insert_image_resource(fz_context *ctx, pdf_document *doc, unsigned char dige
  * it may be more problematic. */
 
 pdf_obj *
-pdf_find_font_resource(fz_context *ctx, pdf_document *doc, int type, fz_buffer *item, unsigned char digest[16])
+pdf_find_font_resource(fz_context *ctx, pdf_document *doc, int type, int encoding, fz_buffer *item, unsigned char digest[16])
 {
 	fz_md5 state;
 	unsigned char *data;
@@ -124,6 +124,7 @@ pdf_find_font_resource(fz_context *ctx, pdf_document *doc, int type, fz_buffer *
 	/* Create md5 and see if we have the item in our table */
 	fz_md5_init(&state);
 	fz_md5_update(&state, (unsigned char*)&type, sizeof type);
+	fz_md5_update(&state, (unsigned char*)&encoding, sizeof encoding);
 	fz_md5_update(&state, data, size);
 	fz_md5_final(&state, digest);
 
@@ -141,7 +142,7 @@ pdf_insert_font_resource(fz_context *ctx, pdf_document *doc, unsigned char diges
 		fz_warn(ctx, "warning: font resource already present");
 	else
 		res = pdf_keep_obj(ctx, obj);
-	return res;
+	return pdf_keep_obj(ctx, res);
 }
 
 void

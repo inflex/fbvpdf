@@ -1229,7 +1229,7 @@ static inline jint to_ColorParams_safe(fz_context *ctx, JNIEnv *env, const fz_co
 	if (!ctx || !cp)
 		return 0;
 
-	return (((int) (!!cp->bp)<<5) | ((int) (!!cp->op)<<6) || ((int) (!!cp->opm)<<7) || (cp->ri & 31));
+	return (((int) (!!cp->bp)<<5) | ((int) (!!cp->op)<<6) | ((int) (!!cp->opm)<<7) | (cp->ri & 31));
 }
 
 static inline jobject to_ColorSpace_safe(fz_context *ctx, JNIEnv *env, fz_colorspace *cs)
@@ -7054,7 +7054,7 @@ FUN(PDFDocument_addFont)(JNIEnv *env, jobject self, jobject jfont)
 }
 
 JNIEXPORT jobject JNICALL
-FUN(PDFDocument_addSimpleFont)(JNIEnv *env, jobject self, jobject jfont)
+FUN(PDFDocument_addCJKFont)(JNIEnv *env, jobject self, jobject jfont, jint ordering)
 {
 	fz_context *ctx = get_context(env);
 	pdf_document *pdf = from_PDFDocument(env, self);
@@ -7065,7 +7065,29 @@ FUN(PDFDocument_addSimpleFont)(JNIEnv *env, jobject self, jobject jfont)
 	if (!font) { jni_throw_arg(env, "font must not be null"); return NULL; }
 
 	fz_try(ctx)
-		ind = pdf_add_simple_font(ctx, pdf, font);
+		ind = pdf_add_cjk_font(ctx, pdf, font, ordering);
+	fz_catch(ctx)
+	{
+		jni_rethrow(env, ctx);
+		return NULL;
+	}
+
+	return to_PDFObject_safe_own(ctx, env, self, ind);
+}
+
+JNIEXPORT jobject JNICALL
+FUN(PDFDocument_addSimpleFont)(JNIEnv *env, jobject self, jobject jfont, jint encoding)
+{
+	fz_context *ctx = get_context(env);
+	pdf_document *pdf = from_PDFDocument(env, self);
+	fz_font *font = from_Font(env, jfont);
+	pdf_obj *ind = NULL;
+
+	if (!ctx || !pdf) return NULL;
+	if (!font) { jni_throw_arg(env, "font must not be null"); return NULL; }
+
+	fz_try(ctx)
+		ind = pdf_add_simple_font(ctx, pdf, font, encoding);
 	fz_catch(ctx)
 	{
 		jni_rethrow(env, ctx);
@@ -8606,7 +8628,7 @@ FUN(PDFPage_createAnnotation)(JNIEnv *env, jobject self, jint subtype)
 		return NULL;
 	}
 
-	return to_Annotation_safe(ctx, env, self, (fz_annot*)annot);
+	return to_Annotation_safe(ctx, env, (fz_annot*)annot);
 }
 
 JNIEXPORT void JNICALL

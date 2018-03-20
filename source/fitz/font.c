@@ -635,19 +635,55 @@ fz_new_font_from_file(fz_context *ctx, const char *name, const char *path, int i
 	return font;
 }
 
+fz_font *
+fz_new_base14_font(fz_context *ctx, const char *name)
+{
+	const unsigned char *data;
+	int size;
+	data = fz_lookup_base14_font(ctx, name, &size);
+	if (!data)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot find builtin font with name '%s'", name);
+	return fz_new_font_from_memory(ctx, name, data, size, 0, 0);
+}
+
+fz_font *
+fz_new_cjk_font(fz_context *ctx, int ordering, int serif, int wmode)
+{
+	const unsigned char *data;
+	int size, index;
+	data = fz_lookup_cjk_font(ctx, ordering, serif, wmode, &size, &index);
+	if (!data)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot find builtin CJK font");
+	return fz_new_font_from_memory(ctx, NULL, data, size, index, 0);
+}
+
+fz_font *
+fz_new_builtin_font(fz_context *ctx, const char *name, int is_bold, int is_italic)
+{
+	const unsigned char *data;
+	int size;
+	data = fz_lookup_builtin_font(ctx, name, is_bold, is_italic, &size);
+	if (!data)
+		fz_throw(ctx, FZ_ERROR_GENERIC, "cannot find builtin font with name '%s'", name);
+	return fz_new_font_from_memory(ctx, NULL, data, size, 0, 0);
+}
+
 static fz_matrix *
 fz_adjust_ft_glyph_width(fz_context *ctx, fz_font *font, int gid, fz_matrix *trm)
 {
 	/* Fudge the font matrix to stretch the glyph if we've substituted the font. */
 	if (font->flags.ft_stretch && font->width_table /* && font->wmode == 0 */)
 	{
-		FT_Fixed adv;
+		FT_Error fterr;
+		FT_Fixed adv = 0;
 		float subw;
 		float realw;
 
 		fz_lock(ctx, FZ_LOCK_FREETYPE);
-		FT_Get_Advance(font->ft_face, gid, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_IGNORE_TRANSFORM, &adv);
+		fterr = FT_Get_Advance(font->ft_face, gid, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_IGNORE_TRANSFORM, &adv);
 		fz_unlock(ctx, FZ_LOCK_FREETYPE);
+		if (fterr)
+			fz_warn(ctx, "freetype getting character advance: %s", ft_error_string(fterr));
 
 		realw = adv * 1000.0f / ((FT_Face)font->ft_face)->units_per_EM;
 		if (gid < font->width_count)
@@ -1513,7 +1549,8 @@ int fz_glyph_cacheable(fz_context *ctx, fz_font *font, int gid)
 static float
 fz_advance_ft_glyph(fz_context *ctx, fz_font *font, int gid, int wmode)
 {
-	FT_Fixed adv;
+	FT_Error fterr;
+	FT_Fixed adv = 0;
 	int mask;
 
 	/* Substitute font widths. */
@@ -1528,8 +1565,10 @@ fz_advance_ft_glyph(fz_context *ctx, fz_font *font, int gid, int wmode)
 	if (wmode)
 		mask |= FT_LOAD_VERTICAL_LAYOUT;
 	fz_lock(ctx, FZ_LOCK_FREETYPE);
-	FT_Get_Advance(font->ft_face, gid, mask, &adv);
+	fterr = FT_Get_Advance(font->ft_face, gid, mask, &adv);
 	fz_unlock(ctx, FZ_LOCK_FREETYPE);
+	if (fterr)
+		fz_warn(ctx, "freetype getting character advance: %s", ft_error_string(fterr));
 	return (float) adv / ((FT_Face)font->ft_face)->units_per_EM;
 }
 
