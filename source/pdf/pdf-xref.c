@@ -2174,11 +2174,11 @@ pdf_update_stream(fz_context *ctx, pdf_document *doc, pdf_obj *obj, fz_buffer *n
 	fz_drop_buffer(ctx, x->stm_buf);
 	x->stm_buf = fz_keep_buffer(ctx, newbuf);
 
-	pdf_dict_puts_drop(ctx, obj, "Length", pdf_new_int(ctx, doc, (int)fz_buffer_storage(ctx, newbuf, NULL)));
+	pdf_dict_put_int(ctx, obj, PDF_NAME_Length, (int)fz_buffer_storage(ctx, newbuf, NULL));
 	if (!compressed)
 	{
-		pdf_dict_dels(ctx, obj, "Filter");
-		pdf_dict_dels(ctx, obj, "DecodeParms");
+		pdf_dict_del(ctx, obj, PDF_NAME_Filter);
+		pdf_dict_del(ctx, obj, PDF_NAME_DecodeParms);
 	}
 }
 
@@ -2678,11 +2678,23 @@ pdf_add_object_drop(fz_context *ctx, pdf_document *doc, pdf_obj *obj)
 }
 
 pdf_obj *
+pdf_add_new_dict(fz_context *ctx, pdf_document *doc, int initial)
+{
+	return pdf_add_object_drop(ctx, doc, pdf_new_dict(ctx, doc, initial));
+}
+
+pdf_obj *
+pdf_add_new_array(fz_context *ctx, pdf_document *doc, int initial)
+{
+	return pdf_add_object_drop(ctx, doc, pdf_new_array(ctx, doc, initial));
+}
+
+pdf_obj *
 pdf_add_stream(fz_context *ctx, pdf_document *doc, fz_buffer *buf, pdf_obj *obj, int compressed)
 {
 	pdf_obj *ind;
 	if (!obj)
-		ind = pdf_add_object_drop(ctx, doc, pdf_new_dict(ctx, doc, 4));
+		ind = pdf_add_new_dict(ctx, doc, 4);
 	else
 		ind = pdf_add_object(ctx, doc, obj);
 	fz_try(ctx)
@@ -2718,14 +2730,12 @@ pdf_document *pdf_create_document(fz_context *ctx)
 
 		trailer = pdf_new_dict(ctx, doc, 2);
 		pdf_dict_put_int(ctx, trailer, PDF_NAME_Size, 3);
-		root = pdf_new_dict(ctx, doc, 2);
-		pdf_dict_put_drop(ctx, trailer, PDF_NAME_Root, pdf_add_object_drop(ctx, doc, root));
+		pdf_dict_put_drop(ctx, trailer, PDF_NAME_Root, root = pdf_add_new_dict(ctx, doc, 2));
 		pdf_dict_put(ctx, root, PDF_NAME_Type, PDF_NAME_Catalog);
-		pages = pdf_new_dict(ctx, doc, 3);
-		pdf_dict_put_drop(ctx, root, PDF_NAME_Pages, pdf_add_object_drop(ctx, doc, pages));
+		pdf_dict_put_drop(ctx, root, PDF_NAME_Pages, pages = pdf_add_new_dict(ctx, doc, 3));
 		pdf_dict_put(ctx, pages, PDF_NAME_Type, PDF_NAME_Pages);
 		pdf_dict_put_int(ctx, pages, PDF_NAME_Count, 0);
-		pdf_dict_put_drop(ctx, pages, PDF_NAME_Kids, pdf_new_array(ctx, doc, 1));
+		pdf_dict_put_array(ctx, pages, PDF_NAME_Kids, 1);
 
 		/* Set the trailer of the final xref section. */
 		doc->xref_sections[0].trailer = trailer;
