@@ -95,18 +95,6 @@ typedef unsigned __int64 uint64_t;
 #define SEEK_END 2
 #endif
 
-#ifdef _WIN32
-char **fz_argv_from_wargv(int argc, wchar_t **wargv);
-void fz_free_argv(int argc, char **argv);
-
-char *fz_utf8_from_wchar(const wchar_t *s);
-wchar_t *fz_wchar_from_utf8(const char *s);
-
-/* really a FILE* but we don't want to include stdio.h here */
-void *fz_fopen_utf8(const char *name, const char *mode);
-int fz_remove_utf8(const char *name);
-#endif
-
 #ifdef _MSC_VER /* Microsoft Visual C */
 
 /* MSVC up to VS2012 */
@@ -134,6 +122,20 @@ static __inline int signbit(double x)
 
 #define hypotf _hypotf
 #define atoll _atoi64
+
+#endif
+
+#ifdef _WIN32
+
+char *fz_utf8_from_wchar(const wchar_t *s);
+wchar_t *fz_wchar_from_utf8(const char *s);
+
+/* really a FILE* but we don't want to include stdio.h here */
+void *fz_fopen_utf8(const char *name, const char *mode);
+int fz_remove_utf8(const char *name);
+
+char **fz_argv_from_wargv(int argc, wchar_t **wargv);
+void fz_free_argv(int argc, char **argv);
 
 #endif
 
