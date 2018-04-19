@@ -68,6 +68,7 @@ endif
 # Windows (MINGW) build doesn't use system libraries.
 ifeq "$(OS)" "MINGW"
 
+CC = gcc
 WINDRES := windres
 HAVE_X11 ?= no
 HAVE_WIN32 := yes
