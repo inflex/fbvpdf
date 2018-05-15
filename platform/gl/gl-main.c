@@ -1,6 +1,7 @@
 #include "gl-app.h"
 
 #include "mupdf/pdf.h" /* for pdf specifics and forms */
+#include "mupdf/ddi.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ enum
 
 struct ui ui;
 fz_context *ctx = NULL;
+struct ddi_s ddi;
 
 /* OpenGL capabilities */
 static int has_ARB_texture_non_power_of_two = 1;
@@ -148,9 +150,6 @@ static int zoom_out(int oldres)
 #define MINRES (zoom_list[0])
 #define MAXRES (zoom_list[nelem(zoom_list)-1])
 #define DEFRES 96
-
-#define DDI_IN_SUFFIX ".ddin"
-#define DDI_OUT_SUFFIX ".ddout"
 
 static char filename[2048];
 static char *password = "";
@@ -435,28 +434,6 @@ static void pop_future(void)
 	while (future_count > 0 && currentpage == here)
 		restore_mark(future[--future_count]);
 	push_history();
-}
-
-void ddi_clipboard_out( char *s ) {
-	char fn[1024];
-	char fnt[1024];
-	FILE *f;
-
-	if (!ddiprefix) return;
-
-	snprintf(fnt, sizeof(fn),"%s%st", ddiprefix, DDI_OUT_SUFFIX);
-	snprintf(fn, sizeof(fn),"%s%s", ddiprefix, DDI_OUT_SUFFIX);
-//	fprintf(stderr, "%s - %s\n", fnt, fn );
-	f = fopen(fnt,"w");
-	if (f) {
-		fprintf(f,"%s",s);
-		fflush(f);
-		fclose(f);
-		rename(fnt, fn);
-//		fprintf(stderr,"'%s' written\n", s);
-	} else {
-		fprintf(stderr,"Error opening file (%s)\n", fnt);
-	}
 }
 
 static void ui_label_draw(int x0, int y0, int x1, int y1, const char *text)
@@ -746,8 +723,8 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
-			ddi_clipboard_out(s);
-//			fprintf(stderr,"Clipboard being set to '%s'\n", s);
+			DDI_dispatch( &ddi, s );
+			fprintf(stderr,"Clipboard being set to '%s'\n", s);
 			fz_free(ctx, s);
 			glutPostRedisplay();
 		}
@@ -1342,21 +1319,12 @@ static void do_canvas(void)
 }
 
 int ddi_get_search(char *buf, size_t size) {
-	char fn[1024];
 	int result = 0;
-	FILE *f;
 
 	if (!ddiprefix) return 0;
 
-	snprintf(fn,sizeof(fn),"%s%s", ddiprefix, DDI_IN_SUFFIX);
-	f = fopen(fn,"r");
-	if (f) {
+	if (DDI_pickup( &ddi, buf, size ) == 0) {
 		char *p;
-		if (!fgets(buf, size, f)) {
-			fprintf(stderr,"Error reading data from DDI search file\n");
-		}
-		fclose(f);
-		remove(fn);
 
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
@@ -1390,7 +1358,6 @@ int ddi_get_search(char *buf, size_t size) {
 
 static void run_main_loop(void)
 {
-	char sn[1024];
 
 	glViewport(0, 0, window_w, window_h);
 	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
@@ -1634,12 +1601,14 @@ void BoardView::Zoom(float osd_x, float osd_y, float zoom) {
 ***/
 static void on_wheel(int wheel, int direction, int x, int y)
 {
-	float pct, pct2, oz;
+	float pct;
+	//float	pct2, oz;
+
 
 	pct = 1.1;
-	pct2 = pct;
+//	pct2 = pct;
 
-	oz = currentzoom / 100;
+//	oz = currentzoom / 100;
 
 
 //	fprintf(stderr,"wheel: (%d,%d) [%d, %d]-=> ", x, y, canvas_w, canvas_h );
@@ -1757,7 +1726,7 @@ static void ddi_search_check( void ) {
 
 
 	{
-		int start_time = glutGet(GLUT_ELAPSED_TIME);
+//		int start_time = glutGet(GLUT_ELAPSED_TIME);
 		search_page = prior_page;
 		search_active = 1;
 
@@ -1781,7 +1750,6 @@ static void ddi_search_check( void ) {
 				{
 					fz_point p;
 					fz_rect bb;
-					float z;
 
 					p.x = (canvas_w/2) *72 / (currentzoom );
 					p.y = (canvas_h/2) *72 / (currentzoom );
@@ -1792,19 +1760,6 @@ static void ddi_search_check( void ) {
 
 	//				fprintf(stderr,"box:%d[%f,%f - %f,%f]\n",prior_inpage_index, bb.x0, bb.y0, bb.x1, bb.y1);
 					jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
-
-					/*
-					   z = 0.1;
-						glLineWidth(2);
-					   glBegin(GL_QUADS);              // Each set of 4 vertices form a quad
-				      glColor3f(0.0f, 1.0f, 0.0f); // Green?
-				      glVertex2f( bb.x0*z, bb.y0*z );
-				      glVertex2f( bb.x1*z, bb.y0*z );
-				      glVertex2f( bb.x1*z, bb.y1*z );
-				      glVertex2f( bb.x0*z, bb.y1*z );
-					   glEnd();
-						glFlush();
-						*/
 				}
 
 
@@ -1988,6 +1943,11 @@ int main(int argc, char **argv)
 		++title;
 	else
 		title = filename;
+
+	/* ddi setup */
+	DDI_init(&ddi);
+	DDI_set_prefix(&ddi, ddiprefix);
+	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
 	/* Init MuPDF */
 

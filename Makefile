@@ -43,6 +43,7 @@ CFLAGS += $(ZLIB_CFLAGS)
 
 ALL_DIR := $(OUT)/generated
 ALL_DIR += $(OUT)/scripts
+ALL_DIR += $(OUT)/source/ddi
 ALL_DIR += $(OUT)/source/fitz
 ALL_DIR += $(OUT)/source/pdf
 ALL_DIR += $(OUT)/source/xps
@@ -131,11 +132,13 @@ $(OUT)/%.o : %.cpp | $(ALL_DIR)
 
 # --- File lists ---
 
+DDI_HDR := include/mupdf/ddi.h $(wildcard include/mupdf/ddi/*.h)
 FITZ_HDR := include/mupdf/fitz.h $(wildcard include/mupdf/fitz/*.h)
 PDF_HDR := include/mupdf/pdf.h $(wildcard include/mupdf/pdf/*.h)
 THREAD_HDR := include/mupdf/helpers/mu-threads.h
 PKCS7_HDR := $(sort $(wildcard include/mupdf/helpers/pkcs7-*.h))
 
+DDI_SRC := $(sort $(wildcard source/ddi/*.c))
 FITZ_SRC := $(sort $(wildcard source/fitz/*.c))
 PDF_SRC := $(sort $(wildcard source/pdf/*.c))
 XPS_SRC := $(sort $(wildcard source/xps/*.c))
@@ -149,6 +152,7 @@ ifeq "$(HAVE_LIBCRYPTO)" "yes"
 PKCS7_SRC += $(wildcard source/helpers/pkcs7/pkcs7-openssl.c)
 endif
 
+DDI_SRC_HDR := $(wildcard source/ddi/*.h)
 FITZ_SRC_HDR := $(wildcard source/fitz/*.h)
 PDF_SRC_HDR := $(wildcard source/pdf/*.h) $(OUT)/generated/pdf-name-table.h
 XPS_SRC_HDR := $(wildcard source/xps/*.h)
@@ -156,6 +160,7 @@ SVG_SRC_HDR := $(wildcard source/svg/*.h)
 HTML_SRC_HDR := $(wildcard source/html/*.h)
 GPRF_SRC_HDR := $(wildcard source/gprf/*.h)
 
+DDI_OBJ := $(DDI_SRC:%.c=$(OUT)/%.o)
 FITZ_OBJ := $(FITZ_SRC:%.c=$(OUT)/%.o)
 PDF_OBJ := $(PDF_SRC:%.c=$(OUT)/%.o)
 XPS_OBJ := $(XPS_SRC:%.c=$(OUT)/%.o)
@@ -167,6 +172,7 @@ THREAD_OBJ := $(THREAD_SRC:%.c=$(OUT)/%.o)
 PKCS7_OBJ := $(PKCS7_SRC:%.c=$(OUT)/%.o)
 SIGNATURE_OBJ := $(OUT)/platform/x11/pdfapp.o $(OUT)/source/tools/pdfsign.o
 
+$(DDI_OBJ) : $(DDI_HDR) $(DDI_SRC_HDR)
 $(FITZ_OBJ) : $(FITZ_HDR) $(FITZ_SRC_HDR)
 $(PDF_OBJ) : $(FITZ_HDR) $(PDF_HDR) $(PDF_SRC_HDR)
 $(PDF_OBJ) : $(FITZ_SRC_HDR) # ugh, ugly hack for fitz-imp.h + colorspace-imp.h
@@ -305,6 +311,7 @@ $(OUT)/scripts/cmapdump.o : \
 	source/fitz/ftoa.c \
 	source/fitz/printf.c \
 	source/fitz/time.c \
+	source/ddi/ddi.c \
 	source/pdf/pdf-lex.c \
 	source/pdf/pdf-cmap.c \
 	source/pdf/pdf-cmap-parse.c \
@@ -334,6 +341,7 @@ THREAD_LIB = $(OUT)/libmuthreads.a
 PKCS7_LIB = $(OUT)/libmupkcs7.a
 
 MUPDF_OBJ := \
+	$(DDI_OBJ) \
 	$(FITZ_OBJ) \
 	$(PDF_OBJ) \
 	$(CMAP_OBJ) \
