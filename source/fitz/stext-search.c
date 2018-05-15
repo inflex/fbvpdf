@@ -1,8 +1,10 @@
 #include "mupdf/fitz.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
+#include <ctype.h>
 
 int fz_stext_char_count(fz_context *ctx, fz_stext_page *page)
 {
@@ -162,6 +164,7 @@ static int find_closest_in_page(fz_stext_page *page, fz_point p)
 				closest_idx = idx;
 			}
 			idx += line_length(line);
+//PLD			printf("closest in line: length: %d\n", line_length(line));
 		}
 	}
 
@@ -182,18 +185,26 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 {
 	fz_stext_block *block;
 	fz_stext_line *line;
-	fz_stext_char *ch;
-	int idx, start, end;
+	fz_stext_char *chw, *chwlws;
+	fz_stext_char *ch, *tc;
+	int idx, start, end, lsi;
 	int inside;
+	int word_mode = 0;
+	int were_done = 0;
 
 	start = find_closest_in_page(page, a);
 	end = find_closest_in_page(page, b);
+//	fprintf(stderr,"start: %d, end: %d\n", start, end);
 
-	if (start > end)
+	if (start > end) {
 		idx = start, start = end, end = idx;
+	}
 
-	if (start == end)
-		return;
+	if (start == end) {
+		word_mode = 1;
+		end++;
+//		fprintf(stderr,"Word mode selected\n");
+	}
 
 	inside = 0;
 	idx = 0;
@@ -203,19 +214,76 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 			continue;
 		for (line = block->u.t.first_line; line; line = line->next)
 		{
+			lsi = idx;
 			for (ch = line->first_char; ch; ch = ch->next)
 			{
-				if (!inside)
-					if (idx == start)
+				if (!inside) {
+					if (idx == start) {
 						inside = 1;
-				if (inside)
+						if (word_mode) {
+							float size_to_match = ch->size;
+							chwlws = NULL;
+//							fprintf(stderr,"Hit at IDX=%d\n",idx);
+							/* find the START of our word */
+							idx = lsi;
+							chwlws = NULL;
+							for (chw = line->first_char; chw; chw = chw->next) {
+
+								if (isblank(chw->c)||(chw->size != size_to_match)) {
+//									fprintf(stderr,"break at %d\n",idx);
+									chwlws = chw;
+								}
+
+								if (idx == start) {
+									if (chwlws == NULL) chw = line->first_char;
+									else chw = chwlws->next;
+//									fprintf(stderr,"Found character match location, now winding back to read word (startchar='%d'\n",chw->c);
+									while (chw && !isblank(chw->c))  {
+										cb->on_char(ctx, cb->arg, line, chw);
+//										fprintf(stderr,"%c.", chw->c);
+										chw = chw->next; 
+									}
+									return;
+									were_done = 1;
+//									fprintf(stderr,"\nALL DONE\n");
+									break;
+								}
+								idx++;
+							}
+//							fprintf(stderr,"\n");
+							return;
+							idx = end;
+							//break;
+						}
+					}
+				}
+
+				if (inside) {
 					cb->on_char(ctx, cb->arg, line, ch);
-				if (++idx == end)
-					return;
-			}
-			if (inside)
-				cb->on_line(ctx, cb->arg, line);
+//					fprintf(stderr,"[%c]",ch->c);
+				}
+
+//				fprintf(stderr,"%d ",idx);
+				if (++idx == end) return;
+
+				if (were_done) break;
+			} // for ch in line
+
+//			if ((word_mode)&&(inside==1)) break;
+				if (were_done) break;
+			if (inside) cb->on_line(ctx, cb->arg, line);
 		}
+
+		/*
+		if ((word_mode)&&(inside==1)) {
+			for (ch = line->first_char; ch; ch = ch->next) {
+				fprintf(stderr,".");
+				cb->on_line(ctx, cb->arg, line);
+			}
+		}
+		*/
+
+				if (were_done) break;
 	}
 }
 
