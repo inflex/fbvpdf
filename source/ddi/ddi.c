@@ -53,16 +53,13 @@ int DDI_dispatch( struct ddi_s *ddi, const char *request ) {
 	 * temporary file first, then rename it, which is an 
 	 * atomic operation
 	 */
-	fprintf(stderr,"DDI: opening '%s' for writing '%s' to, then renaming to '%s' ", fnt, request, fn );
 	fo = fopen(fnt,"w");
 	if (fo) {
 		fprintf(fo,"%s", request );
 		fclose(fo);
 		rename(fnt, fn);
-		fprintf(stderr,"success\n");
 	} else {
 		if (ddi->debug) fprintf(stderr,"%s:%d: Error trying to open '%s' (%s)\n", __FILE__, __LINE__, fnt, strerror(errno));
-		fprintf(stderr,"fail.\n");
 		return 1;
 	}
 

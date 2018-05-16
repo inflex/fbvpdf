@@ -724,7 +724,6 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 #endif
 			ui_set_clipboard(s);
 			DDI_dispatch( &ddi, s );
-			fprintf(stderr,"Clipboard being set to '%s'\n", s);
 			fz_free(ctx, s);
 			glutPostRedisplay();
 		}
@@ -1336,7 +1335,6 @@ int ddi_get_search(char *buf, size_t size) {
 #define PRIOR_INDEXING
 #ifdef PRIOR_INDEXING
 			prior_inpage_index++; // 
-//			fprintf(stderr,"Index = %d\n", prior_inpage_index);
 #else
 			prior_page++;
 #endif
@@ -1344,7 +1342,6 @@ int ddi_get_search(char *buf, size_t size) {
 			/*
 			 * If we're starting a new search 
 			 */
-//			fprintf(stderr,"New search '%s'\n",buf);
 			prior_page = 0;
 			prior_inpage_index = 0;
 			snprintf(prior_search, sizeof(prior_search), "%s", buf);
@@ -1372,40 +1369,6 @@ static void run_main_loop(void)
 
 	ui_begin();
 
-
-	/*
-	if (ddi_get_search( sn, sizeof(sn))) {
-		int start_time = glutGet(GLUT_ELAPSED_TIME);
-		search_page = prior_page;
-		search_active = 1;
-
-		while (search_active) 
-		{
-			search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
-
-			if (search_hit_count) {
-				fprintf(stderr,"hitcount:%d\n",search_hit_count);
-				search_active = 0;
-				search_hit_page = search_page;
-				jump_to_page(search_hit_page);
-				prior_page = search_hit_page;
-				break;
-
-			} else {
-				search_page += search_dir;
-				if (search_page < 0 || search_page == fz_count_pages(ctx, doc)) {
-					search_active = 0;
-					prior_page = 0;
-					break;
-				}
-			}
-		}
-
-//		if (search_active) glutPostRedisplay();
-	}
-	*/
-
-/***** END PLD CODE ******/
 
 	if (search_active)
 	{
@@ -1602,27 +1565,14 @@ void BoardView::Zoom(float osd_x, float osd_y, float zoom) {
 static void on_wheel(int wheel, int direction, int x, int y)
 {
 	float pct;
-	//float	pct2, oz;
-
 
 	pct = 1.1;
-//	pct2 = pct;
-
-//	oz = currentzoom / 100;
-
-
-//	fprintf(stderr,"wheel: (%d,%d) [%d, %d]-=> ", x, y, canvas_w, canvas_h );
 	if (direction > 0) {
 		currentzoom *= pct;
-//		scroll_x += (pct2 *(canvas_w/2) -((x -(canvas_w/2)) *pct2)) *oz;
-//		scroll_y += (pct2 *(canvas_h/2) -((y -(canvas_h/2)) *pct2)) *oz ;
 	} else  {
 		currentzoom /= pct;
-//		scroll_x -= (pct2 *(canvas_w/2) -((x -(canvas_w/2)) *pct2)) *oz;
-//		scroll_y -= (pct2 *(canvas_h/2) -((y -(canvas_h/2)) *pct2)) *oz;
 	}
 
-//	fprintf(stderr,"%d %d\n", scroll_x, scroll_y);
 	if (currentzoom < 18) currentzoom = 18;
 	if (currentzoom > 800) currentzoom = 800;
 
@@ -1650,8 +1600,6 @@ static void on_motion(int x, int y)
 {
 	ui.x = x;
 	ui.y = y;
-
-//	fprintf(stderr,"scroll (%d,%d)\n", scroll_x, scroll_y );
 
 	if (ui.down) {
 		if (!am_dragging) {
@@ -1726,16 +1674,12 @@ static void ddi_search_check( void ) {
 
 
 	{
-//		int start_time = glutGet(GLUT_ELAPSED_TIME);
 		search_page = prior_page;
 		search_active = 1;
-
-//		fprintf(stderr,"START: priorpage=%d index=%d\n", prior_page, prior_inpage_index);
 
 		while (search_active) 
 		{
 			search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
-//			fprintf(stderr,"hitcount:%d hitpage=%d priorpage=%d index=%d\n",search_hit_count, search_page, prior_page, prior_inpage_index);
 
 			if (search_hit_count) {
 
@@ -1758,7 +1702,6 @@ static void ddi_search_check( void ) {
 
 					bb = search_hit_bbox[prior_inpage_index];
 
-	//				fprintf(stderr,"box:%d[%f,%f - %f,%f]\n",prior_inpage_index, bb.x0, bb.y0, bb.x1, bb.y1);
 					jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
 				}
 
@@ -1773,7 +1716,6 @@ static void ddi_search_check( void ) {
 					prior_page = search_hit_page;
 					
 					if (prior_inpage_index  >= search_hit_count -1) {
-						//fprintf(stderr,"End of this page's hits reached. Move to next page\n");
 						prior_inpage_index=-1; // This gets incremented when we read in the search string
 						prior_page = search_hit_page+search_dir;
 
@@ -1782,7 +1724,6 @@ static void ddi_search_check( void ) {
 						 * search options
 						 */
 						if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
-						//	fprintf(stderr,"Reached end of document, looping around next time\n");
 							search_active = 0;
 							prior_page = 0;
 							prior_inpage_index = -1; // because when we loop back around it's different to next page only.
@@ -1841,7 +1782,6 @@ static void ddi_search_check( void ) {
 }
 
 static void on_timer( int value ) {
-//	fprintf(stderr,",");
 	ddi_search_check();
 	glutTimerFunc( 100, on_timer, 1 );
 }
