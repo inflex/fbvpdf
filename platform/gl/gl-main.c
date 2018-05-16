@@ -83,15 +83,15 @@ const char *ogl_error_string(GLenum code)
 #define CASE(E) case E: return #E; break
 	switch (code)
 	{
-	/* glGetError */
-	CASE(GL_NO_ERROR);
-	CASE(GL_INVALID_ENUM);
-	CASE(GL_INVALID_VALUE);
-	CASE(GL_INVALID_OPERATION);
-	CASE(GL_OUT_OF_MEMORY);
-	CASE(GL_STACK_UNDERFLOW);
-	CASE(GL_STACK_OVERFLOW);
-	default: return "(unknown)";
+		/* glGetError */
+		CASE(GL_NO_ERROR);
+		CASE(GL_INVALID_ENUM);
+		CASE(GL_INVALID_VALUE);
+		CASE(GL_INVALID_OPERATION);
+		CASE(GL_OUT_OF_MEMORY);
+		CASE(GL_STACK_UNDERFLOW);
+		CASE(GL_STACK_OVERFLOW);
+		default: return "(unknown)";
 	}
 #undef CASE
 }
@@ -989,108 +989,108 @@ static void do_app(void)
 	{
 		switch (ui.key)
 		{
-		case KEY_ESCAPE: clear_search(); break;
-		case KEY_F1: showhelp = !showhelp; break;
-		case 'o': toggle_outline(); break;
-		case 'L': showlinks = !showlinks; break;
-		case 'i': showinfo = !showinfo; break;
-		case 'r': reload(); break;
-		case 'q': quit(); break;
+			case KEY_ESCAPE: clear_search(); break;
+			case KEY_F1: showhelp = !showhelp; break;
+			case 'o': toggle_outline(); break;
+			case 'L': showlinks = !showlinks; break;
+			case 'i': showinfo = !showinfo; break;
+			case 'r': reload(); break;
+			case 'q': quit(); break;
 
-		case 'I': currentinvert = !currentinvert; break;
-		case 'f': toggle_fullscreen(); break;
-		case 'w': shrinkwrap(); break;
-		case 'W': auto_zoom_w(); break;
-		case 'H': auto_zoom_h(); break;
-		case 'Z': auto_zoom(); break;
-		case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-		case '+': currentzoom = zoom_in(currentzoom); break;
-		case '-': currentzoom = zoom_out(currentzoom); break;
-		case '[': currentrotate += 90; break;
-		case ']': currentrotate -= 90; break;
-		case 'k': case KEY_UP: scroll_y -= 10; break;
-		case 'j': case KEY_DOWN: scroll_y += 10; break;
-		case 'h': case KEY_LEFT: scroll_x -= 10; break;
-		case 'l': case KEY_RIGHT: scroll_x += 10; break;
+			case 'I': currentinvert = !currentinvert; break;
+			case 'f': toggle_fullscreen(); break;
+			case 'w': shrinkwrap(); break;
+			case 'W': auto_zoom_w(); break;
+			case 'H': auto_zoom_h(); break;
+			case 'Z': auto_zoom(); break;
+			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
+			case '+': currentzoom = zoom_in(currentzoom); break;
+			case '-': currentzoom = zoom_out(currentzoom); break;
+			case '[': currentrotate += 90; break;
+			case ']': currentrotate -= 90; break;
+			case 'k': case KEY_UP: scroll_y -= 10; break;
+			case 'j': case KEY_DOWN: scroll_y += 10; break;
+			case 'h': case KEY_LEFT: scroll_x -= 10; break;
+			case 'l': case KEY_RIGHT: scroll_x += 10; break;
 
-		case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
-		case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
-		case ',': case KEY_PAGE_UP: currentpage -= fz_maxi(number, 1); break;
-		case '.': case KEY_PAGE_DOWN: currentpage += fz_maxi(number, 1); break;
-		case '<': currentpage -= 10 * fz_maxi(number, 1); break;
-		case '>': currentpage += 10 * fz_maxi(number, 1); break;
-		case 'g': jump_to_page(number - 1); break;
-		case 'G': jump_to_page(fz_count_pages(ctx, doc) - 1); break;
+			case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
+			case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
+			case ',': case KEY_PAGE_UP: currentpage -= fz_maxi(number, 1); break;
+			case '.': case KEY_PAGE_DOWN: currentpage += fz_maxi(number, 1); break;
+			case '<': currentpage -= 10 * fz_maxi(number, 1); break;
+			case '>': currentpage += 10 * fz_maxi(number, 1); break;
+			case 'g': jump_to_page(number - 1); break;
+			case 'G': jump_to_page(fz_count_pages(ctx, doc) - 1); break;
 
-		case 'm':
-			if (number == 0)
-				push_history();
-			else if (number > 0 && number < nelem(marks))
-				marks[number] = save_mark();
-			break;
-		case 't':
-			if (number == 0)
-			{
-				if (history_count > 0)
-					pop_history();
-			}
-			else if (number > 0 && number < nelem(marks))
-			{
-				struct mark mark = marks[number];
-				restore_mark(mark);
-				jump_to_page(mark.page);
-			}
-			break;
-		case 'T':
-			if (number == 0)
-			{
-				if (future_count > 0)
-					pop_future();
-			}
-			break;
+			case 'm':
+						 if (number == 0)
+							 push_history();
+						 else if (number > 0 && number < nelem(marks))
+							 marks[number] = save_mark();
+						 break;
+			case 't':
+						 if (number == 0)
+						 {
+							 if (history_count > 0)
+								 pop_history();
+						 }
+						 else if (number > 0 && number < nelem(marks))
+						 {
+							 struct mark mark = marks[number];
+							 restore_mark(mark);
+							 jump_to_page(mark.page);
+						 }
+						 break;
+			case 'T':
+						 if (number == 0)
+						 {
+							 if (future_count > 0)
+								 pop_future();
+						 }
+						 break;
 
-		case '/':
-			clear_search();
-			search_dir = 1;
-			showsearch = 1;
-			search_input.p = search_input.text;
-			search_input.q = search_input.end;
-			break;
-		case '?':
-			clear_search();
-			search_dir = -1;
-			showsearch = 1;
-			search_input.p = search_input.text;
-			search_input.q = search_input.end;
-			break;
-		case 'N':
-			search_dir = -1;
-			if (search_hit_page == currentpage)
-				search_page = currentpage + search_dir;
-			else
-				search_page = currentpage;
-			if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
-			{
-				search_hit_page = -1;
-				if (search_needle)
-					search_active = 1;
-			}
-			glutPostRedisplay();
-			break;
-		case 'n':
-			search_dir = 1;
-			if (search_hit_page == currentpage)
-				search_page = currentpage + search_dir;
-			else
-				search_page = currentpage;
-			if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
-			{
-				search_hit_page = -1;
-				if (search_needle)
-					search_active = 1;
-			}
-			glutPostRedisplay();
-			break;
+			case '/':
+						 clear_search();
+						 search_dir = 1;
+						 showsearch = 1;
+						 search_input.p = search_input.text;
+						 search_input.q = search_input.end;
+						 break;
+			case '?':
+						 clear_search();
+						 search_dir = -1;
+						 showsearch = 1;
+						 search_input.p = search_input.text;
+						 search_input.q = search_input.end;
+						 break;
+			case 'N':
+						 search_dir = -1;
+						 if (search_hit_page == currentpage)
+							 search_page = currentpage + search_dir;
+						 else
+							 search_page = currentpage;
+						 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
+						 {
+							 search_hit_page = -1;
+							 if (search_needle)
+								 search_active = 1;
+						 }
+						 glutPostRedisplay();
+						 break;
+			case 'n':
+						 search_dir = 1;
+						 if (search_hit_page == currentpage)
+							 search_page = currentpage + search_dir;
+						 else
+							 search_page = currentpage;
+						 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
+						 {
+							 search_hit_page = -1;
+							 if (search_needle)
+								 search_active = 1;
+						 }
+						 glutPostRedisplay();
+						 break;
 		}
 
 		if (ui.key >= '0' && ui.key <= '9')
@@ -1317,7 +1317,7 @@ static void do_canvas(void)
 	}
 }
 
-int ddi_get_search(char *buf, size_t size) {
+int ddi_get(char *buf, size_t size) {
 	int result = 0;
 
 	if (!ddiprefix) return 0;
@@ -1501,30 +1501,30 @@ static void on_special(int key, int x, int y)
 
 	switch (key)
 	{
-	case GLUT_KEY_INSERT: ui.key = KEY_INSERT; break;
+		case GLUT_KEY_INSERT: ui.key = KEY_INSERT; break;
 #ifdef GLUT_KEY_DELETE
-	case GLUT_KEY_DELETE: ui.key = KEY_DELETE; break;
+		case GLUT_KEY_DELETE: ui.key = KEY_DELETE; break;
 #endif
-	case GLUT_KEY_RIGHT: ui.key = KEY_RIGHT; break;
-	case GLUT_KEY_LEFT: ui.key = KEY_LEFT; break;
-	case GLUT_KEY_DOWN: ui.key = KEY_DOWN; break;
-	case GLUT_KEY_UP: ui.key = KEY_UP; break;
-	case GLUT_KEY_PAGE_UP: ui.key = KEY_PAGE_UP; break;
-	case GLUT_KEY_PAGE_DOWN: ui.key = KEY_PAGE_DOWN; break;
-	case GLUT_KEY_HOME: ui.key = KEY_HOME; break;
-	case GLUT_KEY_END: ui.key = KEY_END; break;
-	case GLUT_KEY_F1: ui.key = KEY_F1; break;
-	case GLUT_KEY_F2: ui.key = KEY_F2; break;
-	case GLUT_KEY_F3: ui.key = KEY_F3; break;
-	case GLUT_KEY_F4: ui.key = KEY_F4; break;
-	case GLUT_KEY_F5: ui.key = KEY_F5; break;
-	case GLUT_KEY_F6: ui.key = KEY_F6; break;
-	case GLUT_KEY_F7: ui.key = KEY_F7; break;
-	case GLUT_KEY_F8: ui.key = KEY_F8; break;
-	case GLUT_KEY_F9: ui.key = KEY_F9; break;
-	case GLUT_KEY_F10: ui.key = KEY_F10; break;
-	case GLUT_KEY_F11: ui.key = KEY_F11; break;
-	case GLUT_KEY_F12: ui.key = KEY_F12; break;
+		case GLUT_KEY_RIGHT: ui.key = KEY_RIGHT; break;
+		case GLUT_KEY_LEFT: ui.key = KEY_LEFT; break;
+		case GLUT_KEY_DOWN: ui.key = KEY_DOWN; break;
+		case GLUT_KEY_UP: ui.key = KEY_UP; break;
+		case GLUT_KEY_PAGE_UP: ui.key = KEY_PAGE_UP; break;
+		case GLUT_KEY_PAGE_DOWN: ui.key = KEY_PAGE_DOWN; break;
+		case GLUT_KEY_HOME: ui.key = KEY_HOME; break;
+		case GLUT_KEY_END: ui.key = KEY_END; break;
+		case GLUT_KEY_F1: ui.key = KEY_F1; break;
+		case GLUT_KEY_F2: ui.key = KEY_F2; break;
+		case GLUT_KEY_F3: ui.key = KEY_F3; break;
+		case GLUT_KEY_F4: ui.key = KEY_F4; break;
+		case GLUT_KEY_F5: ui.key = KEY_F5; break;
+		case GLUT_KEY_F6: ui.key = KEY_F6; break;
+		case GLUT_KEY_F7: ui.key = KEY_F7; break;
+		case GLUT_KEY_F8: ui.key = KEY_F8; break;
+		case GLUT_KEY_F9: ui.key = KEY_F9; break;
+		case GLUT_KEY_F10: ui.key = KEY_F10; break;
+		case GLUT_KEY_F11: ui.key = KEY_F11; break;
+		case GLUT_KEY_F12: ui.key = KEY_F12; break;
 	}
 
 	if (ui.key)
@@ -1540,7 +1540,7 @@ static void on_special(int key, int x, int y)
  * Zoom from another project
  */
 /*
-void BoardView::Zoom(float osd_x, float osd_y, float zoom) {
+	void BoardView::Zoom(float osd_x, float osd_y, float zoom) {
 	ImVec2 target;
 	ImVec2 coord;
 	ImGuiIO &io = ImGui::GetIO();
@@ -1551,17 +1551,17 @@ void BoardView::Zoom(float osd_x, float osd_y, float zoom) {
 	target.y = osd_y;
 	coord    = ScreenToCoord(target.x, target.y);
 
-	// Adjust the scale of the whole view, then get the new coordinates ( as
-	// CoordToScreen utilises m_scale )
-	m_scale        = m_scale * powf(2.0f, zoom);
-	ImVec2 dtarget = CoordToScreen(coord.x, coord.y);
+// Adjust the scale of the whole view, then get the new coordinates ( as
+// CoordToScreen utilises m_scale )
+m_scale        = m_scale * powf(2.0f, zoom);
+ImVec2 dtarget = CoordToScreen(coord.x, coord.y);
 
-	ImVec2 td = ScreenToCoord(target.x - dtarget.x, target.y - dtarget.y, 0);
-	m_dx += td.x;
-	m_dy += td.y;
-	m_needsRedraw = true;
+ImVec2 td = ScreenToCoord(target.x - dtarget.x, target.y - dtarget.y, 0);
+m_dx += td.x;
+m_dy += td.y;
+m_needsRedraw = true;
 }
-***/
+ ***/
 static void on_wheel(int wheel, int direction, int x, int y)
 {
 	float pct;
@@ -1585,13 +1585,13 @@ static void on_mouse(int button, int action, int x, int y)
 	ui.y = y;
 	switch (button)
 	{
-	case GLUT_LEFT_BUTTON: ui.down = (action == GLUT_DOWN); break;
-	case GLUT_MIDDLE_BUTTON: ui.middle = (action == GLUT_DOWN); break;
-	case GLUT_RIGHT_BUTTON: ui.right = (action == GLUT_DOWN); break;
-	case 3: if (action == GLUT_DOWN) on_wheel(0, 1, x, y); break;
-	case 4: if (action == GLUT_DOWN) on_wheel(0, -1, x, y); break;
-	case 5: if (action == GLUT_DOWN) on_wheel(1, 1, x, y); break;
-	case 6: if (action == GLUT_DOWN) on_wheel(1, -1, x, y); break;
+		case GLUT_LEFT_BUTTON: ui.down = (action == GLUT_DOWN); break;
+		case GLUT_MIDDLE_BUTTON: ui.middle = (action == GLUT_DOWN); break;
+		case GLUT_RIGHT_BUTTON: ui.right = (action == GLUT_DOWN); break;
+		case 3: if (action == GLUT_DOWN) on_wheel(0, 1, x, y); break;
+		case 4: if (action == GLUT_DOWN) on_wheel(0, -1, x, y); break;
+		case 5: if (action == GLUT_DOWN) on_wheel(1, 1, x, y); break;
+		case 6: if (action == GLUT_DOWN) on_wheel(1, -1, x, y); break;
 	}
 	run_main_loop();
 }
@@ -1652,137 +1652,175 @@ static void on_warning(const char *fmt, va_list ap)
 	fprintf(stderr, "\n");
 }
 
-static void ddi_search_check( void ) {
+static void ddi_check( void ) {
 	char sn[1024];
 	int use_indexing = 1;
 	int last_search_was_empty = 0;
 
-	if (ddi_get_search( sn, sizeof(sn))) {
+	if (ddi_get( sn, sizeof(sn))) {
 
-	glViewport(0, 0, window_w, window_h);
-	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+		if (strncmp(sn, "!quit:", strlen("!quit:"))==0) {
+			quit();
+		}
 
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0, window_w, window_h, 0, -1, 1);
+		if (strncmp(sn, "!load:", strlen("!load:"))==0) {
+			/*
+			 * load a file, not searching.
+			 */
+			snprintf(filename,sizeof(filename),"%s", sn +strlen("!load:"));
+			//			fprintf(stderr,"filename set to '%s'\n",filename);
+			title = strrchr(filename, '/');
+			if (!title)
+				title = strrchr(filename, '\\');
+			if (title)
+				++title;
+			else
+				title = filename;
 
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+			ctx = fz_new_context(NULL, NULL, 0);
+			fz_register_document_handlers(ctx);
 
-	ui_begin();
+			if (layout_css)
+			{
+				fz_buffer *buf = fz_read_file(ctx, layout_css);
+				fz_set_user_css(ctx, fz_string_from_buffer(ctx, buf));
+				fz_drop_buffer(ctx, buf);
+			}
+
+			fz_set_use_document_css(ctx, layout_use_doc_css);
+
+			reload();
+
+		} else {
+
+			/*
+			 * searching
+			 */
+			glViewport(0, 0, window_w, window_h);
+			glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			glMatrixMode(GL_PROJECTION);
+			glLoadIdentity();
+			glOrtho(0, window_w, window_h, 0, -1, 1);
+
+			glMatrixMode(GL_MODELVIEW);
+			glLoadIdentity();
+
+			ui_begin();
 
 
-	{
-		search_page = prior_page;
-		search_active = 1;
+			{
+				search_page = prior_page;
+				search_active = 1;
 
-		while (search_active) 
-		{
-			search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
-
-			if (search_hit_count) {
-
-				if (last_search_was_empty) {
-					prior_inpage_index = 0;
-					last_search_was_empty = 0;
-				}
-
-				search_active = 0;
-				search_hit_page = search_page;
-			
+				while (search_active) 
 				{
-					fz_point p;
-					fz_rect bb;
+					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
 
-					p.x = (canvas_w/2) *72 / (currentzoom );
-					p.y = (canvas_h/2) *72 / (currentzoom );
+					if (search_hit_count) {
 
-					if (!use_indexing) prior_inpage_index = 0;
+						if (last_search_was_empty) {
+							prior_inpage_index = 0;
+							last_search_was_empty = 0;
+						}
 
-					bb = search_hit_bbox[prior_inpage_index];
+						search_active = 0;
+						search_hit_page = search_page;
 
-					jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
-				}
+						{
+							fz_point p;
+							fz_rect bb;
+
+							p.x = (canvas_w/2) *72 / (currentzoom );
+							p.y = (canvas_h/2) *72 / (currentzoom );
+
+							if (!use_indexing) prior_inpage_index = 0;
+
+							bb = search_hit_bbox[prior_inpage_index];
+
+							jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
+						}
 
 
-				if (use_indexing) {
-					/*
-					 * when we use indexing method, we increment
-					 * the page only if the index exceeds the current
-					 * page hitcount
-					 */
+						if (use_indexing) {
+							/*
+							 * when we use indexing method, we increment
+							 * the page only if the index exceeds the current
+							 * page hitcount
+							 */
 
-					prior_page = search_hit_page;
-					
-					if (prior_inpage_index  >= search_hit_count -1) {
-						prior_inpage_index=-1; // This gets incremented when we read in the search string
-						prior_page = search_hit_page+search_dir;
+							prior_page = search_hit_page;
+
+							if (prior_inpage_index  >= search_hit_count -1) {
+								prior_inpage_index=-1; // This gets incremented when we read in the search string
+								prior_page = search_hit_page+search_dir;
+
+								/*
+								 * Reset everything if we've arrived at the end of our
+								 * search options
+								 */
+								if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
+									search_active = 0;
+									prior_page = 0;
+									prior_inpage_index = -1; // because when we loop back around it's different to next page only.
+								}
+							} 
+
+						} else {
+
+							/*
+							 * If we're using per page jumping
+							 */
+							prior_page = search_hit_page;
+
+							if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
+								search_active = 0;
+								prior_page = 0;
+							}
+						} 
+						//break; // why are we breaking?
+
+					} else {
 
 						/*
-						 * Reset everything if we've arrived at the end of our
-						 * search options
+						 * No search hits, let's try another page
 						 */
-						if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
+						search_page += search_dir;
+						last_search_was_empty = 1;
+
+						if (search_page < 0 || search_page == fz_count_pages(ctx, doc)) {
 							search_active = 0;
 							prior_page = 0;
-							prior_inpage_index = -1; // because when we loop back around it's different to next page only.
+							prior_inpage_index = -1;
+							break;
 						}
-					} 
+					} // no search hits
 
-				} else {
+				} // while search is active
 
-					/*
-					 * If we're using per page jumping
-					 */
-					prior_page = search_hit_page;
+			} // block braces only
 
-					if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
-							search_active = 0;
-							prior_page = 0;
-					}
-				} 
-				//break; // why are we breaking?
+			glutPostRedisplay();
 
-			} else {
+			do_app();
 
-				/*
-				 * No search hits, let's try another page
-				 */
-				search_page += search_dir;
-				last_search_was_empty = 1;
-
-				if (search_page < 0 || search_page == fz_count_pages(ctx, doc)) {
-					search_active = 0;
-					prior_page = 0;
-					prior_inpage_index = -1;
-					break;
-				}
-			} // no search hits
-
-		} // while search is active
-
-	} // block braces only
-
-	glutPostRedisplay();
-
-	do_app();
-
-	if (doquit)
-	{
-		glutDestroyWindow(window);
+			if (doquit)
+			{
+				glutDestroyWindow(window);
 #ifdef __APPLE__
-		exit(1); /* GLUT on MacOS keeps running even with no windows */
+				exit(1); /* GLUT on MacOS keeps running even with no windows */
 #endif
-		return;
-	}
-	}
+				return;
+			}
+		}
 
+	}
 
 }
 
 static void on_timer( int value ) {
-	ddi_search_check();
+	ddi_check();
 	glutTimerFunc( 100, on_timer, 1 );
 }
 
@@ -1831,7 +1869,7 @@ static void usage(const char *argv0)
 	fprintf(stderr, "\t-X\tdisable document styles for EPUB layout\n");
 	exit(1);
 }
-  //do other stuff.
+//do other stuff.
 #ifdef _MSC_VER
 int main_utf8(int argc, char **argv)
 #else
@@ -1845,16 +1883,16 @@ int main(int argc, char **argv)
 	{
 		switch (c)
 		{
-		default: usage(argv[0]); break;
-		case 'p': password = fz_optarg; break;
-		case 'r': currentzoom = fz_atof(fz_optarg); break;
-		case 'I': currentinvert = !currentinvert; break;
-		case 'W': layout_w = fz_atof(fz_optarg); break;
-		case 'H': layout_h = fz_atof(fz_optarg); break;
-		case 'S': layout_em = fz_atof(fz_optarg); break;
-		case 'U': layout_css = fz_optarg; break;
-		case 'X': layout_use_doc_css = 0; break;
-		case 'D': ddiprefix = fz_optarg; break;
+			default: usage(argv[0]); break;
+			case 'p': password = fz_optarg; break;
+			case 'r': currentzoom = fz_atof(fz_optarg); break;
+			case 'I': currentinvert = !currentinvert; break;
+			case 'W': layout_w = fz_atof(fz_optarg); break;
+			case 'H': layout_h = fz_atof(fz_optarg); break;
+			case 'S': layout_em = fz_atof(fz_optarg); break;
+			case 'U': layout_css = fz_optarg; break;
+			case 'X': layout_use_doc_css = 0; break;
+			case 'D': ddiprefix = fz_optarg; break;
 		}
 	}
 
@@ -1925,7 +1963,7 @@ int main(int argc, char **argv)
 	window = glutCreateWindow(title);
 
 	glutTimerFunc(100,on_timer,1);
-//	glutIdleFunc(on_idle);
+	//	glutIdleFunc(on_idle);
 	glutReshapeFunc(on_reshape);
 	glutDisplayFunc(on_display);
 #if defined(FREEGLUT) && (GLUT_API_VERSION >= 6)
