@@ -1948,7 +1948,6 @@ int main(int argc, char **argv)
 	DDI_init(&ddi);
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
-	fprintf(stderr,"DDI Prefix set to: '%s'\n", ddiprefix);
 
 	/* Init MuPDF */
 
