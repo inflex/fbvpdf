@@ -153,6 +153,7 @@ static int zoom_out(int oldres)
 
 static char filename[2048];
 static char *password = "";
+static int raise_on_search = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
 static int prior_page = 1;
@@ -195,6 +196,9 @@ static float oldrotate = 0, currentrotate = 0;
 static fz_matrix page_ctm, page_inv_ctm;
 static int loaded = 0;
 static int window = 0;
+#ifdef __WIN32__
+HWND hwnd;
+#endif
 
 static int isfullscreen = 0;
 static int showoutline = 0;
@@ -1663,6 +1667,14 @@ static void ddi_check( void ) {
 			quit();
 		}
 
+		if (strncmp(sn, "!raise:", strlen("!raise:"))==0) {
+			raise_on_search = 1;
+		}
+
+		if (strncmp(sn, "!noraise:", strlen("!noraise:"))==0) {
+			raise_on_search = 0;
+		}
+
 		if (strncmp(sn, "!load:", strlen("!load:"))==0) {
 			/*
 			 * load a file, not searching.
@@ -1713,6 +1725,12 @@ static void ddi_check( void ) {
 			{
 				search_page = prior_page;
 				search_active = 1;
+
+				if (raise_on_search == 1) {
+#ifdef __WIN32__
+					BringWindowToTop( hwnd );
+#endif
+				}
 
 				while (search_active) 
 				{
@@ -1961,9 +1979,10 @@ int main(int argc, char **argv)
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
 	glutInitWindowSize(page_tex.w, page_tex.h);
 	window = glutCreateWindow(title);
-
+#ifdef __WIN32__
+	hwnd = FindWindow( "GLUT", title );
+#endif
 	glutTimerFunc(100,on_timer,1);
-	//	glutIdleFunc(on_idle);
 	glutReshapeFunc(on_reshape);
 	glutDisplayFunc(on_display);
 #if defined(FREEGLUT) && (GLUT_API_VERSION >= 6)
