@@ -751,7 +751,11 @@ static void do_search_hits(int xofs, int yofs)
 
 		fz_transform_rect(&r, &page_ctm);
 
-		glColor4f(1, 0, 0, 0.4f);
+		if (i == prior_inpage_index) {
+			glColor4f(1, 0, 0, 0.4f);
+		} else {
+			glColor4f(1, 0, 0, 0.1f);
+		}
 		glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
 	}
 
@@ -1797,7 +1801,7 @@ static void ddi_check( void ) {
 
 							prior_page = search_hit_page;
 
-							if (prior_inpage_index  >= search_hit_count -1) {
+							if (prior_inpage_index  > search_hit_count -1) {
 								prior_inpage_index=-1; // This gets incremented when we read in the search string
 								prior_page = search_hit_page+search_dir;
 
@@ -1847,6 +1851,7 @@ static void ddi_check( void ) {
 			} // block braces only
 
 			glutPostRedisplay();
+
 
 			do_app();
 
