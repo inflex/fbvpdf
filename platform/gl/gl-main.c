@@ -2032,7 +2032,11 @@ int main(int argc, char **argv)
 	glutMouseFunc(on_mouse);
 	glutMotionFunc(on_motion);
 	glutPassiveMotionFunc(on_motion);
+#ifdef __WIN32__
+	glutMouseWheelFunc(on_wheel);
+#else
 	glutMouseWheelFunc(on_mouse);
+#endif
 
 	has_ARB_texture_non_power_of_two = glutExtensionSupported("GL_ARB_texture_non_power_of_two");
 	if (!has_ARB_texture_non_power_of_two)
