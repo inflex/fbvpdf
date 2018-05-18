@@ -20,17 +20,22 @@ void DDI_set_prefix( struct ddi_s *ddi, char *prefix ) {
 
 void DDI_init( struct ddi_s *ddi ) {
 	ddi->debug = 0;
+	ddi->resend = 0;
 	ddi->prefix[0] = 0;
 	ddi->mode = DDI_MODE_NONE;
+	ddi->last_dispatch[0] = '\0';
+	ddi->last_pickup[0] = '\0';
 }
 
 void DDI_set_mode( struct ddi_s *ddi, int mode ) {
 	ddi->mode = mode;
 }
 
+
 int DDI_dispatch( struct ddi_s *ddi, const char *request ) {
 	FILE *fo;
 	char *fn, *fnt;
+
 
 	if (ddi->mode == DDI_MODE_NONE) return 1;
 
@@ -63,9 +68,16 @@ int DDI_dispatch( struct ddi_s *ddi, const char *request ) {
 		return 1;
 	}
 
+	if (ddi->resend == 0) snprintf(ddi->last_dispatch, sizeof(ddi->last_dispatch),"%s", request);
+	else ddi->resend = 0;
+
 	return 0;
 }
 
+int DDI_resend( struct ddi_s *ddi ){
+	ddi->resend = 1;
+	return DDI_dispatch( ddi, ddi->last_dispatch );
+}
 
 int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
 	FILE *f;
@@ -84,6 +96,7 @@ int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
 		fgets(buffer, bsize, f);
 		fclose(f);
 		remove(fn);
+		snprintf(ddi->last_pickup, sizeof(ddi->last_pickup),"%s",buffer);
 	} else {
 		if (ddi->debug) fprintf(stderr,"%s:%d: Error trying to open '%s' (%s)\n", __FILE__, __LINE__, fn, strerror(errno));
 		return 1;

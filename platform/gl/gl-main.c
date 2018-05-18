@@ -156,6 +156,10 @@ static int zoom_out(int oldres)
 #define SEARCH_STATUS_INPAGE 1
 #define SEARCH_STATUS_SEEKING 2
 
+#define DDI_SIMULATE_OPTION_NONE 0
+#define DDI_SIMULATE_OPTION_SEARCH_NEXT 1
+#define DDI_SIMULATE_OPTION_SEARCH_PREV 2
+
 static char filename[2048];
 static char *password = "";
 static int raise_on_search = 0;
@@ -163,6 +167,7 @@ static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
 static int search_current_page = 1;
 static int search_inpage_index = -1;
+static int ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 static int document_has_hits = 0;
 static int search_status = SEARCH_STATUS_NONE;
 static char am_dragging = 0;
@@ -1097,6 +1102,10 @@ static void do_app(void)
 						 glutPostRedisplay();
 						 break;
 			case 'n':
+						 if (search_current_page >= 0) {
+							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
+						 } else {
+						 
 						 search_dir = 1;
 						 if (search_hit_page == currentpage)
 							 search_page = currentpage + search_dir;
@@ -1109,6 +1118,7 @@ static void do_app(void)
 								 search_active = 1;
 						 }
 						 glutPostRedisplay();
+						 }
 						 break;
 		}
 
@@ -1686,7 +1696,13 @@ static void on_warning(const char *fmt, va_list ap)
 static void ddi_check( void ) {
 	char sn[1024];
 
-	if (ddi_get( sn, sizeof(sn))) {
+	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
+		snprintf(sn, sizeof(sn), ddi.last_pickup);
+	}
+
+	if ((ddi_get( sn, sizeof(sn)))||(ddi_simulate_option)) {
+
+		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 
 		if (strlen(sn) < 2) return;
 
