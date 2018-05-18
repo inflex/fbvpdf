@@ -1566,21 +1566,48 @@ m_dy += td.y;
 m_needsRedraw = true;
 }
  ***/
+
 static void on_wheel(int wheel, int direction, int x, int y)
 {
-	float pct;
 
-	pct = 1.1;
-	if (direction > 0) {
-		currentzoom *= pct;
-	} else  {
-		currentzoom /= pct;
+	/*
+	 * NOTE: We don't set the glutOnMouse() callback to be this
+	 * function because it's not dependable in X.  Rather instead
+	 * we use on_mouse() to determine all the button states and
+	 * call on_wheel() in a more predictable manner.
+	 */
+
+	if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
+		float pct;
+		pct = 1.1;
+		if (direction > 0) {
+			currentzoom *= pct;
+		} else  {
+			currentzoom /= pct;
+		}
+
+		if (currentzoom < 18) currentzoom = 18;
+		if (currentzoom > 800) currentzoom = 800;
+		run_main_loop();
+	} else {
+		int jump = 1;
+		if (glutGetModifiers()&GLUT_ACTIVE_SHIFT) jump=5; 
+		if (direction < 0) currentpage += jump;
+		else currentpage -= jump;
+		if (currentpage < 0) currentpage = 0;
+		if (currentpage >= fz_count_pages(ctx,doc)) {  currentpage = fz_count_pages(ctx,doc) -1; }
+		run_main_loop();
 	}
+	/*
+			
 
-	if (currentzoom < 18) currentzoom = 18;
-	if (currentzoom > 800) currentzoom = 800;
+		ui.scroll_x = wheel == 1 ? direction : 0;
+		ui.scroll_y = wheel == 0 ? direction : 0;
+		ui.scroll_x = ui.scroll_y = 0;
+	}
+	*/
 
-	run_main_loop();
+
 }
 
 static void on_mouse(int button, int action, int x, int y)
@@ -1994,7 +2021,7 @@ int main(int argc, char **argv)
 	glutMouseFunc(on_mouse);
 	glutMotionFunc(on_motion);
 	glutPassiveMotionFunc(on_motion);
-	glutMouseWheelFunc(on_wheel);
+	glutMouseWheelFunc(on_mouse);
 
 	has_ARB_texture_non_power_of_two = glutExtensionSupported("GL_ARB_texture_non_power_of_two");
 	if (!has_ARB_texture_non_power_of_two)
