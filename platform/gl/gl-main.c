@@ -3,6 +3,7 @@
 #include "mupdf/pdf.h" /* for pdf specifics and forms */
 #include "mupdf/ddi.h"
 
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -151,13 +152,19 @@ static int zoom_out(int oldres)
 #define MAXRES (zoom_list[nelem(zoom_list)-1])
 #define DEFRES 96
 
+#define SEARCH_STATUS_NONE 0
+#define SEARCH_STATUS_INPAGE 1
+#define SEARCH_STATUS_SEEKING 2
+
 static char filename[2048];
 static char *password = "";
 static int raise_on_search = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
-static int prior_page = 1;
-static int prior_inpage_index = -1;
+static int search_current_page = 1;
+static int search_inpage_index = -1;
+static int document_has_hits = 0;
+static int search_status = SEARCH_STATUS_NONE;
 static char am_dragging = 0;
 static fz_point dragging_start;
 
@@ -197,7 +204,7 @@ static fz_matrix page_ctm, page_inv_ctm;
 static int loaded = 0;
 static int window = 0;
 #ifdef __WIN32__
-HWND hwnd;
+//HWND hwnd;
 #endif
 
 static int isfullscreen = 0;
@@ -224,7 +231,7 @@ static int search_active = 0;
 static struct input search_input = { { 0 }, 0 };
 static char *search_needle = 0;
 static int search_dir = 1;
-static int search_page = -1;
+static int search_page = 0;
 static int search_hit_page = -1;
 static int search_hit_count = 0;
 static fz_rect search_hit_bbox[5000];
@@ -751,7 +758,7 @@ static void do_search_hits(int xofs, int yofs)
 
 		fz_transform_rect(&r, &page_ctm);
 
-		if (i == prior_inpage_index) {
+		if (i == search_inpage_index) {
 			glColor4f(1, 0, 0, 0.4f);
 		} else {
 			glColor4f(1, 0, 0, 0.1f);
@@ -1345,26 +1352,6 @@ int ddi_get(char *buf, size_t size) {
 
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-
-		if (strcmp(buf, prior_search)==0) {
-			/*
-			 * If we're resuming an existing search
-			 */
-#define PRIOR_INDEXING
-#ifdef PRIOR_INDEXING
-			prior_inpage_index++; // 
-#else
-			prior_page++;
-#endif
-		} else {
-			/*
-			 * If we're starting a new search 
-			 */
-			prior_page = 0;
-			prior_inpage_index = 0;
-			snprintf(prior_search, sizeof(prior_search), "%s", buf);
-		}
-
 		result = 1;
 	}  // if file opened
 
@@ -1698,10 +1685,10 @@ static void on_warning(const char *fmt, va_list ap)
 
 static void ddi_check( void ) {
 	char sn[1024];
-	int use_indexing = 1;
-	int last_search_was_empty = 0;
 
 	if (ddi_get( sn, sizeof(sn))) {
+
+		if (strlen(sn) < 2) return;
 
 		if (strncmp(sn, "!quit:", strlen("!quit:"))==0) {
 			quit();
@@ -1720,7 +1707,6 @@ static void ddi_check( void ) {
 			 * load a file, not searching.
 			 */
 			snprintf(filename,sizeof(filename),"%s", sn +strlen("!load:"));
-			//			fprintf(stderr,"filename set to '%s'\n",filename);
 			title = strrchr(filename, '/');
 			if (!title)
 				title = strrchr(filename, '\\');
@@ -1747,7 +1733,37 @@ static void ddi_check( void ) {
 
 			/*
 			 * searching
+			 *
+			 * Sending the same search string as before
+			 * will result in us moving to the next index.
+			 *
+			 * sn contains the search string.
+			 *
 			 */
+
+			if (search_page == -1) search_page = 0;
+			
+			/*
+			 * Step 1: check our input
+			 *
+			 */
+			if (strcmp(sn, prior_search)==0) {
+				/*
+				 * If we're resuming an existing search
+				 */
+//				search_inpage_index++; 
+
+			} else {
+				/*
+				 * If we're starting a new search 
+				 */
+				search_current_page = -1;
+				search_inpage_index = -1;
+				search_page = 0;
+				snprintf(prior_search, sizeof(prior_search), "%s", sn);
+			}
+
+
 			glViewport(0, 0, window_w, window_h);
 			glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
@@ -1761,14 +1777,13 @@ static void ddi_check( void ) {
 
 			ui_begin();
 
-
 			{
-				search_page = prior_page;
+				//search_page = search_current_page;
 				search_active = 1;
 
 				if (raise_on_search == 1) {
 #ifdef __WIN32__
-					BringWindowToTop( hwnd );
+//					BringWindowToTop( hwnd );
 #endif
 				}
 
@@ -1776,84 +1791,66 @@ static void ddi_check( void ) {
 				{
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
 
-					if (search_hit_count) {
+					/*
+					 * If we've used up all our hits in this page
+					 *
+					 * OR if there were no hits on this page
+					 *
+					 */
+					if ((search_hit_count == 0)||(search_inpage_index > search_hit_count -2)) {
+						search_inpage_index = -1;
+						search_current_page = -1;
+						search_page++;
 
-						if (last_search_was_empty) {
-							prior_inpage_index = 0;
-							last_search_was_empty = 0;
+						/*
+						 * If we've used up all the pages in the document
+						 *
+						 */
+						if (search_page >= fz_count_pages(ctx, doc) -1) {
+
+							/*
+							 * If the document does have hits
+							 *
+							 */
+							if (document_has_hits) {
+								search_page = 0;
+								document_has_hits = 0;
+								continue;
+							} else {
+								search_active = 0;
+								break; // no hits in document
+							}
 						}
+						continue;
+					}
+
+					/*
+					 * If we have search hits...
+					 *
+					 */ 
+					if (search_hit_count) {
+						fz_point p;
+						fz_rect bb;
+						document_has_hits = 1;
+
+						/*
+						 * If the search_current_page hasn't yet been initialised
+						 * then set it to this page that we've got hits on.
+						 *
+						 */
+						search_current_page = search_page;
+						search_inpage_index++;
 
 						search_active = 0;
 						search_hit_page = search_page;
 
-						{
-							fz_point p;
-							fz_rect bb;
+						p.x = (canvas_w/2) *72 / (currentzoom );
+						p.y = (canvas_h/2) *72 / (currentzoom );
 
-							p.x = (canvas_w/2) *72 / (currentzoom );
-							p.y = (canvas_h/2) *72 / (currentzoom );
+						bb = search_hit_bbox[search_inpage_index];
 
-							if (!use_indexing) prior_inpage_index = 0;
-
-							bb = search_hit_bbox[prior_inpage_index];
-
-							jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
-						}
-
-
-						if (use_indexing) {
-							/*
-							 * when we use indexing method, we increment
-							 * the page only if the index exceeds the current
-							 * page hitcount
-							 */
-
-							prior_page = search_hit_page;
-
-							if (prior_inpage_index  > search_hit_count -1) {
-								prior_inpage_index=-1; // This gets incremented when we read in the search string
-								prior_page = search_hit_page+search_dir;
-
-								/*
-								 * Reset everything if we've arrived at the end of our
-								 * search options
-								 */
-								if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
-									search_active = 0;
-									prior_page = 0;
-									prior_inpage_index = -1; // because when we loop back around it's different to next page only.
-								}
-							} 
-
-						} else {
-
-							/*
-							 * If we're using per page jumping
-							 */
-							prior_page = search_hit_page;
-
-							if (search_page < 0 || search_page >= fz_count_pages(ctx, doc)) {
-								search_active = 0;
-								prior_page = 0;
-							}
-						} 
-						//break; // why are we breaking?
-
-					} else {
-
-						/*
-						 * No search hits, let's try another page
-						 */
-						search_page += search_dir;
-						last_search_was_empty = 1;
-
-						if (search_page < 0 || search_page == fz_count_pages(ctx, doc)) {
-							search_active = 0;
-							prior_page = 0;
-							prior_inpage_index = -1;
-							break;
-						}
-					} // no search hits
+						jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
+					} // if search hit count > 0
 
 				} // while search is active
 
@@ -2021,7 +2018,7 @@ int main(int argc, char **argv)
 	glutInitWindowSize(page_tex.w, page_tex.h);
 	window = glutCreateWindow(title);
 #ifdef __WIN32__
-	hwnd = FindWindow( "GLUT", title );
+//	hwnd = FindWindow( "GLUT", title );
 #endif
 	glutTimerFunc(100,on_timer,1);
 	glutReshapeFunc(on_reshape);
