@@ -127,7 +127,7 @@ void ui_draw_image(struct texture *tex, float x, float y)
 	glDisable(GL_BLEND);
 }
 
-static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288 };
+static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 550 };
 
 static int zoom_in(int oldres)
 {
@@ -906,11 +906,13 @@ static void toggle_outline(void)
 
 static void auto_zoom_w(void)
 {
+	scroll_x = scroll_y = 0;
 	currentzoom = fz_clamp(currentzoom * canvas_w / page_tex.w, MINRES, MAXRES);
 }
 
 static void auto_zoom_h(void)
 {
+	scroll_x = scroll_y = 0;
 	currentzoom = fz_clamp(currentzoom * canvas_h / page_tex.h, MINRES, MAXRES);
 }
 
@@ -1007,19 +1009,21 @@ static void do_app(void)
 
 			case 'I': currentinvert = !currentinvert; break;
 			case 'f': toggle_fullscreen(); break;
-			case 'w': shrinkwrap(); break;
-			case 'W': auto_zoom_w(); break;
-			case 'H': auto_zoom_h(); break;
-			case 'Z': auto_zoom(); break;
-			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-			case '+': currentzoom = zoom_in(currentzoom); break;
-			case '-': currentzoom = zoom_out(currentzoom); break;
+			case 'W': shrinkwrap(); break;
+			case 'w': auto_zoom_w(); break;
+			case 'h': auto_zoom_h(); break;
+			case 'z': auto_zoom(); break;
+//			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
+			//case '+': currentzoom = zoom_in(currentzoom); break;
+			//case '-': currentzoom = zoom_out(currentzoom); break;
+//			case '+': currentzoom *= 1.25; break;
+//			case '-': currentzoom /= 1.25; break;
 			case '[': currentrotate += 90; break;
 			case ']': currentrotate -= 90; break;
-			case 'k': case KEY_UP: scroll_y -= 10; break;
-			case 'j': case KEY_DOWN: scroll_y += 10; break;
-			case 'h': case KEY_LEFT: scroll_x -= 10; break;
-			case 'l': case KEY_RIGHT: scroll_x += 10; break;
+//			case 'k': case KEY_UP: scroll_y -= 10; break;
+//			case 'j': case KEY_DOWN: scroll_y += 10; break;
+//			case 'h': case KEY_LEFT: scroll_x -= 10; break;
+//			case 'l': case KEY_RIGHT: scroll_x += 10; break;
 
 			case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
 			case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
@@ -1208,7 +1212,7 @@ static void do_help(void)
 	y += ui.lineheight + ui.baseline;
 
 	glColor4f(0, 0, 0, 1);
-	y = do_help_line(x, y, "MuPDF", FZ_VERSION);
+	y = do_help_line(x, y, "OBV-MuPDF", FZ_VERSION);
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
 	y = do_help_line(x, y, "i", "show document information");
@@ -1219,17 +1223,16 @@ static void do_help(void)
 	y += ui.lineheight;
 	y = do_help_line(x, y, "I", "toggle inverted color mode");
 	y = do_help_line(x, y, "f", "fullscreen window");
-	y = do_help_line(x, y, "w", "shrink wrap window");
-	y = do_help_line(x, y, "W or H", "fit to width or height");
-	y = do_help_line(x, y, "Z", "fit to page");
-	y = do_help_line(x, y, "z", "reset zoom");
+	y = do_help_line(x, y, "W", "shrink wrap window");
+	y = do_help_line(x, y, "w or h", "fit to width or height");
+	y = do_help_line(x, y, "z", "fit to window");
 	y = do_help_line(x, y, "N z", "set zoom to N");
-	y = do_help_line(x, y, "+ or -", "zoom in or out");
-	y = do_help_line(x, y, "[ or ]", "rotate left or right");
-	y = do_help_line(x, y, "arrow keys", "pan in small increments");
+//	y = do_help_line(x, y, "+ or -", "zoom in or out");
+//	y = do_help_line(x, y, "[ or ]", "rotate left or right");
+//	y = do_help_line(x, y, "arrow keys", "pan in small increments");
 	y += ui.lineheight;
-	y = do_help_line(x, y, "b", "smart move backward");
-	y = do_help_line(x, y, "Space", "smart move forward");
+//	y = do_help_line(x, y, "b", "smart move backward");
+//	y = do_help_line(x, y, "Space", "smart move forward");
 	y = do_help_line(x, y, ", or PgUp", "go backward");
 	y = do_help_line(x, y, ". or PgDn", "go forward");
 	y = do_help_line(x, y, "<", "go backward 10 pages");
@@ -1265,6 +1268,7 @@ static void do_canvas(void)
 		oldinvert = currentinvert;
 	}
 
+	/*
 	if (ui.x >= canvas_x && ui.x < canvas_x + canvas_w && ui.y >= canvas_y && ui.y < canvas_y + canvas_h)
 	{
 		ui.hot = doc;
@@ -1289,7 +1293,12 @@ static void do_canvas(void)
 		scroll_x = saved_scroll_x + saved_ui_x - ui.x;
 		scroll_y = saved_scroll_y + saved_ui_y - ui.y;
 	}
+	*/
 
+	x = canvas_x -scroll_x;
+	y = canvas_y -scroll_y;
+
+	/*
 	if (page_tex.w <= canvas_w)
 	{
 		scroll_x = 0;
@@ -1297,7 +1306,7 @@ static void do_canvas(void)
 	}
 	else
 	{
-		scroll_x = fz_clamp(scroll_x, 0, page_tex.w - canvas_w);
+//		scroll_x = fz_clamp(scroll_x, 0, page_tex.w - canvas_w);
 		x = canvas_x - scroll_x;
 	}
 
@@ -1308,9 +1317,10 @@ static void do_canvas(void)
 	}
 	else
 	{
-		scroll_y = fz_clamp(scroll_y, 0, page_tex.h - canvas_h);
+//		scroll_y = fz_clamp(scroll_y, 0, page_tex.h - canvas_h);
 		y = canvas_y - scroll_y;
 	}
+	*/
 
 	ui_draw_image(&page_tex, x - page_tex.x, y - page_tex.y);
 
@@ -1544,33 +1554,6 @@ static void on_special(int key, int x, int y)
 	}
 }
 
-/***
- * Zoom from another project
- */
-/*
-	void BoardView::Zoom(float osd_x, float osd_y, float zoom) {
-	ImVec2 target;
-	ImVec2 coord;
-	ImGuiIO &io = ImGui::GetIO();
-
-	if (io.KeyCtrl) zoom /= zoomModifier;
-
-	target.x = osd_x;
-	target.y = osd_y;
-	coord    = ScreenToCoord(target.x, target.y);
-
-// Adjust the scale of the whole view, then get the new coordinates ( as
-// CoordToScreen utilises m_scale )
-m_scale        = m_scale * powf(2.0f, zoom);
-ImVec2 dtarget = CoordToScreen(coord.x, coord.y);
-
-ImVec2 td = ScreenToCoord(target.x - dtarget.x, target.y - dtarget.y, 0);
-m_dx += td.x;
-m_dy += td.y;
-m_needsRedraw = true;
-}
- ***/
-
 static void on_wheel(int wheel, int direction, int x, int y)
 {
 
@@ -1582,17 +1565,43 @@ static void on_wheel(int wheel, int direction, int x, int y)
 	 */
 
 	if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
-		float pct;
-		pct = 1.1;
+		double oz;
+		double tx, ty, desx, desy;
+		double pct;
+		double tsx, tsy;
+
+		oz = currentzoom;
+
+		tsx = scroll_x;
+		tsy = scroll_y;
+
+		pct = 1.5;
+
+		tx = (tsx + x);
+		ty = (tsy + y);
+
 		if (direction > 0) {
 			currentzoom *= pct;
+			if (currentzoom > MAXRES) { currentzoom = oz;  return; }
+			desx = tx *pct;
+			desy = ty *pct;
+			tsx += desx -tx;
+			tsy += desy -ty;
+
 		} else  {
 			currentzoom /= pct;
+			if (currentzoom < MINRES) { currentzoom = oz; return; }
+			desx = tx /pct;
+			desy = ty /pct;
+			tsx += desx -tx;
+			tsy += desy -ty;
 		}
 
-		if (currentzoom < 18) currentzoom = 18;
-		if (currentzoom > 800) currentzoom = 800;
+		scroll_x = floor(tsx);
+		scroll_y = floor(tsy);
+
 		run_main_loop();
+
 	} else {
 		int jump = 1;
 		if (glutGetModifiers()&GLUT_ACTIVE_SHIFT) jump=5; 
