@@ -45,6 +45,11 @@ struct ddi_s ddi;
 static int has_ARB_texture_non_power_of_two = 1;
 static GLint max_texture_size = 8192;
 
+// Menu handling function declaration
+void menucb(int mitem) {
+}
+
+
 static void ui_begin(void)
 {
 	ui.hot = NULL;
@@ -1383,8 +1388,7 @@ static void run_main_loop(void)
 	glLoadIdentity();
 
 	ui_begin();
-
-
+ 
 	if (search_active)
 	{
 		int start_time = glutGet(GLUT_ELAPSED_TIME);
