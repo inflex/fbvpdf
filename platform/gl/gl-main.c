@@ -20,18 +20,6 @@ void glutInitErrorFunc(void *fn) {}
 void glutInitWarningFunc(void *fn) {}
 #endif
 
-// Menu items
-enum MENU_TYPE
-{
-        MENU_FRONT,
-        MENU_SPOT,
-        MENU_BACK,
-        MENU_BACK_FRONT,
-};
-
-// Assign a default value
-//MENU_TYPE show = MENU_BACK_FRONT;
-
 enum
 {
 	/* Screen furniture: aggregate size of unusable space from title bars, task bars, window borders, etc */
@@ -2081,18 +2069,6 @@ int main(int argc, char **argv)
 	ui.lineheight = DEFAULT_UI_LINEHEIGHT;
 
 	ui_init_fonts(ctx, ui.fontsize);
-
-	        // Create a menu
-        glutCreateMenu(menucb);
-
-        // Add menu items
-        glutAddMenuEntry("Show Front", MENU_FRONT);
-        glutAddMenuEntry("Show Back", MENU_BACK);
-        glutAddMenuEntry("Spotlight", MENU_SPOT);
-        glutAddMenuEntry("Blend 'em all", MENU_BACK_FRONT);
-
-        // Associate a mouse button with menu
-        glutAttachMenu(GLUT_MIDDLE_BUTTON);
 
 	render_page();
 	update_title();
