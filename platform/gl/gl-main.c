@@ -20,6 +20,18 @@ void glutInitErrorFunc(void *fn) {}
 void glutInitWarningFunc(void *fn) {}
 #endif
 
+// Menu items
+enum MENU_TYPE
+{
+        MENU_FRONT,
+        MENU_SPOT,
+        MENU_BACK,
+        MENU_BACK_FRONT,
+};
+
+// Assign a default value
+//MENU_TYPE show = MENU_BACK_FRONT;
+
 enum
 {
 	/* Screen furniture: aggregate size of unusable space from title bars, task bars, window borders, etc */
@@ -44,6 +56,11 @@ struct ddi_s ddi;
 /* OpenGL capabilities */
 static int has_ARB_texture_non_power_of_two = 1;
 static GLint max_texture_size = 8192;
+
+// Menu handling function declaration
+void menucb(int mitem) {
+}
+
 
 static void ui_begin(void)
 {
@@ -1383,8 +1400,7 @@ static void run_main_loop(void)
 	glLoadIdentity();
 
 	ui_begin();
-
-
+ 
 	if (search_active)
 	{
 		int start_time = glutGet(GLUT_ELAPSED_TIME);
@@ -2065,6 +2081,18 @@ int main(int argc, char **argv)
 	ui.lineheight = DEFAULT_UI_LINEHEIGHT;
 
 	ui_init_fonts(ctx, ui.fontsize);
+
+	        // Create a menu
+        glutCreateMenu(menucb);
+
+        // Add menu items
+        glutAddMenuEntry("Show Front", MENU_FRONT);
+        glutAddMenuEntry("Show Back", MENU_BACK);
+        glutAddMenuEntry("Spotlight", MENU_SPOT);
+        glutAddMenuEntry("Blend 'em all", MENU_BACK_FRONT);
+
+        // Associate a mouse button with menu
+        glutAttachMenu(GLUT_MIDDLE_BUTTON);
 
 	render_page();
 	update_title();
