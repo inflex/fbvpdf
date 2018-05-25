@@ -168,6 +168,7 @@ static int zoom_out(int oldres)
 static char filename[2048];
 static char *password = "";
 static int raise_on_search = 0;
+static int scroll_wheel_swap = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
 static int search_current_page = 1;
@@ -1367,6 +1368,7 @@ int ddi_get(char *buf, size_t size) {
 
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
+//		fprintf(stdout,"DDI pickup: '%s'\n", buf);
 		result = 1;
 	}  // if file opened
 
@@ -1565,7 +1567,7 @@ static void on_wheel(int wheel, int direction, int x, int y)
 	 * call on_wheel() in a more predictable manner.
 	 */
 
-	if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
+	if (!((glutGetModifiers() & (GLUT_ACTIVE_CTRL))) != (!scroll_wheel_swap)) {
 		double oz;
 		double tx, ty, desx, desy;
 		double pct;
@@ -1712,6 +1714,11 @@ static void ddi_check( void ) {
 
 		if (strncmp(sn, "!quit:", strlen("!quit:"))==0) {
 			quit();
+		}
+
+		if (strncmp(sn, "!ss:", strlen("!ss:"))==0) {
+//			fprintf(stdout,"%s:%d: Swap received.\n", __FILE__,__LINE__);
+			scroll_wheel_swap = 1;
 		}
 
 		if (strncmp(sn, "!raise:", strlen("!raise:"))==0) {
@@ -1938,6 +1945,7 @@ static void usage(const char *argv0)
 	fprintf(stderr, "\t-p -\tpassword\n");
 	fprintf(stderr, "\t-r -\tresolution\n");
 	fprintf(stderr, "\t-I\tinvert colors\n");
+	fprintf(stderr, "\t-D\t<ddi prefix>\n");
 	fprintf(stderr, "\t-W -\tpage width for EPUB layout\n");
 	fprintf(stderr, "\t-H -\tpage height for EPUB layout\n");
 	fprintf(stderr, "\t-S -\tfont size for EPUB layout\n");
