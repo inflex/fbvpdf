@@ -12,6 +12,8 @@
 #include <unistd.h> /* for fork and exec */
 #endif
 
+/* set the timer cycle rate, 50ms is more than fast enough! */
+#define GLUT_TIMER_DURATION 50 
 #ifndef FREEGLUT
 /* freeglut extension no-ops */
 void glutExit(void) {}
@@ -1716,8 +1718,11 @@ static void ddi_check( void ) {
 			quit();
 		}
 
+		if (strncmp(sn, "!cinvert:", strlen("!cinvert:"))==0) {
+			currentinvert = !currentinvert;
+		}
+
 		if (strncmp(sn, "!ss:", strlen("!ss:"))==0) {
-//			fprintf(stdout,"%s:%d: Swap received.\n", __FILE__,__LINE__);
 			scroll_wheel_swap = 1;
 		}
 
@@ -1904,7 +1909,7 @@ static void ddi_check( void ) {
 
 static void on_timer( int value ) {
 	ddi_check();
-	glutTimerFunc( 100, on_timer, 1 );
+	glutTimerFunc( GLUT_TIMER_DURATION, on_timer, 1 );
 }
 
 #if defined(FREEGLUT) && (GLUT_API_VERSION >= 6)
@@ -2048,7 +2053,7 @@ int main(int argc, char **argv)
 #ifdef __WIN32__
 //	hwnd = FindWindow( "GLUT", title );
 #endif
-	glutTimerFunc(100,on_timer,1);
+	glutTimerFunc( GLUT_TIMER_DURATION, on_timer,1);
 	glutReshapeFunc(on_reshape);
 	glutDisplayFunc(on_display);
 #if defined(FREEGLUT) && (GLUT_API_VERSION >= 6)
