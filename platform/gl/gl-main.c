@@ -751,7 +751,7 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
-			fprintf(stderr,"%s:%d: Dispatching request '%s'\n", __FILE__, __LINE__, s);
+//			fprintf(stderr,"%s:%d: Dispatching request '%s'\n", __FILE__, __LINE__, s);
 			DDI_dispatch( &ddi, s );
 			fz_free(ctx, s);
 			glutPostRedisplay();
@@ -1375,7 +1375,7 @@ int ddi_get(char *buf, size_t size) {
 
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-		fprintf(stdout,"DDI pickup: '%s'\n", buf);
+//		fprintf(stdout,"DDI pickup: '%s'\n", buf);
 		result = 1;
 	}  // if file opened
 
@@ -1831,7 +1831,7 @@ static void ddi_check( void ) {
 
 				while (search_active) {
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
-					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
+//					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
 
 					/*
 					 * If we've used up all our hits in this page
@@ -2102,7 +2102,7 @@ int main(int argc, char **argv)
 #else
 	glutMouseWheelFunc(on_mouse);
 #endif
-	fprintf(stderr,"%s:%d: glut callbacks done\r\n", FL);
+	//fprintf(stderr,"%s:%d: glut callbacks done\r\n", FL);
 
 	has_ARB_texture_non_power_of_two = glutExtensionSupported("GL_ARB_texture_non_power_of_two");
 	if (!has_ARB_texture_non_power_of_two)
