@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "ddi.h"
 
@@ -25,6 +28,16 @@ void DDI_init( struct ddi_s *ddi ) {
 	ddi->mode = DDI_MODE_NONE;
 	ddi->last_dispatch[0] = '\0';
 	ddi->last_pickup[0] = '\0';
+}
+
+int DDI_wait( struct ddi_s *ddi, int cycles ) {
+	struct stat buffer;   
+
+	while(cycles--) {
+		if (stat(ddi->dispatch_name, &buffer)) return 0;
+		usleep(10000);
+	}
+	return -1;
 }
 
 void DDI_set_mode( struct ddi_s *ddi, int mode ) {
@@ -79,6 +92,17 @@ int DDI_resend( struct ddi_s *ddi ){
 	return DDI_dispatch( ddi, ddi->last_dispatch );
 }
 
+void DDI_clear( struct ddi_s *ddi ) {
+	remove(ddi->dispatch_tname);
+	remove(ddi->dispatch_name);
+	remove(ddi->pickup_tname);
+	remove(ddi->pickup_name);
+}
+
+#ifndef FL
+#define FL __FILE__,__LINE__
+#endif
+
 int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
 	FILE *f;
 	char *fn;
@@ -93,9 +117,20 @@ int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
 
 	f = fopen(fn, "r");
 	if (f) {
+		int rc = 10;
+		int rr = 1;
 		fgets(buffer, bsize, f);
 		fclose(f);
-		remove(fn);
+
+		while (rc--) {
+			rr = unlink(fn); // was remove() before, but changed to unlink for safety
+			if ( rr == -1 ) {
+				fprintf(stderr,"%s:%d: Unable to remove file (%s) '%s'", FL, strerror(errno), fn);
+				usleep(10000);
+			} else {
+				break;
+			}
+		}
 		snprintf(ddi->last_pickup, sizeof(ddi->last_pickup),"%s",buffer);
 	} else {
 		if (ddi->debug) fprintf(stderr,"%s:%d: Error trying to open '%s' (%s)\n", __FILE__, __LINE__, fn, strerror(errno));

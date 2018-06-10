@@ -29,6 +29,8 @@ struct ddi_s {
 };
 
 void DDI_init( struct ddi_s *ddi );
+void DDI_clear( struct ddi_s *ddi );
+int DDI_wait( struct ddi_s *ddi, int cycles );
 void DDI_set_mode( struct ddi_s *ddi, int mode );
 void DDI_set_debug( struct ddi_s *ddi, int debug );
 void DDI_set_prefix( struct ddi_s *ddi, char *prefix );

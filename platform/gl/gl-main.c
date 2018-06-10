@@ -4,10 +4,12 @@
 #include "mupdf/ddi.h"
 
 #include <math.h>
+#include <time.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
+#define FL __FILE__,__LINE__
 #ifndef _WIN32
 #include <unistd.h> /* for fork and exec */
 #endif
@@ -135,7 +137,7 @@ void ui_draw_image(struct texture *tex, float x, float y)
 	glDisable(GL_BLEND);
 }
 
-static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 550 };
+static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 550, 700, 900 };
 
 static int zoom_in(int oldres)
 {
@@ -171,6 +173,7 @@ static char filename[2048];
 static char *password = "";
 static int raise_on_search = 0;
 static int scroll_wheel_swap = 0;
+static int search_in_page_only = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
 static int search_current_page = 1;
@@ -209,6 +212,7 @@ static int annot_count = 0;
 
 static int window_w = 1, window_h = 1;
 
+static time_t process_start_time;
 static int oldinvert = 0, currentinvert = 0;
 static int oldpage = 0, currentpage = 0;
 static float oldzoom = DEFRES, currentzoom = DEFRES;
@@ -747,6 +751,7 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
+			fprintf(stderr,"%s:%d: Dispatching request '%s'\n", __FILE__, __LINE__, s);
 			DDI_dispatch( &ddi, s );
 			fz_free(ctx, s);
 			glutPostRedisplay();
@@ -1370,7 +1375,7 @@ int ddi_get(char *buf, size_t size) {
 
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-//		fprintf(stdout,"DDI pickup: '%s'\n", buf);
+		fprintf(stdout,"DDI pickup: '%s'\n", buf);
 		result = 1;
 	}  // if file opened
 
@@ -1705,7 +1710,7 @@ static void ddi_check( void ) {
 	char sn[1024];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
-		snprintf(sn, sizeof(sn), ddi.last_pickup);
+		snprintf(sn, sizeof(sn), "%s", ddi.last_pickup);
 	}
 
 	if ((ddi_get( sn, sizeof(sn)))||(ddi_simulate_option)) {
@@ -1714,27 +1719,29 @@ static void ddi_check( void ) {
 
 		if (strlen(sn) < 2) return;
 
+		if (strncmp(sn, "!pagesearch:", strlen("!pagesearch:"))==0) {
+			char tmp[128];
+			search_in_page_only = 1;
+			snprintf(tmp, sizeof(tmp), "%s", sn+strlen("!pagesearch:"));
+			snprintf(sn, sizeof(sn), "%s", tmp);
+		}
+		
 		if (strncmp(sn, "!quit:", strlen("!quit:"))==0) {
-			quit();
-		}
+			if (time(NULL) -process_start_time > 5) quit();
 
-		if (strncmp(sn, "!cinvert:", strlen("!cinvert:"))==0) {
+		} else if (strncmp(sn, "!cinvert:", strlen("!cinvert:"))==0) {
 			currentinvert = !currentinvert;
-		}
 
-		if (strncmp(sn, "!ss:", strlen("!ss:"))==0) {
+		} else if (strncmp(sn, "!ss:", strlen("!ss:"))==0) {
 			scroll_wheel_swap = 1;
-		}
 
-		if (strncmp(sn, "!raise:", strlen("!raise:"))==0) {
+		} else if (strncmp(sn, "!raise:", strlen("!raise:"))==0) {
 			raise_on_search = 1;
-		}
 
-		if (strncmp(sn, "!noraise:", strlen("!noraise:"))==0) {
+		} else if (strncmp(sn, "!noraise:", strlen("!noraise:"))==0) {
 			raise_on_search = 0;
-		}
 
-		if (strncmp(sn, "!load:", strlen("!load:"))==0) {
+		} else if (strncmp(sn, "!load:", strlen("!load:"))==0) {
 			/*
 			 * load a file, not searching.
 			 */
@@ -1779,7 +1786,10 @@ static void ddi_check( void ) {
 			 * Step 1: check our input
 			 *
 			 */
-			if (strcmp(sn, prior_search)==0) {
+			if (search_in_page_only) {
+				search_inpage_index = 0;
+
+			} else if (strcmp(sn, prior_search)==0) {
 				/*
 				 * If we're resuming an existing search
 				 */
@@ -1819,9 +1829,9 @@ static void ddi_check( void ) {
 #endif
 				}
 
-				while (search_active) 
-				{
+				while (search_active) {
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
+					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
 
 					/*
 					 * If we've used up all our hits in this page
@@ -1829,38 +1839,43 @@ static void ddi_check( void ) {
 					 * OR if there were no hits on this page
 					 *
 					 */
-					if ((search_hit_count == 0)||(search_inpage_index > search_hit_count -2)) {
-						search_inpage_index = -1;
-						search_current_page = -1;
-						search_page++;
-
-						/*
-						 * If we've used up all the pages in the document
-						 *
-						 */
-						if (search_page >= fz_count_pages(ctx, doc) -1) {
+					if (!search_in_page_only) {
+						if ((search_hit_count == 0)||(search_inpage_index > search_hit_count -2)) {
+							search_inpage_index = -1;
+							search_current_page = -1;
+							search_page++;
 
 							/*
-							 * If the document does have hits
+							 * If we've used up all the pages in the document
 							 *
 							 */
-							if (document_has_hits) {
-								search_page = 0;
-								document_has_hits = 0;
-								continue;
-							} else {
-								search_active = 0;
-								break; // no hits in document
+							if (search_page >= fz_count_pages(ctx, doc) -1) {
+
+								/*
+								 * If the document does have hits
+								 *
+								 */
+								if (document_has_hits) {
+									search_page = 0;
+									document_has_hits = 0;
+									continue;
+								} else {
+									search_active = 0;
+									break; // no hits in document
+								}
 							}
+							continue;
 						}
-						continue;
+					} else {
+						search_inpage_index = -1;
 					}
+							 
 
 					/*
 					 * If we have search hits...
 					 *
 					 */ 
-					if (search_hit_count) {
+					if ((search_hit_count)&&(!search_in_page_only)) {
 						fz_point p;
 						fz_rect bb;
 						document_has_hits = 1;
@@ -1883,6 +1898,11 @@ static void ddi_check( void ) {
 
 						jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
 					} // if search hit count > 0
+					
+					if (search_in_page_only) {
+						search_active = 0;
+						search_in_page_only = 0;
+					}
 
 				} // while search is active
 
@@ -1904,7 +1924,6 @@ static void ddi_check( void ) {
 		}
 
 	}
-
 }
 
 static void on_timer( int value ) {
@@ -1967,7 +1986,11 @@ int main(int argc, char **argv)
 {
 	int c;
 
+	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
+
+//	fprintf(stderr,"Initialising glut\r\n");
 	glutInit(&argc, argv);
+//	fprintf(stderr,"Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X:D:")) != -1)
 	{
 		switch (c)
@@ -1984,6 +2007,7 @@ int main(int argc, char **argv)
 			case 'D': ddiprefix = fz_optarg; break;
 		}
 	}
+
 
 	if (fz_optind < argc)
 	{
@@ -2003,6 +2027,8 @@ int main(int argc, char **argv)
 	if (fz_optind < argc)
 		anchor = argv[fz_optind++];
 
+//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
+
 	title = strrchr(filename, '/');
 	if (!title)
 		title = strrchr(filename, '\\');
@@ -2012,10 +2038,12 @@ int main(int argc, char **argv)
 		title = filename;
 
 	/* ddi setup */
+//	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
 	DDI_init(&ddi);
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
+//	fprintf(stderr,"Initialising muPDF\r\n");
 	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
@@ -2030,8 +2058,11 @@ int main(int argc, char **argv)
 
 	fz_set_use_document_css(ctx, layout_use_doc_css);
 
+//	fprintf(stderr,"%s:%d: Loading document\r\n", FL);
 	load_document();
+//	fprintf(stderr,"%s:%d: Loading page\r\n", FL);
 	load_page();
+//	fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
 
 	/* Init IMGUI */
 
@@ -2049,6 +2080,7 @@ int main(int argc, char **argv)
 	glutInitWarningFunc(on_warning);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
 	glutInitWindowSize(page_tex.w, page_tex.h);
+//	fprintf(stderr,"%s:%d: glut init done\r\n", FL);
 	window = glutCreateWindow(title);
 #ifdef __WIN32__
 //	hwnd = FindWindow( "GLUT", title );
@@ -2070,6 +2102,7 @@ int main(int argc, char **argv)
 #else
 	glutMouseWheelFunc(on_mouse);
 #endif
+	fprintf(stderr,"%s:%d: glut callbacks done\r\n", FL);
 
 	has_ARB_texture_non_power_of_two = glutExtensionSupported("GL_ARB_texture_non_power_of_two");
 	if (!has_ARB_texture_non_power_of_two)
@@ -2086,7 +2119,11 @@ int main(int argc, char **argv)
 	render_page();
 	update_title();
 
+//	fprintf(stderr,"%s:%d: Into the glut main loop.\n", FL);
+
 	glutMainLoop();
+
+//	fprintf(stderr,"%s:%d: Out of main loop.\n", FL);
 
 	ui_finish_fonts(ctx);
 
