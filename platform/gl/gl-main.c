@@ -173,6 +173,7 @@ static int zoom_out(int oldres)
 #define PATH_MAX 4096
 #endif
 
+static char ddi_data[10240]; // 10k aught to do it
 static char filename[PATH_MAX];
 static char *password = "";
 static int raise_on_search = 0;
@@ -1989,6 +1990,10 @@ int main(int argc, char **argv)
 #endif
 {
 	int c;
+	int windowx, windowy;
+
+	windowx = 1280;
+	windowy = 720;
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
@@ -2024,16 +2029,43 @@ int main(int argc, char **argv)
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
 	{
-		char s[PATH_MAX];
+		/*
+		 * DDI setup package, is the first one we receive
+		 * and may contain multiple commands for us to process.
+		 *
+		 */
+		char s[10240];
 		int x = 10;
-//		fprintf(stderr,"%s:%d: Waiting for filename\r\n", __FILE__, __LINE__);
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
-			usleep(100000); // 0.1 sec
-//			fprintf(stderr,"%s:%d: DDI pickup: %s\n", __FILE__, __LINE__, s);
-			if (strncmp(s,"!load:", 6)==0) {
-				snprintf(filename, sizeof(filename), "%s", s+6 );
+			char *p, *q;
+			usleep(10000); // 0.1 sec
+			fprintf(stderr,"Data---------\r\n%s\r\n",s);
+			if ((p = strstr(s,"!load:"))!=NULL) {
+				q = strchr(p,'\n');
+				if (q) *q = '\0';
+				snprintf(filename, sizeof(filename), "%s", p+6 );
+				if (q) *q = '\n';
+
+				if ((p = strstr(s, "!setwindowsize:"))) {
+					q = strchr(p,'\n');
+					if (q) *q = '\0';
+					sscanf(p +strlen("!setwindowsize:"),"%d %d", &windowx, &windowy );
+					if (q) *q = '\n';
+				}
+				if ((p = strstr(s, "!cinvert:"))) {
+					currentinvert = !currentinvert;
+				}
+				if ((p = strstr(s, "!ss:"))) {
+					scroll_wheel_swap = 1;
+				}
+				if ((p = strstr(s, "!raise:"))) {
+					raise_on_search = 1;
+				}
+				if ((p = strstr(s, "!noraise:"))) {
+					raise_on_search = 0;
+				}
 				break;
-			}
+			} // if we had a successful DDI packet read
 		}
 
 		if (x == 0) {
@@ -2096,14 +2128,14 @@ int main(int argc, char **argv)
 	search_input.q = search_input.p;
 	search_input.end = search_input.p;
 
-	/* Init GLUT */
 
 	glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
 
 	glutInitErrorFunc(on_error);
 	glutInitWarningFunc(on_warning);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-	glutInitWindowSize(page_tex.w, page_tex.h);
+	//glutInitWindowSize(page_tex.w, page_tex.h);
+	glutInitWindowSize(windowx, windowy);
 	//	fprintf(stderr,"%s:%d: glut init done\r\n", FL);
 	window = glutCreateWindow(title);
 #ifdef __WIN32__

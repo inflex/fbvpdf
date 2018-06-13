@@ -104,6 +104,7 @@ void DDI_clear( struct ddi_s *ddi ) {
 #endif
 
 int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
+	struct stat st;
 	FILE *f;
 	char *fn;
 
@@ -115,11 +116,17 @@ int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
 		fn = ddi->pickup_name;
 	}
 
+	stat(fn, &st);
+
 	f = fopen(fn, "r");
 	if (f) {
 		int rc = 10;
 		int rr = 1;
-		fgets(buffer, bsize, f);
+		int bc = 0;
+		
+		//fgets(buffer, bsize, f);
+		bc = fread(buffer, 1, st.st_size, f);
+		buffer[bc] = '\0';
 		fclose(f);
 
 		while (rc--) {
