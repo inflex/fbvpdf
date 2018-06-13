@@ -1830,7 +1830,8 @@ static void ddi_check( void ) {
 
 				if (raise_on_search == 1) {
 #ifdef __WIN32__
-					//					BringWindowToTop( hwnd );
+					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
+					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
 #endif
 				}
 
