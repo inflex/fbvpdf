@@ -178,6 +178,7 @@ static char filename[PATH_MAX];
 static char *password = "";
 static int raise_on_search = 0;
 static int scroll_wheel_swap = 0;
+static int search_ended_flash_page = 0;
 static int search_in_page_only = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
@@ -1830,12 +1831,23 @@ static void ddi_check( void ) {
 
 				if (raise_on_search == 1) {
 #ifdef __WIN32__
-					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
-					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
+//					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
+//					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
 #endif
 				}
 
 				while (search_active) {
+					if (search_page > fz_count_pages(ctx, doc) -1) {
+						//search_ended_flash_page = 1;
+						//currentinvert = !currentinvert;
+						search_current_page = -1;
+						search_inpage_index = -1;
+						search_page = 0;
+						prior_search[0] = 0;
+						sn[0] = 0;
+						search_active = 0;
+						break;
+					}
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
 					//					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
 
