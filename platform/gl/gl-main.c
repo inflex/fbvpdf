@@ -169,7 +169,11 @@ static int zoom_out(int oldres)
 #define DDI_SIMULATE_OPTION_SEARCH_NEXT 1
 #define DDI_SIMULATE_OPTION_SEARCH_PREV 2
 
-static char filename[2048];
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+static char filename[PATH_MAX];
 static char *password = "";
 static int raise_on_search = 0;
 static int scroll_wheel_swap = 0;
@@ -751,7 +755,7 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
-//			fprintf(stderr,"%s:%d: Dispatching request '%s'\n", __FILE__, __LINE__, s);
+			//			fprintf(stderr,"%s:%d: Dispatching request '%s'\n", __FILE__, __LINE__, s);
 			DDI_dispatch( &ddi, s );
 			fz_free(ctx, s);
 			glutPostRedisplay();
@@ -1038,17 +1042,17 @@ static void do_app(void)
 			case 'w': auto_zoom_w(); break;
 			case 'h': auto_zoom_h(); break;
 			case 'z': auto_zoom(); break;
-//			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-			//case '+': currentzoom = zoom_in(currentzoom); break;
-			//case '-': currentzoom = zoom_out(currentzoom); break;
-//			case '+': currentzoom *= 1.25; break;
-//			case '-': currentzoom /= 1.25; break;
+						 //			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
+						 //case '+': currentzoom = zoom_in(currentzoom); break;
+						 //case '-': currentzoom = zoom_out(currentzoom); break;
+						 //			case '+': currentzoom *= 1.25; break;
+						 //			case '-': currentzoom /= 1.25; break;
 			case '[': currentrotate += 90; break;
 			case ']': currentrotate -= 90; break;
-//			case 'k': case KEY_UP: scroll_y -= 10; break;
-//			case 'j': case KEY_DOWN: scroll_y += 10; break;
-//			case 'h': case KEY_LEFT: scroll_x -= 10; break;
-//			case 'l': case KEY_RIGHT: scroll_x += 10; break;
+						 //			case 'k': case KEY_UP: scroll_y -= 10; break;
+						 //			case 'j': case KEY_DOWN: scroll_y += 10; break;
+						 //			case 'h': case KEY_LEFT: scroll_x -= 10; break;
+						 //			case 'l': case KEY_RIGHT: scroll_x += 10; break;
 
 			case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
 			case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
@@ -1118,19 +1122,19 @@ static void do_app(void)
 						 if (search_current_page >= 0) {
 							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
 						 } else {
-						 
-						 search_dir = 1;
-						 if (search_hit_page == currentpage)
-							 search_page = currentpage + search_dir;
-						 else
-							 search_page = currentpage;
-						 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
-						 {
-							 search_hit_page = -1;
-							 if (search_needle)
-								 search_active = 1;
-						 }
-						 glutPostRedisplay();
+
+							 search_dir = 1;
+							 if (search_hit_page == currentpage)
+								 search_page = currentpage + search_dir;
+							 else
+								 search_page = currentpage;
+							 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
+							 {
+								 search_hit_page = -1;
+								 if (search_needle)
+									 search_active = 1;
+							 }
+							 glutPostRedisplay();
 						 }
 						 break;
 		}
@@ -1257,12 +1261,12 @@ static void do_help(void)
 	y = do_help_line(x, y, "w or h", "fit to width or height");
 	y = do_help_line(x, y, "z", "fit to window");
 	y = do_help_line(x, y, "N z", "set zoom to N");
-//	y = do_help_line(x, y, "+ or -", "zoom in or out");
-//	y = do_help_line(x, y, "[ or ]", "rotate left or right");
-//	y = do_help_line(x, y, "arrow keys", "pan in small increments");
+	//	y = do_help_line(x, y, "+ or -", "zoom in or out");
+	//	y = do_help_line(x, y, "[ or ]", "rotate left or right");
+	//	y = do_help_line(x, y, "arrow keys", "pan in small increments");
 	y += ui.lineheight;
-//	y = do_help_line(x, y, "b", "smart move backward");
-//	y = do_help_line(x, y, "Space", "smart move forward");
+	//	y = do_help_line(x, y, "b", "smart move backward");
+	//	y = do_help_line(x, y, "Space", "smart move forward");
 	y = do_help_line(x, y, ", or PgUp", "go backward");
 	y = do_help_line(x, y, ". or PgDn", "go forward");
 	y = do_help_line(x, y, "<", "go backward 10 pages");
@@ -1299,56 +1303,56 @@ static void do_canvas(void)
 	}
 
 	/*
-	if (ui.x >= canvas_x && ui.x < canvas_x + canvas_w && ui.y >= canvas_y && ui.y < canvas_y + canvas_h)
-	{
+		if (ui.x >= canvas_x && ui.x < canvas_x + canvas_w && ui.y >= canvas_y && ui.y < canvas_y + canvas_h)
+		{
 		ui.hot = doc;
 		if (!ui.active && ui.middle)
 		{
-			ui.active = doc;
-			saved_scroll_x = scroll_x;
-			saved_scroll_y = scroll_y;
-			saved_ui_x = ui.x;
-			saved_ui_y = ui.y;
+		ui.active = doc;
+		saved_scroll_x = scroll_x;
+		saved_scroll_y = scroll_y;
+		saved_ui_x = ui.x;
+		saved_ui_y = ui.y;
 		}
-	}
+		}
 
-	if (ui.hot == doc)
-	{
+		if (ui.hot == doc)
+		{
 		scroll_x -= ui.scroll_x * ui.lineheight * 3;
 		scroll_y -= ui.scroll_y * ui.lineheight * 3;
-	}
+		}
 
-	if (ui.active == doc)
-	{
+		if (ui.active == doc)
+		{
 		scroll_x = saved_scroll_x + saved_ui_x - ui.x;
 		scroll_y = saved_scroll_y + saved_ui_y - ui.y;
-	}
-	*/
+		}
+		*/
 
 	x = canvas_x -scroll_x;
 	y = canvas_y -scroll_y;
 
 	/*
-	if (page_tex.w <= canvas_w)
-	{
+		if (page_tex.w <= canvas_w)
+		{
 		scroll_x = 0;
 		x = canvas_x + (canvas_w - page_tex.w) / 2;
-	}
-	else
-	{
-//		scroll_x = fz_clamp(scroll_x, 0, page_tex.w - canvas_w);
-		x = canvas_x - scroll_x;
+		}
+		else
+		{
+	//		scroll_x = fz_clamp(scroll_x, 0, page_tex.w - canvas_w);
+	x = canvas_x - scroll_x;
 	}
 
 	if (page_tex.h <= canvas_h)
 	{
-		scroll_y = 0;
-		y = canvas_y + (canvas_h - page_tex.h) / 2;
+	scroll_y = 0;
+	y = canvas_y + (canvas_h - page_tex.h) / 2;
 	}
 	else
 	{
-//		scroll_y = fz_clamp(scroll_y, 0, page_tex.h - canvas_h);
-		y = canvas_y - scroll_y;
+	//		scroll_y = fz_clamp(scroll_y, 0, page_tex.h - canvas_h);
+	y = canvas_y - scroll_y;
 	}
 	*/
 
@@ -1375,7 +1379,7 @@ int ddi_get(char *buf, size_t size) {
 
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-//		fprintf(stdout,"DDI pickup: '%s'\n", buf);
+		//		fprintf(stdout,"DDI pickup: '%s'\n", buf);
 		result = 1;
 	}  // if file opened
 
@@ -1397,7 +1401,7 @@ static void run_main_loop(void)
 	glLoadIdentity();
 
 	ui_begin();
- 
+
 	if (search_active)
 	{
 		int start_time = glutGet(GLUT_ELAPSED_TIME);
@@ -1622,13 +1626,13 @@ static void on_wheel(int wheel, int direction, int x, int y)
 		run_main_loop();
 	}
 	/*
-			
+
 
 		ui.scroll_x = wheel == 1 ? direction : 0;
 		ui.scroll_y = wheel == 0 ? direction : 0;
 		ui.scroll_x = ui.scroll_y = 0;
-	}
-	*/
+		}
+		*/
 
 
 }
@@ -1725,9 +1729,9 @@ static void ddi_check( void ) {
 			snprintf(tmp, sizeof(tmp), "%s", sn+strlen("!pagesearch:"));
 			snprintf(sn, sizeof(sn), "%s", tmp);
 		}
-		
+
 		if (strncmp(sn, "!quit:", strlen("!quit:"))==0) {
-			if (time(NULL) -process_start_time > 5) quit();
+			if (time(NULL) -process_start_time > 2) quit();
 
 		} else if (strncmp(sn, "!cinvert:", strlen("!cinvert:"))==0) {
 			currentinvert = !currentinvert;
@@ -1781,7 +1785,7 @@ static void ddi_check( void ) {
 			 */
 
 			if (search_page == -1) search_page = 0;
-			
+
 			/*
 			 * Step 1: check our input
 			 *
@@ -1793,7 +1797,7 @@ static void ddi_check( void ) {
 				/*
 				 * If we're resuming an existing search
 				 */
-//				search_inpage_index++; 
+				//				search_inpage_index++; 
 
 			} else {
 				/*
@@ -1825,13 +1829,13 @@ static void ddi_check( void ) {
 
 				if (raise_on_search == 1) {
 #ifdef __WIN32__
-//					BringWindowToTop( hwnd );
+					//					BringWindowToTop( hwnd );
 #endif
 				}
 
 				while (search_active) {
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
-//					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
+					//					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
 
 					/*
 					 * If we've used up all our hits in this page
@@ -1869,7 +1873,7 @@ static void ddi_check( void ) {
 					} else {
 						search_inpage_index = -1;
 					}
-							 
+
 
 					/*
 					 * If we have search hits...
@@ -1898,7 +1902,7 @@ static void ddi_check( void ) {
 
 						jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
 					} // if search hit count > 0
-					
+
 					if (search_in_page_only) {
 						search_active = 0;
 						search_in_page_only = 0;
@@ -1988,7 +1992,7 @@ int main(int argc, char **argv)
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
-//	fprintf(stderr,"Initialising glut\r\n");
+	//	fprintf(stderr,"Initialising glut\r\n");
 	glutInit(&argc, argv);
 //	fprintf(stderr,"Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X:D:")) != -1)
@@ -2008,26 +2012,52 @@ int main(int argc, char **argv)
 		}
 	}
 
-
-	if (fz_optind < argc)
-	{
-		fz_strlcpy(filename, argv[fz_optind++], sizeof filename);
-	}
-	else
-	{
-#ifdef _WIN32
-		win_install();
-		if (!win_open_file(filename, sizeof filename))
-			exit(0);
-#else
-		usage(argv[0]);
-#endif
-	}
-
 	if (fz_optind < argc)
 		anchor = argv[fz_optind++];
 
-//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
+	//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
+
+	/* ddi setup */
+//	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
+	DDI_init(&ddi);
+	DDI_set_prefix(&ddi, ddiprefix);
+	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
+
+	{
+		char s[PATH_MAX];
+		int x = 10;
+//		fprintf(stderr,"%s:%d: Waiting for filename\r\n", __FILE__, __LINE__);
+		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
+			usleep(100000); // 0.1 sec
+//			fprintf(stderr,"%s:%d: DDI pickup: %s\n", __FILE__, __LINE__, s);
+			if (strncmp(s,"!load:", 6)==0) {
+				snprintf(filename, sizeof(filename), "%s", s+6 );
+				break;
+			}
+		}
+
+		if (x == 0) {
+
+			if (fz_optind < argc)
+			{
+				fz_strlcpy(filename, argv[fz_optind++], sizeof filename);
+			}
+			else
+			{
+#ifdef _WIN32
+				win_install();
+				if (!win_open_file(filename, sizeof filename))
+					exit(0);
+#else
+				usage(argv[0]);
+#endif
+			}
+
+
+		}
+	}
+
+
 
 	title = strrchr(filename, '/');
 	if (!title)
@@ -2037,13 +2067,7 @@ int main(int argc, char **argv)
 	else
 		title = filename;
 
-	/* ddi setup */
-//	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
-	DDI_init(&ddi);
-	DDI_set_prefix(&ddi, ddiprefix);
-	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
-
-//	fprintf(stderr,"Initialising muPDF\r\n");
+	//	fprintf(stderr,"Initialising muPDF\r\n");
 	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
@@ -2058,11 +2082,11 @@ int main(int argc, char **argv)
 
 	fz_set_use_document_css(ctx, layout_use_doc_css);
 
-//	fprintf(stderr,"%s:%d: Loading document\r\n", FL);
+	//	fprintf(stderr,"%s:%d: Loading document\r\n", FL);
 	load_document();
-//	fprintf(stderr,"%s:%d: Loading page\r\n", FL);
+	//	fprintf(stderr,"%s:%d: Loading page\r\n", FL);
 	load_page();
-//	fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
+	//	fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
 
 	/* Init IMGUI */
 
@@ -2080,10 +2104,10 @@ int main(int argc, char **argv)
 	glutInitWarningFunc(on_warning);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
 	glutInitWindowSize(page_tex.w, page_tex.h);
-//	fprintf(stderr,"%s:%d: glut init done\r\n", FL);
+	//	fprintf(stderr,"%s:%d: glut init done\r\n", FL);
 	window = glutCreateWindow(title);
 #ifdef __WIN32__
-//	hwnd = FindWindow( "GLUT", title );
+	//	hwnd = FindWindow( "GLUT", title );
 #endif
 	glutTimerFunc( GLUT_TIMER_DURATION, on_timer,1);
 	glutReshapeFunc(on_reshape);
@@ -2119,11 +2143,11 @@ int main(int argc, char **argv)
 	render_page();
 	update_title();
 
-//	fprintf(stderr,"%s:%d: Into the glut main loop.\n", FL);
+	//	fprintf(stderr,"%s:%d: Into the glut main loop.\n", FL);
 
 	glutMainLoop();
 
-//	fprintf(stderr,"%s:%d: Out of main loop.\n", FL);
+	//	fprintf(stderr,"%s:%d: Out of main loop.\n", FL);
 
 	ui_finish_fonts(ctx);
 
