@@ -143,6 +143,8 @@ enum {
 	FZ_LOCK_MAX
 };
 
+#define FZ_CTX_FLAGS_SPACE_HEURISTIC 1
+
 struct fz_context_s
 {
 	void *user;
@@ -162,6 +164,7 @@ struct fz_context_s
 	fz_document_handler_context *handler;
 	fz_output_context *output;
 	uint16_t seed48[7];
+	uint16_t flags;
 };
 
 /*

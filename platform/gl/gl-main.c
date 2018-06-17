@@ -181,6 +181,7 @@ static char *password = "";
 static int raise_on_search = 0;
 static int scroll_wheel_swap = 0;
 //static int search_ended_flash_page = 0;
+static int search_heuristics = 1;
 static int search_in_page_only = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
@@ -1134,7 +1135,13 @@ static void do_app(void)
 						 glutPostRedisplay();
 						 break;
 			case 'n':
-						 if ((search_current_page >= 0)&&(strlen(search_needle)==0)) {
+						 if (debug) fprintf(stderr,"%s:%d: NEXT search pressed\r\n",FL);
+						 if (!search_needle) {
+							 if (debug) fprintf(stderr,"%s:%d: Search needle is NULL, ignoring next search request\r\n", FL);
+							 break;
+						 }
+
+						 if ((search_current_page >= 0)&&(search_needle)&&(strlen(search_needle)==0)) {
 							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
 						 } else {
 
@@ -1745,12 +1752,12 @@ static void on_warning(const char *fmt, va_list ap)
 }
 
 static void ddi_check( void ) {
-	char sn_a[1024];
-	char sn_b[1024];
+	char sn_a[10240];
+	char sn_b[10240];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
 		if (strlen(ddi.last_pickup)) snprintf(sn_a, sizeof(sn_a), "%s", ddi.last_pickup);
-		else if (strlen(search_needle)) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
+		else if (search_needle) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
 		else return;
 	}
 
@@ -1763,7 +1770,7 @@ static void ddi_check( void ) {
 	 *
 	 */
 
-	if ((ddi_get( sn_a, sizeof(sn_a)))||(ddi_simulate_option)) {
+	if ((ddi_simulate_option)||(ddi_get( sn_a, sizeof(sn_a)))) {
 
 		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 
@@ -1846,12 +1853,16 @@ static void ddi_check( void ) {
 			 */
 
 			sn_b[0] = '\0';
-			if (strchr(sn_a,'_')) {
-				snprintf(sn_b,sizeof(sn_b),"%s", sn_a);
-				for (int i = 0; i < (strlen(sn_b) -1); i++) {
-					if (sn_b[i] == '_') sn_b[i] = ' ';
+			if (search_heuristics == 1) {
+				if (strchr(sn_a,'_')) {
+					snprintf(sn_b,sizeof(sn_b),"%s", sn_a);
+					for (int i = 0; i < (strlen(sn_b) -1); i++) {
+						if (sn_b[i] == '_') sn_b[i] = ' ';
+					}
+					if(debug)fprintf(stderr,"%s:%d: Alternative search: '%s'\r\n", FL, sn_b);
 				}
-				if(debug)fprintf(stderr,"%s:%d: Alternative search: '%s'\r\n", FL, sn_b);
+			} else {
+				if (debug) fprintf(stderr,"%s:%d: Search heuristics disabled\r\n", FL);
 			}
 
 			if (search_page == -1) search_page = 0;
@@ -2194,6 +2205,16 @@ int main(int argc, char **argv)
 				raise_on_search = 1;
 			}
 
+			if ((p = strstr(s, "!noheuristics:"))) {
+				fprintf(stderr,"%s:%d: No heuristics", FL);
+				search_heuristics = 0;
+			}
+
+			if ((p = strstr(s, "!heuristics:"))) {
+				search_heuristics = 1;
+				fprintf(stderr,"%s:%d: Heuristics", FL);
+			}
+
 			if ((p = strstr(s, "!noraise:"))) {
 				raise_on_search = 0;
 			}
@@ -2235,6 +2256,8 @@ int main(int argc, char **argv)
 	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
+	if (search_heuristics) ctx->flags |= FZ_CTX_FLAGS_SPACE_HEURISTIC;
+
 	fz_register_document_handlers(ctx);
 
 	if (layout_css)

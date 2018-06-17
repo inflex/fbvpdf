@@ -223,38 +223,38 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 						if (word_mode) {
 							float size_to_match = ch->size;
 							chwlws = NULL;
-//							fprintf(stderr,"Hit at IDX=%d\n",idx);
+
 							/* find the START of our word */
 							idx = lsi;
 							chwlws = NULL;
 							for (chw = line->first_char; chw; chw = chw->next) {
 
-								if ((isblank(chw->c)&&(!isspace(chw->c)))||(chw->size != size_to_match)) {
-//									fprintf(stderr,"break at %d\n",idx);
-									chwlws = chw;
+								if ( ctx->flags & FZ_CTX_FLAGS_SPACE_HEURISTIC ) {
+									if ((isblank(chw->c) && (!isspace(chw->c))) ||(chw->size != size_to_match)) { chwlws = chw; }
+								} else {
+									if ( isblank(chw->c) || (chw->size != size_to_match)) { chwlws = chw; }
 								}
 
 								if (idx == start) {
 									if (chwlws == NULL) chw = line->first_char;
 									else chw = chwlws->next;
-//									fprintf(stderr,"Found character match location, now winding back to read word (startchar='%d'\n",chw->c);
-									while (chw && (!isblank(chw->c) || isspace(chw->c)))  {
+									while (
+											chw 
+											&& (!isblank(chw->c) 
+												|| (isspace(chw->c) && (ctx->flags & FZ_CTX_FLAGS_SPACE_HEURISTIC)))
+											){
 										cb->on_char(ctx, cb->arg, line, chw);
-//										fprintf(stderr,"%c.", chw->c);
 										chw = chw->next; 
 									}
 									return;
 									were_done = 1;
-//									fprintf(stderr,"\nALL DONE\n");
 									break;
 								}
 								idx++;
 							}
-//							fprintf(stderr,"\n");
 							return;
 							idx = end;
-							//break;
-						}
+						} // end word mode
 					}
 				}
 
