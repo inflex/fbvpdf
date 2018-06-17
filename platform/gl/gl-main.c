@@ -221,6 +221,7 @@ static int annot_count = 0;
 
 static int window_w = 1, window_h = 1;
 
+static int debug = 0;
 static time_t process_start_time;
 static int oldinvert = 0, currentinvert = 0;
 static int oldpage = 0, currentpage = 0;
@@ -281,7 +282,7 @@ static void update_title(void)
 	if (search_not_found) {
 		if (n > 50) snprintf(buf, sizeof(buf),"'%s' not found - ...%s", last_search_string, title +n -50);
 		else snprintf(buf, sizeof(buf),"'%s' not found - %s", last_search_string, title);
-		//		fprintf(stderr,"%s:%d: Search not found: '%s'\r\n", FL, last_search_string);
+		if (debug) fprintf(stderr,"%s:%d: Search not found: '%s'\r\n", FL, last_search_string);
 	} else {
 		if (n > 50) {
 			sprintf(buf, "...%s - %d / %d", title + n - 50, currentpage + 1, fz_count_pages(ctx, doc));
@@ -768,7 +769,7 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
-			//			fprintf(stderr,"%s:%d: Dispatching request '%s'\n", __FILE__, __LINE__, s);
+			if (debug) fprintf(stderr,"%s:%d: Dispatching request '%s'\n", FL, s);
 			DDI_dispatch( &ddi, s );
 			fz_free(ctx, s);
 			glutPostRedisplay();
@@ -1132,10 +1133,11 @@ static void do_app(void)
 						 glutPostRedisplay();
 						 break;
 			case 'n':
-						 if (search_current_page >= 0) {
+						 if ((search_current_page >= 0)&&(strlen(search_needle)==0)) {
 							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
 						 } else {
 
+							 if (strlen(search_needle)) {
 							 search_dir = 1;
 							 if (search_hit_page == currentpage)
 								 search_page = currentpage + search_dir;
@@ -1148,6 +1150,7 @@ static void do_app(void)
 									 search_active = 1;
 							 }
 							 glutPostRedisplay();
+							 }
 						 }
 						 break;
 		}
@@ -1258,7 +1261,6 @@ static void do_help(void)
 	x += ui.lineheight;
 	y += ui.lineheight + ui.baseline;
 
-	fprintf(stderr,"%s:%d: %d %d\r\n", __FILE__,__LINE__, x, y);
 	glColor4f(0, 0, 0, 1);
 	y = do_help_line(x, y, "FlexBV-MuPDF", FZ_VERSION);
 	y += ui.lineheight;
@@ -1391,9 +1393,10 @@ int ddi_get(char *buf, size_t size) {
 	if (DDI_pickup( &ddi, buf, size ) == 0) {
 		char *p;
 
+		if (debug) fprintf(stderr,"%s:%d: Received '%s'\r\n", FL, buf);
 		p = buf;
 		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-		//		fprintf(stdout,"DDI pickup: '%s'\n", buf);
+		if (debug) fprintf(stderr,"%s:%d: After filtering '%s'\r\n", FL, buf);
 		result = 1;
 	}  // if file opened
 
@@ -1744,9 +1747,20 @@ static void ddi_check( void ) {
 	char sn[1024];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
-		snprintf(sn, sizeof(sn), "%s", ddi.last_pickup);
+		if (strlen(ddi.last_pickup)) snprintf(sn, sizeof(sn), "%s", ddi.last_pickup);
+		else if (strlen(search_needle)) snprintf(sn,sizeof(sn),"%s", search_needle);
+		else return;
 	}
 
+	/*
+	 * 
+	 * NOTE: We're only expecting single-line DDI requests here.
+	 *
+	 * The only compound DDI request we get with muPDF is right at 
+	 * the start when we load up.
+	 *
+	 */
+	 
 	if ((ddi_get( sn, sizeof(sn)))||(ddi_simulate_option)) {
 
 		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
@@ -1760,26 +1774,38 @@ static void ddi_check( void ) {
 			snprintf(sn, sizeof(sn), "%s", tmp);
 		}
 
-		if (strncmp(sn, "!quit:", strlen("!quit:"))==0) {
+		if (strstr(sn, "!quit:")) {
 			if (time(NULL) -process_start_time > 2) quit();
 
-		} else if (strncmp(sn, "!cinvert:", strlen("!cinvert:"))==0) {
+		} else if (strstr(sn, "!debug:")) {
+			fprintf(stderr,"%s:%d: DEBUG mode ACTIVE\r\n", FL);
+			debug = 1;
+
+		} else if (strstr(sn, "!cinvert:")) {
 			currentinvert = !currentinvert;
 
-		} else if (strncmp(sn, "!ss:", strlen("!ss:"))==0) {
+		} else if (strstr(sn, "!ss:")) {
 			scroll_wheel_swap = 1;
 
-		} else if (strncmp(sn, "!raise:", strlen("!raise:"))==0) {
+		} else if (strstr(sn, "!raise:")) {
 			raise_on_search = 1;
 
-		} else if (strncmp(sn, "!noraise:", strlen("!noraise:"))==0) {
+		} else if (strstr(sn, "!noraise:")) {
 			raise_on_search = 0;
 
-		} else if (strncmp(sn, "!load:", strlen("!load:"))==0) {
+		} else if (strstr(sn, "!load:")) {
+
+			char *fnp;
+
 			/*
 			 * load a file, not searching.
 			 */
-			snprintf(filename,sizeof(filename),"%s", sn +strlen("!load:"));
+
+			fnp = strstr(sn, "!load:");
+			snprintf(filename,sizeof(filename),"%s", fnp +strlen("!load:"));
+			fnp = strpbrk(filename,"\n\r");
+			if (fnp) *fnp = '\0';
+
 			title = strrchr(filename, '/');
 			if (!title)
 				title = strrchr(filename, '\\');
@@ -1904,7 +1930,7 @@ static void ddi_check( void ) {
 					}
 					*/
 
-					//					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
+					if (debug) fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, sn, search_hit_count, search_page +1);
 
 					/*
 					 * If we've used up all our hits in this page
@@ -2114,7 +2140,7 @@ int main(int argc, char **argv)
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
 			char *p, *q;
 			usleep(10000); // 0.1 sec
-			//			fprintf(stderr,"Data---------\r\n%s\r\n",s);
+			if (debug) fprintf(stderr,"DDI Data---------\r\n%s\r\n-------------\r\n",s);
 			if ((p = strstr(s,"!load:"))!=NULL) {
 				q = strchr(p,'\n');
 				if (q) *q = '\0';
@@ -2138,6 +2164,10 @@ int main(int argc, char **argv)
 				}
 				if ((p = strstr(s, "!noraise:"))) {
 					raise_on_search = 0;
+				}
+				if ((p = strstr(s, "!debug:"))) {
+					debug = 1;
+					if (debug) fprintf(stderr,"DDI Data---------\r\n%s\r\n-------------\r\n",s);
 				}
 				break;
 			} // if we had a successful DDI packet read
