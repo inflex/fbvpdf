@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #define FL __FILE__,__LINE__
 #ifndef _WIN32
@@ -1138,18 +1139,18 @@ static void do_app(void)
 						 } else {
 
 							 if (strlen(search_needle)) {
-							 search_dir = 1;
-							 if (search_hit_page == currentpage)
-								 search_page = currentpage + search_dir;
-							 else
-								 search_page = currentpage;
-							 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
-							 {
-								 search_hit_page = -1;
-								 if (search_needle)
-									 search_active = 1;
-							 }
-							 glutPostRedisplay();
+								 search_dir = 1;
+								 if (search_hit_page == currentpage)
+									 search_page = currentpage + search_dir;
+								 else
+									 search_page = currentpage;
+								 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
+								 {
+									 search_hit_page = -1;
+									 if (search_needle)
+										 search_active = 1;
+								 }
+								 glutPostRedisplay();
 							 }
 						 }
 						 break;
@@ -1395,7 +1396,7 @@ int ddi_get(char *buf, size_t size) {
 
 		if (debug) fprintf(stderr,"%s:%d: Received '%s'\r\n", FL, buf);
 		p = buf;
-//		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
+		//		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
 		if (debug) fprintf(stderr,"%s:%d: After filtering '%s'\r\n", FL, buf);
 		result = 1;
 	}  // if file opened
@@ -1744,11 +1745,12 @@ static void on_warning(const char *fmt, va_list ap)
 }
 
 static void ddi_check( void ) {
-	char sn[1024];
+	char sn_a[1024];
+	char sn_b[1024];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
-		if (strlen(ddi.last_pickup)) snprintf(sn, sizeof(sn), "%s", ddi.last_pickup);
-		else if (strlen(search_needle)) snprintf(sn,sizeof(sn),"%s", search_needle);
+		if (strlen(ddi.last_pickup)) snprintf(sn_a, sizeof(sn_a), "%s", ddi.last_pickup);
+		else if (strlen(search_needle)) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
 		else return;
 	}
 
@@ -1760,40 +1762,40 @@ static void ddi_check( void ) {
 	 * the start when we load up.
 	 *
 	 */
-	 
-	if ((ddi_get( sn, sizeof(sn)))||(ddi_simulate_option)) {
+
+	if ((ddi_get( sn_a, sizeof(sn_a)))||(ddi_simulate_option)) {
 
 		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 
-		if (strlen(sn) < 2) return;
+		if (strlen(sn_a) < 2) return;
 
-		if (strncmp(sn, "!pagesearch:", strlen("!pagesearch:"))==0) {
+		if (strncmp(sn_a, "!pagesearch:", strlen("!pagesearch:"))==0) {
 			char tmp[128];
 			search_in_page_only = 1;
-			snprintf(tmp, sizeof(tmp), "%s", sn+strlen("!pagesearch:"));
-			snprintf(sn, sizeof(sn), "%s", tmp);
+			snprintf(tmp, sizeof(tmp), "%s", sn_a+strlen("!pagesearch:"));
+			snprintf(sn_a, sizeof(sn_a), "%s", tmp);
 		}
 
-		if (strstr(sn, "!quit:")) {
+		if (strstr(sn_a, "!quit:")) {
 			if (time(NULL) -process_start_time > 2) quit();
 
-		} else if (strstr(sn, "!debug:")) {
+		} else if (strstr(sn_a, "!debug:")) {
 			fprintf(stderr,"%s:%d: DEBUG mode ACTIVE\r\n", FL);
 			debug = 1;
 
-		} else if (strstr(sn, "!cinvert:")) {
+		} else if (strstr(sn_a, "!cinvert:")) {
 			currentinvert = !currentinvert;
 
-		} else if (strstr(sn, "!ss:")) {
+		} else if (strstr(sn_a, "!ss:")) {
 			scroll_wheel_swap = 1;
 
-		} else if (strstr(sn, "!raise:")) {
+		} else if (strstr(sn_a, "!raise:")) {
 			raise_on_search = 1;
 
-		} else if (strstr(sn, "!noraise:")) {
+		} else if (strstr(sn_a, "!noraise:")) {
 			raise_on_search = 0;
 
-		} else if (strstr(sn, "!load:")) {
+		} else if (strstr(sn_a, "!load:")) {
 
 			char *fnp;
 
@@ -1801,7 +1803,7 @@ static void ddi_check( void ) {
 			 * load a file, not searching.
 			 */
 
-			fnp = strstr(sn, "!load:");
+			fnp = strstr(sn_a, "!load:");
 			if (debug) fprintf(stderr,"%s:%d: fnp = '%s'\r\n", FL, fnp );
 			snprintf(filename,sizeof(filename),"%s", fnp +strlen("!load:"));
 			fnp = strpbrk(filename,"\n\r");
@@ -1831,6 +1833,7 @@ static void ddi_check( void ) {
 			reload();
 
 		} else {
+			char sn_b[1024];
 
 			/*
 			 * searching
@@ -1842,6 +1845,15 @@ static void ddi_check( void ) {
 			 *
 			 */
 
+			sn_b[0] = '\0';
+			if (strchr(sn_a,'_')) {
+				snprintf(sn_b,sizeof(sn_b),"%s", sn_a);
+				for (int i = 0; i < (strlen(sn_b) -1); i++) {
+					if (sn_b[i] == '_') sn_b[i] = ' ';
+				}
+				if(debug)fprintf(stderr,"%s:%d: Alternative search: '%s'\r\n", FL, sn_b);
+			}
+
 			if (search_page == -1) search_page = 0;
 
 			/*
@@ -1851,7 +1863,7 @@ static void ddi_check( void ) {
 			if (search_in_page_only) {
 				search_inpage_index = 0;
 
-			} else if (strcmp(sn, prior_search)==0) {
+			} else if (strcmp(sn_a, prior_search)==0) {
 				/*
 				 * If we're resuming an existing search
 				 */
@@ -1864,7 +1876,7 @@ static void ddi_check( void ) {
 				search_current_page = -1;
 				search_inpage_index = -1;
 				search_page = 0;
-				snprintf(prior_search, sizeof(prior_search), "%s", sn);
+				snprintf(prior_search, sizeof(prior_search), "%s", sn_a);
 			}
 
 
@@ -1895,19 +1907,28 @@ static void ddi_check( void ) {
 
 				while (search_active) {
 					if (search_page > fz_count_pages(ctx, doc) -1) {
-						//search_ended_flash_page = 1;
-						//currentinvert = !currentinvert;
 						search_current_page = -1;
 						search_inpage_index = -1;
 						search_page = 0;
 						prior_search[0] = 0;
-						sn[0] = 0;
+						sn_a[0] = 0;
 						search_active = 0;
 						break;
 					}
-					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
+
 					/*
-					{
+					 * Because of the prevelance of space vs underscore strings in PDF schematics
+					 * we try search for both variants
+					 *
+					 */
+					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
+					if (debug) fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, sn_a, search_hit_count, search_page +1);
+					if ((search_hit_count == 0)&&(strlen(sn_b))) {
+						search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_b, search_hit_bbox, nelem(search_hit_bbox));
+						if (debug) fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, sn_b, search_hit_count, search_page +1);
+					} 
+					/*
+						{
 						char buf[256];
 						int x = canvas_x; // + 1 * ui.lineheight;
 						int y = canvas_y; // + 1 * ui.lineheight;
@@ -1917,11 +1938,11 @@ static void ddi_check( void ) {
 						ui_begin();
 						glBegin(GL_TRIANGLE_STRIP);
 						{
-							glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
-							glVertex2f(x, y);
-							glVertex2f(x, y + h);
-							glVertex2f(x + w, y);
-							glVertex2f(x + w, y + h);
+						glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
+						glVertex2f(x, y);
+						glVertex2f(x, y + h);
+						glVertex2f(x + w, y);
+						glVertex2f(x + w, y + h);
 						}
 						glEnd();
 
@@ -1929,10 +1950,9 @@ static void ddi_check( void ) {
 						glColor4f(0, 0, 0, 1);
 						do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
 						ui_end();
-					}
-					*/
+						}
+						*/
 
-					if (debug) fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, sn, search_hit_count, search_page +1);
 
 					/*
 					 * If we've used up all our hits in this page
@@ -1962,9 +1982,8 @@ static void ddi_check( void ) {
 									continue;
 								} else {
 									char b[1024];
-									snprintf(last_search_string, sizeof(last_search_string),"%s", sn);
-									snprintf(b,sizeof(b),"'%s' not found", sn);
-									ui_label_draw( 0, 0, 200, 20, b);
+									snprintf(last_search_string, sizeof(last_search_string),"%s", sn_a);
+									snprintf(b,sizeof(b),"'%s' not found", sn_a);
 
 									search_not_found = 1;
 									update_title();
