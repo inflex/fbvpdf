@@ -229,7 +229,7 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 							chwlws = NULL;
 							for (chw = line->first_char; chw; chw = chw->next) {
 
-								if (isblank(chw->c)||(chw->size != size_to_match)) {
+								if ((isblank(chw->c)&&(!isspace(chw->c)))||(chw->size != size_to_match)) {
 //									fprintf(stderr,"break at %d\n",idx);
 									chwlws = chw;
 								}
@@ -238,7 +238,7 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 									if (chwlws == NULL) chw = line->first_char;
 									else chw = chwlws->next;
 //									fprintf(stderr,"Found character match location, now winding back to read word (startchar='%d'\n",chw->c);
-									while (chw && !isblank(chw->c))  {
+									while (chw && (!isblank(chw->c) || isspace(chw->c)))  {
 										cb->on_char(ctx, cb->arg, line, chw);
 //										fprintf(stderr,"%c.", chw->c);
 										chw = chw->next; 

@@ -1395,7 +1395,7 @@ int ddi_get(char *buf, size_t size) {
 
 		if (debug) fprintf(stderr,"%s:%d: Received '%s'\r\n", FL, buf);
 		p = buf;
-		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
+//		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
 		if (debug) fprintf(stderr,"%s:%d: After filtering '%s'\r\n", FL, buf);
 		result = 1;
 	}  // if file opened
@@ -1802,9 +1802,11 @@ static void ddi_check( void ) {
 			 */
 
 			fnp = strstr(sn, "!load:");
+			if (debug) fprintf(stderr,"%s:%d: fnp = '%s'\r\n", FL, fnp );
 			snprintf(filename,sizeof(filename),"%s", fnp +strlen("!load:"));
 			fnp = strpbrk(filename,"\n\r");
 			if (fnp) *fnp = '\0';
+			if (debug) fprintf(stderr,"%s:%d: filename = '%s'\r\n", FL, filename );
 
 			title = strrchr(filename, '/');
 			if (!title)
@@ -2140,38 +2142,44 @@ int main(int argc, char **argv)
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
 			char *p, *q;
 			usleep(10000); // 0.1 sec
-			if (debug) fprintf(stderr,"DDI Data---------\r\n%s\r\n-------------\r\n",s);
+
+			if ((p = strstr(s, "!debug:"))) {
+				debug = 1;
+				if (debug) fprintf(stderr,"%s:%d:DDI Data---------\r\n%s\r\n-------------\r\n",FL,s);
+			}
+
 			if ((p = strstr(s,"!load:"))!=NULL) {
 				q = strchr(p,'\n');
 				if (q) *q = '\0';
 				snprintf(filename, sizeof(filename), "%s", p+6 );
+				if (debug) fprintf(stderr,"%s:%d: Filename set to '%s'\r\n",FL, filename);
 				if (q) *q = '\n';
+			}
 
-				if ((p = strstr(s, "!setwindowsize:"))) {
-					q = strchr(p,'\n');
-					if (q) *q = '\0';
-					sscanf(p +strlen("!setwindowsize:"),"%d %d", &windowx, &windowy );
-					if (q) *q = '\n';
-				}
-				if ((p = strstr(s, "!cinvert:"))) {
-					currentinvert = !currentinvert;
-				}
-				if ((p = strstr(s, "!ss:"))) {
-					scroll_wheel_swap = 1;
-				}
-				if ((p = strstr(s, "!raise:"))) {
-					raise_on_search = 1;
-				}
-				if ((p = strstr(s, "!noraise:"))) {
-					raise_on_search = 0;
-				}
-				if ((p = strstr(s, "!debug:"))) {
-					debug = 1;
-					if (debug) fprintf(stderr,"DDI Data---------\r\n%s\r\n-------------\r\n",s);
-				}
-				break;
-			} // if we had a successful DDI packet read
-		}
+			if ((p = strstr(s, "!setwindowsize:"))) {
+				q = strchr(p,'\n');
+				if (q) *q = '\0';
+				sscanf(p +strlen("!setwindowsize:"),"%d %d", &windowx, &windowy );
+				if (q) *q = '\n';
+			}
+
+			if ((p = strstr(s, "!cinvert:"))) {
+				currentinvert = !currentinvert;
+			}
+
+			if ((p = strstr(s, "!ss:"))) {
+				scroll_wheel_swap = 1;
+			}
+
+			if ((p = strstr(s, "!raise:"))) {
+				raise_on_search = 1;
+			}
+
+			if ((p = strstr(s, "!noraise:"))) {
+				raise_on_search = 0;
+			}
+
+		} // while we're trying to read the DDI packet
 
 		if (x == 0) {
 
@@ -2192,7 +2200,7 @@ int main(int argc, char **argv)
 
 
 		}
-	}
+	} // DDI read block
 
 
 
