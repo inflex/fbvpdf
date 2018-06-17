@@ -1141,7 +1141,7 @@ static void do_app(void)
 							 break;
 						 }
 
-						 if ((search_current_page >= 0)&&(search_needle)&&(strlen(search_needle)==0)) {
+						 if ((search_current_page >= 0)&&(search_needle)) {
 							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
 						 } else {
 
@@ -1753,7 +1753,6 @@ static void on_warning(const char *fmt, va_list ap)
 
 static void ddi_check( void ) {
 	char sn_a[10240];
-	char sn_b[10240];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
 		if (strlen(ddi.last_pickup)) snprintf(sn_a, sizeof(sn_a), "%s", ddi.last_pickup);
