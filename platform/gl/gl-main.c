@@ -139,23 +139,25 @@ void ui_draw_image(struct texture *tex, float x, float y)
 
 static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 550, 700, 900 };
 
-static int zoom_in(int oldres)
-{
+/*
+	static int zoom_in(int oldres)
+	{
 	int i;
 	for (i = 0; i < nelem(zoom_list) - 1; ++i)
-		if (zoom_list[i] <= oldres && zoom_list[i+1] > oldres)
-			return zoom_list[i+1];
+	if (zoom_list[i] <= oldres && zoom_list[i+1] > oldres)
+	return zoom_list[i+1];
 	return zoom_list[i];
-}
+	}
 
-static int zoom_out(int oldres)
-{
+	static int zoom_out(int oldres)
+	{
 	int i;
 	for (i = 0; i < nelem(zoom_list) - 1; ++i)
-		if (zoom_list[i] < oldres && zoom_list[i+1] >= oldres)
-			return zoom_list[i];
+	if (zoom_list[i] < oldres && zoom_list[i+1] >= oldres)
+	return zoom_list[i];
 	return zoom_list[0];
-}
+	}
+	*/
 
 #define MINRES (zoom_list[0])
 #define MAXRES (zoom_list[nelem(zoom_list)-1])
@@ -173,12 +175,11 @@ static int zoom_out(int oldres)
 #define PATH_MAX 4096
 #endif
 
-static char ddi_data[10240]; // 10k aught to do it
 static char filename[PATH_MAX];
 static char *password = "";
 static int raise_on_search = 0;
 static int scroll_wheel_swap = 0;
-static int search_ended_flash_page = 0;
+//static int search_ended_flash_page = 0;
 static int search_in_page_only = 0;
 static char *ddiprefix = "mupdf";
 static char prior_search[1024] = "";
@@ -186,7 +187,7 @@ static int search_current_page = 1;
 static int search_inpage_index = -1;
 static int ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 static int document_has_hits = 0;
-static int search_status = SEARCH_STATUS_NONE;
+//static int search_status = SEARCH_STATUS_NONE;
 static char am_dragging = 0;
 static fz_point dragging_start;
 
@@ -198,7 +199,9 @@ static float layout_em = DEFAULT_LAYOUT_EM;
 static char *layout_css = NULL;
 static int layout_use_doc_css = 1;
 
-static const char *title = "MuPDF/GL";
+static const char *title = "FlexBV MuPDF/GL";
+static int search_not_found = 0;
+static char last_search_string[256] = "";
 static fz_document *doc = NULL;
 static fz_page *page = NULL;
 static fz_stext_page *text = NULL;
@@ -274,10 +277,18 @@ static void update_title(void)
 {
 	static char buf[256];
 	size_t n = strlen(title);
-	if (n > 50)
-		sprintf(buf, "...%s - %d / %d", title + n - 50, currentpage + 1, fz_count_pages(ctx, doc));
-	else
-		sprintf(buf, "%s - %d / %d", title, currentpage + 1, fz_count_pages(ctx, doc));
+
+	if (search_not_found) {
+		if (n > 50) snprintf(buf, sizeof(buf),"'%s' not found - ...%s", last_search_string, title +n -50);
+		else snprintf(buf, sizeof(buf),"'%s' not found - %s", last_search_string, title);
+		//		fprintf(stderr,"%s:%d: Search not found: '%s'\r\n", FL, last_search_string);
+	} else {
+		if (n > 50) {
+			sprintf(buf, "...%s - %d / %d", title + n - 50, currentpage + 1, fz_count_pages(ctx, doc));
+		} else{
+			sprintf(buf, "%s - %d / %d", title, currentpage + 1, fz_count_pages(ctx, doc));
+		}
+	}
 	glutSetWindowTitle(buf);
 	glutSetIconTitle(buf);
 }
@@ -1247,8 +1258,9 @@ static void do_help(void)
 	x += ui.lineheight;
 	y += ui.lineheight + ui.baseline;
 
+	fprintf(stderr,"%s:%d: %d %d\r\n", __FILE__,__LINE__, x, y);
 	glColor4f(0, 0, 0, 1);
-	y = do_help_line(x, y, "OBV-MuPDF", FZ_VERSION);
+	y = do_help_line(x, y, "FlexBV-MuPDF", FZ_VERSION);
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
 	y = do_help_line(x, y, "i", "show document information");
@@ -1287,10 +1299,10 @@ static void do_help(void)
 
 static void do_canvas(void)
 {
-	static int saved_scroll_x = 0;
-	static int saved_scroll_y = 0;
-	static int saved_ui_x = 0;
-	static int saved_ui_y = 0;
+	//	static int saved_scroll_x = 0;
+	//	static int saved_scroll_y = 0;
+	//	static int saved_ui_x = 0;
+	//	static int saved_ui_y = 0;
 
 	float x, y;
 
@@ -1498,8 +1510,24 @@ static void run_main_loop(void)
 	if (search_active)
 	{
 		char buf[256];
-		sprintf(buf, "Searching page %d of %d.", search_page + 1, fz_count_pages(ctx, doc));
-		ui_label_draw(canvas_x, 0, canvas_x + canvas_w, ui.lineheight+4, buf);
+		int x = canvas_x; // + 1 * ui.lineheight;
+		int y = canvas_y; // + 1 * ui.lineheight;
+		int w = canvas_w - 8 * ui.lineheight;
+		int h = 1.25 * ui.lineheight;
+
+		glBegin(GL_TRIANGLE_STRIP);
+		{
+			glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
+			glVertex2f(x, y);
+			glVertex2f(x, y + h);
+			glVertex2f(x + w, y);
+			glVertex2f(x + w, y + h);
+		}
+		glEnd();
+
+		sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
+		glColor4f(0, 0, 0, 1);
+		do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
 	}
 
 	ui_end();
@@ -1828,11 +1856,12 @@ static void ddi_check( void ) {
 			{
 				//search_page = search_current_page;
 				search_active = 1;
+				search_not_found = 0;
 
 				if (raise_on_search == 1) {
 #ifdef __WIN32__
-//					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
-//					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
+					//					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
+					//					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
 #endif
 				}
 
@@ -1849,6 +1878,32 @@ static void ddi_check( void ) {
 						break;
 					}
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn, search_hit_bbox, nelem(search_hit_bbox));
+					/*
+					{
+						char buf[256];
+						int x = canvas_x; // + 1 * ui.lineheight;
+						int y = canvas_y; // + 1 * ui.lineheight;
+						int w = canvas_w - 8 * ui.lineheight;
+						int h = 1.25 * ui.lineheight;
+
+						ui_begin();
+						glBegin(GL_TRIANGLE_STRIP);
+						{
+							glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
+							glVertex2f(x, y);
+							glVertex2f(x, y + h);
+							glVertex2f(x + w, y);
+							glVertex2f(x + w, y + h);
+						}
+						glEnd();
+
+						sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
+						glColor4f(0, 0, 0, 1);
+						do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
+						ui_end();
+					}
+					*/
+
 					//					fprintf(stderr,"%s:%d:Searching for '%s', %d hits\n", __FILE__, __LINE__, sn, search_hit_count);
 
 					/*
@@ -1878,6 +1933,13 @@ static void ddi_check( void ) {
 									document_has_hits = 0;
 									continue;
 								} else {
+									char b[1024];
+									snprintf(last_search_string, sizeof(last_search_string),"%s", sn);
+									snprintf(b,sizeof(b),"'%s' not found", sn);
+									ui_label_draw( 0, 0, 200, 20, b);
+
+									search_not_found = 1;
+									update_title();
 									search_active = 0;
 									break; // no hits in document
 								}
@@ -2012,7 +2074,7 @@ int main(int argc, char **argv)
 
 	//	fprintf(stderr,"Initialising glut\r\n");
 	glutInit(&argc, argv);
-//	fprintf(stderr,"Parsing parameters\r\n");
+	//	fprintf(stderr,"Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X:D:")) != -1)
 	{
 		switch (c)
@@ -2036,7 +2098,7 @@ int main(int argc, char **argv)
 	//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
 
 	/* ddi setup */
-//	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
+	//	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
 	DDI_init(&ddi);
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
@@ -2052,7 +2114,7 @@ int main(int argc, char **argv)
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
 			char *p, *q;
 			usleep(10000); // 0.1 sec
-			fprintf(stderr,"Data---------\r\n%s\r\n",s);
+			//			fprintf(stderr,"Data---------\r\n%s\r\n",s);
 			if ((p = strstr(s,"!load:"))!=NULL) {
 				q = strchr(p,'\n');
 				if (q) *q = '\0';
