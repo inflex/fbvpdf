@@ -517,6 +517,9 @@ fz_search_stext_page(fz_context *ctx, fz_stext_page *page, const char *needle, f
 	fz_buffer *buffer;
 	const char *haystack, *begin, *end;
 	int c, inside;
+	int word_match = 0;
+	int nl = strlen(needle), nc;
+	char *np;
 
 	if (strlen(needle) == 0)
 		return 0;
@@ -538,40 +541,56 @@ fz_search_stext_page(fz_context *ctx, fz_stext_page *page, const char *needle, f
 		inside = 0;
 		for (block = page->first_block; block; block = block->next)
 		{
-			if (block->type != FZ_STEXT_BLOCK_TEXT)
-				continue;
+			if (block->type != FZ_STEXT_BLOCK_TEXT) continue;
 			for (line = block->u.t.first_line; line; line = line->next)
 			{
+
+				word_match = 0;
+				np = needle;
+				nc = nl;
+				for (ch = line->first_char; ch; ch = ch->next) {
+					nc--;
+					if (ch->c != *np) break;
+					if (*np) np++;
+				}
+				if (nc == 0 && !ch) word_match = 1;
+
+				if (word_match == 1) {
+					fprintf(stderr,"%s:%d: WORD match in search '", __FILE__, __LINE__);
+					for (ch = line->first_char; ch; ch = ch->next) {
+						fprintf(stderr,"%c",ch->c);
+						on_highlight_char(ctx, &hits, line, ch);
+					}
+					fprintf(stderr,"'\r\n");
+				}
+
+				/*
 				for (ch = line->first_char; ch; ch = ch->next)
 				{
+					fprintf(stderr,"%c", ch->c);
 try_new_match:
-					if (!inside)
-					{
-						if (haystack >= begin)
-							inside = 1;
+					if (!inside) {
+						if (haystack >= begin) inside = 1;
 					}
-					if (inside)
-					{
-						if (haystack < end)
-							on_highlight_char(ctx, &hits, line, ch);
-						else
-						{
+					if (inside) {
+						if (haystack < end) on_highlight_char(ctx, &hits, line, ch);
+						else {
 							inside = 0;
 							begin = find_string(haystack, needle, &end);
-							if (!begin)
-								goto no_more_matches;
-							else
-								goto try_new_match;
+							if (!begin) goto no_more_matches;
+							else goto try_new_match;
 						}
 					}
 					haystack += fz_chartorune(&c, haystack);
-				}
+				} // for each char in the line
+				fprintf(stderr,"'\r\n");
 				assert(*haystack == '\n');
 				++haystack;
-			}
-			assert(*haystack == '\n');
-			++haystack;
-		}
+				*/
+			} // for each line in the block
+//			assert(*haystack == '\n');
+//			++haystack;
+		} // for each block in the page
 no_more_matches:;
 	}
 	fz_always(ctx)

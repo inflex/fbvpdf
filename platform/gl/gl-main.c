@@ -263,6 +263,7 @@ static int search_dir = 1;
 static int search_page = 0;
 static int search_hit_page = -1;
 static int search_hit_count = 0;
+static int search_compound = 0;
 static fz_rect search_hit_bbox[5000];
 
 static unsigned int next_power_of_two(unsigned int n)
@@ -1753,6 +1754,7 @@ static void on_warning(const char *fmt, va_list ap)
 
 static void ddi_check( void ) {
 	char sn_a[10240];
+	char comp_a[128], comp_b[128];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
 		if (strlen(ddi.last_pickup)) snprintf(sn_a, sizeof(sn_a), "%s", ddi.last_pickup);
@@ -1769,11 +1771,38 @@ static void ddi_check( void ) {
 	 *
 	 */
 
+	search_compound = 0;
+
 	if ((ddi_simulate_option)||(ddi_get( sn_a, sizeof(sn_a)))) {
 
 		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 
 		if (strlen(sn_a) < 2) return;
+
+		if (strncmp(sn_a, "!compsearch:", strlen("!compsearch:"))==0) {
+			/*
+			 * compound search requested.  First we find the page with the
+			 * first part, then we find the second part.
+			 *
+			 */
+			char *p;
+
+
+			snprintf(comp_a, sizeof(comp_a), "%s", sn_a +strlen("!compsearch:"));
+			fprintf(stderr,"%s:%d: Comp search main:'%s' comp_a:'%s'\r\n", FL, sn_a, comp_a);
+			p = strrchr(comp_a, ':');
+			if (p) {
+				fprintf(stderr,"%s:%d: Split found\r\n", FL);
+				snprintf(comp_b, sizeof(comp_b), "%s", p+1);
+				*p = '\0';
+				snprintf(sn_a,sizeof(sn_a),"%s", comp_a);
+				fprintf(stderr,"%s:%d: main = '%s', secondary = '%s'\r\n", FL, sn_a, comp_b);
+				search_compound = 1;
+			} else {
+				fprintf(stderr,"%s:%d: No split in '%s'", FL, comp_a);
+				search_compound = 0;
+			}
+		}
 
 		if (strncmp(sn_a, "!pagesearch:", strlen("!pagesearch:"))==0) {
 			char tmp[128];
@@ -1933,36 +1962,26 @@ static void ddi_check( void ) {
 					 */
 					search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
 					if (debug) fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, sn_a, search_hit_count, search_page +1);
-					if ((search_hit_count == 0)&&(strlen(sn_b))) {
+					if ((search_hit_count == 0)&&(strlen(sn_b))&&(strchr(sn_b,' '))) {
 						search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_b, search_hit_bbox, nelem(search_hit_bbox));
 						if (debug) fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, sn_b, search_hit_count, search_page +1);
 					} 
+
 					/*
-						{
-						char buf[256];
-						int x = canvas_x; // + 1 * ui.lineheight;
-						int y = canvas_y; // + 1 * ui.lineheight;
-						int w = canvas_w - 8 * ui.lineheight;
-						int h = 1.25 * ui.lineheight;
+					 * With compound searching, we're using using the initial part just to locate our page
+					 *
+					 */
+					if ((search_compound == 1)&&(search_hit_count > 0)) {
 
-						ui_begin();
-						glBegin(GL_TRIANGLE_STRIP);
-						{
-						glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
-						glVertex2f(x, y);
-						glVertex2f(x, y + h);
-						glVertex2f(x + w, y);
-						glVertex2f(x + w, y + h);
-						}
-						glEnd();
+						fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s'\r\n", FL, search_page+1, comp_b);
 
-						sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
-						glColor4f(0, 0, 0, 1);
-						do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
-						ui_end();
-						}
-						*/
-
+						search_hit_count = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox, nelem(search_hit_bbox));
+						fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, comp_b, search_hit_count);
+//						if (local_hits > 0) {
+//							snprintf(sn_a, sizeof(sn_a), "%s", comp_b);
+//							search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
+//						} else search_hit_count = 0;
+					}
 
 					/*
 					 * If we've used up all our hits in this page
