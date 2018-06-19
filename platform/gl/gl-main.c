@@ -290,14 +290,14 @@ static void update_title(void)
 	size_t n = strlen(title);
 
 	if (search_not_found) {
-		if (n > 50) snprintf(buf, sizeof(buf),"'%s' not found - ...%s", last_search_string, title +n -50);
-		else snprintf(buf, sizeof(buf),"'%s' not found - %s", last_search_string, title);
+		if (n > 50) snprintf(buf, sizeof(buf),"'%s' not found - ...%s (R%d)", last_search_string, title +n -50, GIT_BUILD);
+		else snprintf(buf, sizeof(buf),"'%s' not found - %s (R%d)", last_search_string, title, GIT_BUILD);
 		if (debug) fprintf(stderr,"%s:%d: Search not found: '%s'\r\n", FL, last_search_string);
 	} else {
 		if (n > 50) {
-			sprintf(buf, "...%s - %d / %d", title + n - 50, currentpage + 1, fz_count_pages(ctx, doc));
+			sprintf(buf, "...%s - %d / %d (R%d)", title + n - 50, currentpage + 1, fz_count_pages(ctx, doc), GIT_BUILD);
 		} else{
-			sprintf(buf, "%s - %d / %d", title, currentpage + 1, fz_count_pages(ctx, doc));
+			sprintf(buf, "%s - %d / %d (R%d)", title, currentpage + 1, fz_count_pages(ctx, doc), GIT_BUILD);
 		}
 	}
 	glutSetWindowTitle(buf);
