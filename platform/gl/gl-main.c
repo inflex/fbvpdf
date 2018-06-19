@@ -176,6 +176,10 @@ static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288
 #define PATH_MAX 4096
 #endif
 
+#define SEARCH_TYPE_NONE 0
+#define SEARCH_TYPE_DDI_SEQUENCE 1
+#define SEARCH_TYPE_TEXT_ONLY 2
+
 static char filename[PATH_MAX];
 static char *password = "";
 static int raise_on_search = 0;
@@ -188,6 +192,7 @@ static char prior_search[1024] = "";
 static int search_current_page = 1;
 static int search_inpage_index = -1;
 static int ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
+static int search_type = SEARCH_TYPE_NONE;
 static int document_has_hits = 0;
 //static int search_status = SEARCH_STATUS_NONE;
 static char am_dragging = 0;
@@ -258,7 +263,9 @@ static struct mark marks[10];
 
 static int search_active = 0;
 static struct input search_input = { { 0 }, 0 };
+static char search_string[10240];
 static char *search_needle = 0;
+static int needle_has_hits = 0;
 static int search_dir = 1;
 static int search_page = 0;
 static int search_hit_page = -1;
@@ -1138,13 +1145,24 @@ static void do_app(void)
 			case 'n':
 						 if (debug) fprintf(stderr,"%s:%d: NEXT search pressed\r\n",FL);
 						 if (!search_needle) {
-							 if (debug) fprintf(stderr,"%s:%d: Search needle is NULL, ignoring next search request\r\n", FL);
+							if (debug) fprintf(stderr,"%s:%d: Needle is NULL\r\n",FL);
+
+							 if (strlen(prior_search)) {
+									if (debug) fprintf(stderr,"%s:%d: Prior exists, setting  needle to prior\r\n",FL);
+								 search_needle = prior_search;
+							 } else {
+								 if (debug) fprintf(stderr,"%s:%d: Search needle is NULL, and prior search is empty. Ignoring next search request\r\n", FL);
+							 }
+
 							 break;
+						 }  else {
+							if (debug) fprintf(stderr,"%s:%d: Needle is '%s'\r\n",FL, search_needle);
 						 }
 
-						 if ((search_current_page >= 0)&&(search_needle)) {
-							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
-						 } else {
+
+//						 if ((search_current_page >= 0)&&(search_needle)) {
+//							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
+//						 } else {
 
 							 if (strlen(search_needle)) {
 								 search_dir = 1;
@@ -1160,7 +1178,7 @@ static void do_app(void)
 								 }
 								 glutPostRedisplay();
 							 }
-						 }
+//						 }
 						 break;
 		}
 
@@ -1443,19 +1461,27 @@ static void run_main_loop(void)
 		{
 			search_hit_count = fz_search_page_number(ctx, doc, search_page, search_needle,
 					search_hit_bbox, nelem(search_hit_bbox));
+			if (debug) fprintf(stderr,"%s:%d: Main loop search - %d hits on '%s' at page %d\r\n", FL, search_hit_count, search_needle, search_page);
 			if (search_hit_count)
 			{
 				search_active = 0;
+				needle_has_hits = 1;
 				search_hit_page = search_page;
 				jump_to_page(search_hit_page);
 				break;
 			}
 			else
 			{
+				if (debug) fprintf(stderr,"%s:%d: No hits on page %d, trying next...\r\n", FL, search_page);
 				search_page += search_dir;
 				if (search_page < 0 || search_page == fz_count_pages(ctx, doc))
 				{
-					search_active = 0;
+					if (debug) fprintf(stderr,"%s:%d: end of the road for '%s'\r\n", FL, search_needle);
+					if (needle_has_hits) {
+						search_page = 0;
+					} else {
+						search_active = 0;
+					}
 					break;
 				}
 			}
@@ -1504,16 +1530,20 @@ static void run_main_loop(void)
 			ui.focus = NULL;
 			showsearch = 0;
 			search_page = -1;
-			if (search_needle)
+			if ((search_needle)&&(search_needle != prior_search))
 			{
-				fz_free(ctx, search_needle);
-				search_needle = NULL;
+//				fz_free(ctx, search_needle);
+//???FIXME				search_needle = NULL;
 			}
 			if (search_input.end > search_input.text)
 			{
-				search_needle = fz_strdup(ctx, search_input.text);
+//				search_needle = fz_strdup(ctx, search_input.text);
+				snprintf(prior_search,sizeof(prior_search),"%s", search_input.text);
+				search_needle = prior_search;
+				needle_has_hits = 0;
 				search_active = 1;
 				search_page = currentpage;
+				if (debug) fprintf(stderr,"%s:%d: Loading prior search / needle with '%s', currentpage = %d\n", FL, search_needle, currentpage);
 			}
 			glutPostRedisplay();
 		}
@@ -1757,8 +1787,8 @@ static void ddi_check( void ) {
 	char comp_a[128], comp_b[128];
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
-		if (strlen(ddi.last_pickup)) snprintf(sn_a, sizeof(sn_a), "%s", ddi.last_pickup);
-		else if (search_needle) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
+		if (search_needle) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
+		else if (strlen(ddi.last_pickup)) snprintf(sn_a, sizeof(sn_a), "%s", ddi.last_pickup);
 		else return;
 	}
 
@@ -1774,6 +1804,10 @@ static void ddi_check( void ) {
 	search_compound = 0;
 
 	if ((ddi_simulate_option)||(ddi_get( sn_a, sizeof(sn_a)))) {
+
+		if (ddi_simulate_option == DDI_SIMULATE_OPTION_NONE) {
+			search_type = SEARCH_TYPE_DDI_SEQUENCE;
+		} 
 
 		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 
@@ -1990,6 +2024,7 @@ static void ddi_check( void ) {
 					 *
 					 */
 					if (!search_in_page_only) {
+						if (debug) fprintf(stderr,"%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d\r\n", FL, search_hit_count, search_inpage_index, currentpage);
 						if ((search_hit_count == 0)||(search_inpage_index > search_hit_count -2)) {
 							search_inpage_index = -1;
 							search_current_page = -1;
@@ -2006,11 +2041,14 @@ static void ddi_check( void ) {
 								 *
 								 */
 								if (document_has_hits) {
+									if (debug) fprintf(stderr,"%s:%d: End of document reached, but resetting back to start\r\n", FL);
 									search_page = 0;
 									document_has_hits = 0;
-									continue;
+									search_active = 1;
+//									continue;
 								} else {
 									char b[1024];
+									if (debug) fprintf(stderr,"%s:%d: End of document reached, no hits found at all\r\n", FL);
 									snprintf(last_search_string, sizeof(last_search_string),"%s", sn_a);
 									snprintf(b,sizeof(b),"'%s' not found", sn_a);
 
