@@ -545,51 +545,62 @@ fz_search_stext_page(fz_context *ctx, fz_stext_page *page, const char *needle, f
 			for (line = block->u.t.first_line; line; line = line->next)
 			{
 
-				word_match = 0;
-				np = needle;
-				nc = nl;
-				for (ch = line->first_char; ch; ch = ch->next) {
-					nc--;
-					if (ch->c != *np) break;
-					if (*np) np++;
-				}
-				if (nc == 0 && !ch) word_match = 1;
-
-				if (word_match == 1) {
-					fprintf(stderr,"%s:%d: WORD match in search '", __FILE__, __LINE__);
+				if (ctx->flags & FZ_CTX_FLAGS_STRICT_MATCH) {
+					word_match = 0;
+					np = needle;
+					nc = nl;
 					for (ch = line->first_char; ch; ch = ch->next) {
-						fprintf(stderr,"%c",ch->c);
-						on_highlight_char(ctx, &hits, line, ch);
+						char rc;
+						nc--;
+						fz_runetochar(&rc, ch->c);
+						if (rc != *np) break;
+						if (*np) np++;
 					}
-					fprintf(stderr,"'\r\n");
+					if (nc == 0 && !ch) word_match = 1;
+
+					if (word_match == 1) {
+						fprintf(stderr,"%s:%d: WORD match in search '", __FILE__, __LINE__);
+						for (ch = line->first_char; ch; ch = ch->next) {
+							fprintf(stderr,"%c",ch->c);
+							on_highlight_char(ctx, &hits, line, ch);
+						}
+						fprintf(stderr,"'\r\n");
+					}
+
+				} else {
+					/*
+					 * Relaxed sub-string/line matching
+					 * 
+					 */
+					for (ch = line->first_char; ch; ch = ch->next)
+					{
+	try_new_match:
+						if (!inside) {
+							if (haystack >= begin) inside = 1;
+						}
+						if (inside) {
+							if (haystack < end) on_highlight_char(ctx, &hits, line, ch);
+							else {
+								inside = 0;
+								begin = find_string(haystack, needle, &end);
+								if (!begin) goto no_more_matches;
+								else goto try_new_match;
+							}
+						}
+						haystack += fz_chartorune(&c, haystack);
+					} // for each char in the line
+				} // relaxed search
+
+				if (!(ctx->flags & FZ_CTX_FLAGS_STRICT_MATCH)) {
+					assert(*haystack == '\n');
+					++haystack;
 				}
 
-				/*
-				for (ch = line->first_char; ch; ch = ch->next)
-				{
-					fprintf(stderr,"%c", ch->c);
-try_new_match:
-					if (!inside) {
-						if (haystack >= begin) inside = 1;
-					}
-					if (inside) {
-						if (haystack < end) on_highlight_char(ctx, &hits, line, ch);
-						else {
-							inside = 0;
-							begin = find_string(haystack, needle, &end);
-							if (!begin) goto no_more_matches;
-							else goto try_new_match;
-						}
-					}
-					haystack += fz_chartorune(&c, haystack);
-				} // for each char in the line
-				fprintf(stderr,"'\r\n");
+			} // for each line in the block
+			if (!(ctx->flags & FZ_CTX_FLAGS_STRICT_MATCH)) {
 				assert(*haystack == '\n');
 				++haystack;
-				*/
-			} // for each line in the block
-//			assert(*haystack == '\n');
-//			++haystack;
+			}
 		} // for each block in the page
 no_more_matches:;
 	}

@@ -1785,6 +1785,7 @@ static void on_warning(const char *fmt, va_list ap)
 static void ddi_check( void ) {
 	char sn_a[10240];
 	char comp_a[128], comp_b[128];
+	char *cmd;
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
 		if (search_needle) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
@@ -1813,7 +1814,24 @@ static void ddi_check( void ) {
 
 		if (strlen(sn_a) < 2) return;
 
-		if (strncmp(sn_a, "!compsearch:", strlen("!compsearch:"))==0) {
+		if ((cmd = strstr(sn_a, "!strictmatch:"))) {
+			char tmp[1024];
+			snprintf(tmp,sizeof(tmp),"%s",sn_a);
+			snprintf(sn_a,sizeof(sn_a), "%s", cmd +strlen("!strictmatch:"));
+			if (debug) fprintf(stderr,"%s:%d: Strict match", FL);
+			ctx->flags |= FZ_CTX_FLAGS_STRICT_MATCH;
+		}
+
+		if ((cmd = strstr(sn_a, "!stdmatch:"))) {
+			char tmp[1024];
+			snprintf(tmp,sizeof(tmp),"%s",sn_a);
+			snprintf(sn_a,sizeof(sn_a), "%s", cmd +strlen("!stdmatch:"));
+			if (debug) fprintf(stderr,"%s:%d: Standard match (default)", FL);
+			ctx->flags &= ~FZ_CTX_FLAGS_STRICT_MATCH;
+		}
+
+
+		if ((cmd = strstr(sn_a, "!compsearch:"))) {
 			/*
 			 * compound search requested.  First we find the page with the
 			 * first part, then we find the second part.
@@ -1822,7 +1840,7 @@ static void ddi_check( void ) {
 			char *p;
 
 
-			snprintf(comp_a, sizeof(comp_a), "%s", sn_a +strlen("!compsearch:"));
+			snprintf(comp_a, sizeof(comp_a), "%s", cmd +strlen("!compsearch:"));
 			fprintf(stderr,"%s:%d: Comp search main:'%s' comp_a:'%s'\r\n", FL, sn_a, comp_a);
 			p = strrchr(comp_a, ':');
 			if (p) {
@@ -2007,10 +2025,10 @@ static void ddi_check( void ) {
 					 */
 					if ((search_compound == 1)&&(search_hit_count > 0)) {
 
-						fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s'\r\n", FL, search_page+1, comp_b);
+						if (debug) fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s'\r\n", FL, search_page+1, comp_b);
 
 						search_hit_count = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox, nelem(search_hit_bbox));
-						fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, comp_b, search_hit_count);
+						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, comp_b, search_hit_count);
 //						if (local_hits > 0) {
 //							snprintf(sn_a, sizeof(sn_a), "%s", comp_b);
 //							search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
@@ -2261,14 +2279,25 @@ int main(int argc, char **argv)
 				raise_on_search = 1;
 			}
 
+
+			if ((p = strstr(s, "!strictmatch:"))) {
+				if (debug) fprintf(stderr,"%s:%d: Strict match", FL);
+				ctx->flags |= FZ_CTX_FLAGS_STRICT_MATCH;
+			}
+
+			if ((p = strstr(s, "!stdmatch:"))) {
+				if (debug) fprintf(stderr,"%s:%d: Standard match (default)", FL);
+				ctx->flags &= ~FZ_CTX_FLAGS_STRICT_MATCH;
+			}
+
 			if ((p = strstr(s, "!noheuristics:"))) {
-				fprintf(stderr,"%s:%d: No heuristics", FL);
+				if (debug) fprintf(stderr,"%s:%d: No heuristics", FL);
 				search_heuristics = 0;
 			}
 
 			if ((p = strstr(s, "!heuristics:"))) {
 				search_heuristics = 1;
-				fprintf(stderr,"%s:%d: Heuristics", FL);
+				if (debug) fprintf(stderr,"%s:%d: Heuristics", FL);
 			}
 
 			if ((p = strstr(s, "!noraise:"))) {

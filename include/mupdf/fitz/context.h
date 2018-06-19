@@ -144,6 +144,7 @@ enum {
 };
 
 #define FZ_CTX_FLAGS_SPACE_HEURISTIC 1
+#define FZ_CTX_FLAGS_STRICT_MATCH 2
 
 struct fz_context_s
 {
