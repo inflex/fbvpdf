@@ -2369,7 +2369,7 @@ int main(int argc, char **argv)
 	search_input.end = search_input.p;
 
 
-	glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
+	//glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
 
 	glutInitErrorFunc(on_error);
 	glutInitWarningFunc(on_warning);
