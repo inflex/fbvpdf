@@ -20,11 +20,6 @@ install: |-
   then
     sudo apt-get -qy install libxi-dev libxrandr-dev freeglut3  # freeglut probably pulls libxi-dev in
   fi
-#  elif [ "$TRAVIS_OS_NAME" == "osx" ]
-#  then
-#    brew update
-#    brew install sdl2
-#  fi
 script: |-
   if [ "$CXX" == "g++" ]; then export CXX="g++-6" CC="gcc-6"; fi
   ./build.sh || exit 1
@@ -45,10 +40,7 @@ before_deploy: |-
 deploy:
   provider: releases
   api_key:
-    secure: L6KY1fuv0gjkyYrML6XwHouUebKjbq3XIPdGCwW0OetcFj7lhLSqBrWUxn1sHohZaT9qiOqxDVO44pQNk6G/fj54dxSRIRf5tb1/7YmGTvGiWsTi1rQFEKlZkA/9i7vklr7dzsMucyB+lzNeQSeSc03kAJrVZ/2Abv+HzdbM0uwXBT3ZJ1bUx9B1bvveJ1mpp7VL6V/cOTc98AnCfoQswxl11IsAqlvbK9IOqyruVL411T2FdLe3ua2XVJ4fNNgTR/W+kT+3wdftNMLlfxDuVpiANLUinCWiRQZ5wInyUmBlFJ2FtBTXMUT6O708kpGiI85v6i8Z25ZEVMEnpwVMZQgUauGKLfnxvM4MvpGFX4HyC2kNR8l48B/AYdsAZa7r83q7ZU9ZVQ0aZ4wmRVpmkNHmZFUf/4OC8Ey4+v0zZj8ffly0PGcggaXvg02HDKulUbVxK1vfRP71qIKAzCWVf47r5hyQZ4GFPjBhhk2V2j1OheshO7kYRJoQt/UqhZJGn65xNrh4HvxEylan8qu4IGqmuQmrE60tv845bNbt/YA+/jZKg1Z7uoizhd2ymLoHG83DBRN3oAhjziGuRTXir2sE8D2DpcyNTC1LePG5EQilz/t46TBBvS3Ql4Z+nrxM1XNae6U/svoV75FvGgv6eLF9ag00tyDKvkfAa8IMhv0=
-  file: "${DEPLOY_FILES}"
-  skip_cleanup: true
+    secure: qxkbaBiM52f6Cz9bap1ZiOYD5RZJIW4066o2AeK6XKxBFFrz0Abt2f8GdBAyKOWqksOIgbfICPAhMTlQeADeCsiUCIbsjjo4rZj1HVZcVyZuIKFt1+P9jKiuXjaC7RS3SkeQLlGhyPPGYgE/nAflgGXuEYD3zzwIFwaoRh4g3Fl0zwj5Sse/C/ks9advFgMkJ1Hmvhxr7xVnT+c/6ZyWlSPmi2paw+Sti4oGfdb50LyOS2kozwyuP9ugFCYmhUffGrdeL/bdch8FwCkIzr6kBahaA5vq/Uxw7ru8H//IBK4dviaHYDcnUHUwo6Gb0ExuHFHXXTYa2vkRYnVjiZAaRnuvdlHEW3P/4f1ZQ53HNDV27BXIuRUMCEin5BlDbsm300doSnwT9bil7J7+wm76ZCt9tk5FEiwLrdgyy23u05QjnB6SwWm76QMTD+cCAm7Y1mARf2wghBYpPoKEbOY/0bLDqi3NjNztjU/z9k8xNZlSYTqbpA4bRwBG5I3jD9RDqXQlJYVvB3Dju4fLdie4kmYRipEIgAalrG8nv1KSbOnhdPk+0aJd15uSEb6d54fgvVWSOeukdCZTbv+8ob4nNX9P2NzfvaT8SmhqAfdRP8ynD4p3UdB29SL9+poGxaV4Ol+p2sh0HaZrgMm9lBzxvm0yrZKlFd3RWu5XF1kwcvk=
+  file: build/releases/mupdf-gl
   on:
-    tags: true
-    condition: "$DEPLOY == yes"
     repo: pvtinflex/mupdf
