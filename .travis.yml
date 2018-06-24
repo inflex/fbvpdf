@@ -1,0 +1,54 @@
+language: c
+git:
+  depth: 9999999
+os:
+- linux
+compiler:
+- clang
+matrix:
+  include:
+  - os: linux
+    compiler: gcc
+    env: DEPLOY=yes
+  - os: osx
+    compiler: clang
+    env: DEPLOY=yes
+dist: trusty
+sudo: required
+install: |-
+  if [ "$TRAVIS_OS_NAME" == "linux" ]
+  then
+    sudo apt-get -qy install libxi-dev libxrandr-dev freeglut3  # freeglut probably pulls libxi-dev in
+  fi
+#  elif [ "$TRAVIS_OS_NAME" == "osx" ]
+#  then
+#    brew update
+#    brew install sdl2
+#  fi
+script: |-
+  if [ "$CXX" == "g++" ]; then export CXX="g++-6" CC="gcc-6"; fi
+  ./build.sh || exit 1
+  if [ "$DEPLOY_DEB" == "yes" ] || [ "$DEPLOY_RPM" == "yes" ]
+  then
+    pushd release_build
+    make package
+    popd
+  fi
+before_deploy: |-
+  if [ "$TRAVIS_OS_NAME" == "osx" ]
+  then
+    export DEPLOY_FILES=build/release/mupdf-gl
+  elif [ "$TRAVIS_OS_NAME" == "linux" ]
+  then
+    export DEPLOY_FILES=build/release/mupdf-gl
+  fi
+deploy:
+  provider: releases
+  api_key:
+    secure: L6KY1fuv0gjkyYrML6XwHouUebKjbq3XIPdGCwW0OetcFj7lhLSqBrWUxn1sHohZaT9qiOqxDVO44pQNk6G/fj54dxSRIRf5tb1/7YmGTvGiWsTi1rQFEKlZkA/9i7vklr7dzsMucyB+lzNeQSeSc03kAJrVZ/2Abv+HzdbM0uwXBT3ZJ1bUx9B1bvveJ1mpp7VL6V/cOTc98AnCfoQswxl11IsAqlvbK9IOqyruVL411T2FdLe3ua2XVJ4fNNgTR/W+kT+3wdftNMLlfxDuVpiANLUinCWiRQZ5wInyUmBlFJ2FtBTXMUT6O708kpGiI85v6i8Z25ZEVMEnpwVMZQgUauGKLfnxvM4MvpGFX4HyC2kNR8l48B/AYdsAZa7r83q7ZU9ZVQ0aZ4wmRVpmkNHmZFUf/4OC8Ey4+v0zZj8ffly0PGcggaXvg02HDKulUbVxK1vfRP71qIKAzCWVf47r5hyQZ4GFPjBhhk2V2j1OheshO7kYRJoQt/UqhZJGn65xNrh4HvxEylan8qu4IGqmuQmrE60tv845bNbt/YA+/jZKg1Z7uoizhd2ymLoHG83DBRN3oAhjziGuRTXir2sE8D2DpcyNTC1LePG5EQilz/t46TBBvS3Ql4Z+nrxM1XNae6U/svoV75FvGgv6eLF9ag00tyDKvkfAa8IMhv0=
+  file: "${DEPLOY_FILES}"
+  skip_cleanup: true
+  on:
+    tags: true
+    condition: "$DEPLOY == yes"
+    repo: pvtinflex/mupdf
