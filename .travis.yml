@@ -44,5 +44,4 @@ deploy:
   file: "${DEPLOY_FILES}"
   skip_cleanup: true
   on:
-    tags: true
     repo: pvtinflex/mupdf
