@@ -1935,8 +1935,9 @@ static void ddi_check( void ) {
 			sn_b[0] = '\0';
 			if (search_heuristics == 1) {
 				if (strchr(sn_a,'_')) {
+					int i;
 					snprintf(sn_b,sizeof(sn_b),"%s", sn_a);
-					for (int i = 0; i < (strlen(sn_b) -1); i++) {
+					for (i = 0; i < (strlen(sn_b) -1); i++) {
 						if (sn_b[i] == '_') sn_b[i] = ' ';
 					}
 					if(debug)fprintf(stderr,"%s:%d: Alternative search: '%s'\r\n", FL, sn_b);
