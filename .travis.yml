@@ -41,6 +41,8 @@ deploy:
   provider: releases
   api_key:
     secure: qxkbaBiM52f6Cz9bap1ZiOYD5RZJIW4066o2AeK6XKxBFFrz0Abt2f8GdBAyKOWqksOIgbfICPAhMTlQeADeCsiUCIbsjjo4rZj1HVZcVyZuIKFt1+P9jKiuXjaC7RS3SkeQLlGhyPPGYgE/nAflgGXuEYD3zzwIFwaoRh4g3Fl0zwj5Sse/C/ks9advFgMkJ1Hmvhxr7xVnT+c/6ZyWlSPmi2paw+Sti4oGfdb50LyOS2kozwyuP9ugFCYmhUffGrdeL/bdch8FwCkIzr6kBahaA5vq/Uxw7ru8H//IBK4dviaHYDcnUHUwo6Gb0ExuHFHXXTYa2vkRYnVjiZAaRnuvdlHEW3P/4f1ZQ53HNDV27BXIuRUMCEin5BlDbsm300doSnwT9bil7J7+wm76ZCt9tk5FEiwLrdgyy23u05QjnB6SwWm76QMTD+cCAm7Y1mARf2wghBYpPoKEbOY/0bLDqi3NjNztjU/z9k8xNZlSYTqbpA4bRwBG5I3jD9RDqXQlJYVvB3Dju4fLdie4kmYRipEIgAalrG8nv1KSbOnhdPk+0aJd15uSEb6d54fgvVWSOeukdCZTbv+8ob4nNX9P2NzfvaT8SmhqAfdRP8ynD4p3UdB29SL9+poGxaV4Ol+p2sh0HaZrgMm9lBzxvm0yrZKlFd3RWu5XF1kwcvk=
-  file: build/releases/mupdf-gl
+  file: "${DEPLOY_FILES}"
+  skip_cleanup: true
   on:
+    condition: "$DEPLOY == yes"
     repo: pvtinflex/mupdf
