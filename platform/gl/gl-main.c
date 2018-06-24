@@ -1065,12 +1065,11 @@ static void do_app(void)
 			case 'W': shrinkwrap(); break;
 			case 'w': auto_zoom_w(); break;
 			case 'h': auto_zoom_h(); break;
-			case 'z': auto_zoom(); break;
-						 //			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-						 //case '+': currentzoom = zoom_in(currentzoom); break;
-						 //case '-': currentzoom = zoom_out(currentzoom); break;
-						 //			case '+': currentzoom *= 1.25; break;
-						 //			case '-': currentzoom /= 1.25; break;
+			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
+//			case '+': currentzoom = zoom_in(currentzoom); break;
+//`			case '-': currentzoom = zoom_out(currentzoom); break;
+			case '=': currentzoom *= 1.25; break;
+			case '-': currentzoom /= 1.25; break;
 			case '[': currentrotate += 90; break;
 			case ']': currentrotate -= 90; break;
 						 //			case 'k': case KEY_UP: scroll_y -= 10; break;
@@ -1713,6 +1712,8 @@ static void on_mouse(int button, int action, int x, int y)
 {
 	ui.x = x;
 	ui.y = y;
+
+	fprintf(stderr,"%s:%d: button: %x\r\n", FL, button);
 	switch (button)
 	{
 		case GLUT_LEFT_BUTTON: ui.down = (action == GLUT_DOWN); break;
@@ -2394,7 +2395,7 @@ int main(int argc, char **argv)
 	glutMouseFunc(on_mouse);
 	glutMotionFunc(on_motion);
 	glutPassiveMotionFunc(on_motion);
-#ifdef __WIN32__
+#ifdef __WIN32__ || __APPLE__
 	glutMouseWheelFunc(on_wheel);
 #else
 	glutMouseWheelFunc(on_mouse);
