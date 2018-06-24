@@ -9,10 +9,10 @@ matrix:
   include:
   - os: linux
     compiler: gcc
-    env: DEPLOY=yes
+    env: DEPLOY=yes OS_TYPE=linux
   - os: osx
     compiler: clang
-    env: DEPLOY=yes
+    env: DEPLOY=yes OS_TYPE=macos
 dist: trusty
 sudo: required
 install: |-
@@ -32,10 +32,10 @@ script: |-
 before_deploy: |-
   if [ "$TRAVIS_OS_NAME" == "osx" ]
   then
-    export DEPLOY_FILES=build/release/mupdf-gl
+    export DEPLOY_FILES=build/release/mupdf-macos
   elif [ "$TRAVIS_OS_NAME" == "linux" ]
   then
-    export DEPLOY_FILES=build/release/mupdf-gl
+    export DEPLOY_FILES=build/release/mupdf-linux
   fi
 deploy:
   provider: releases
