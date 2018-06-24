@@ -1,11 +1,14 @@
-#!/bin/sh
+#!/bin/bash
+set -x
+
+LOS=${TRAVIS_OS_NAME:-linux}
 export G=`git rev-list HEAD --count`
 echo $G
 make -f Makefile.general GIT_BUILD='${G}' 
 if [ $? -eq 0 ]; then
-	if [ "$1" == "linux" ]; then
+	if [ "$LOS" == "linux" ]; then
 		mv build/release/mupdf-gl build/release/mupdf-linux
-	elif [ "$1" == "osx" ]; then
+	elif [ "$LOS" == "osx" ]; then
 		mv build/release/mupdf-gl build/release/mupdf-macos
 	fi
 fi
