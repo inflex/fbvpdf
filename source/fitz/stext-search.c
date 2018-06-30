@@ -201,6 +201,11 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 	}
 
 	if (start == end) {
+		/*
+		 * Created by Paul L Daniels, makes for easy
+		 * one right-click word selection.
+		 *
+		 */
 		word_mode = 1;
 		end++;
 //		fprintf(stderr,"Word mode selected\n");
@@ -240,6 +245,7 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 									else chw = chwlws->next;
 									while (
 											chw 
+											&& (chw->size == size_to_match)
 											&& (!isblank(chw->c) 
 												|| (isspace(chw->c) && (ctx->flags & FZ_CTX_FLAGS_SPACE_HEURISTIC)))
 											){

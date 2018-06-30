@@ -1064,16 +1064,24 @@ static void clear_search(void)
 	search_hit_count = 0;
 }
 
-static void do_app(void)
+static void do_keypress(void)
 {
-	if (ui.key == KEY_F4 && ui.mod == GLUT_ACTIVE_ALT)
-		quit();
 
+	ui.plain = 1;
+	fprintf(stderr,"%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
+//	if (ui.key == KEY_F4 && ui.mod == GLUT_ACTIVE_ALT)
+//		quit();
+
+	/*
+	 * close the help/info if we've pressed something else 
+	 *
+	 */
 	if (ui.down || ui.middle || ui.right || ui.key)
 		showinfo = showhelp = 0;
 
 	if (!ui.focus && ui.key && ui.plain)
 	{
+		fprintf(stderr,"%s:%d: Acting on key '%c'\r\n", FL, ui.key );
 		switch (ui.key)
 		{
 			case KEY_ESCAPE: clear_search(); break;
@@ -1489,7 +1497,6 @@ static void run_main_loop(void)
 	ui_begin();
 
 	if (search_active) {
-	//if (0) {
 		//		int start_time = glutGet(GLUT_ELAPSED_TIME);
 
 		if (ui.key == KEY_ESCAPE)
@@ -1499,17 +1506,25 @@ static void run_main_loop(void)
 		ui.key = ui.mod = ui.plain = 0;
 		ui.down = ui.middle = ui.right = 0;
 
-		while (0) {
+		while (1) {
 			//glutGet(GLUT_ELAPSED_TIME) < start_time + 200)
 			search_hit_count = fz_search_page_number(ctx, doc, search_page, search_needle,
 					search_hit_bbox, nelem(search_hit_bbox));
 			if (debug) fprintf(stderr,"%s:%d: Main loop search - %d hits on '%s' at page %d\r\n", FL, search_hit_count, search_needle, search_page);
 			if (search_hit_count)
 			{
+				fz_point p;
+				fz_rect bb;
 				search_active = 0;
 				needle_has_hits = 1;
 				search_hit_page = search_page;
-				jump_to_page(search_hit_page);
+
+				p.x = (canvas_w/2) *72 / (currentzoom );
+				p.y = (canvas_h/2) *72 / (currentzoom );
+				bb = search_hit_bbox[0];
+				jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
+
+//				jump_to_page(search_hit_page);
 				break;
 			}
 			else
@@ -1535,7 +1550,7 @@ static void run_main_loop(void)
 		}
 	} // if search-active
 
-	do_app();
+	//do_app();
 
 	/*
 		if (doquit) { //		glutDestroyWindow(window); #ifdef __APPLE__ exit(1); #endif return; }
@@ -1551,13 +1566,12 @@ static void run_main_loop(void)
 	if (showoutline) do_outline(outline, canvas_x);
 
 	if (showsearch) {
-	//if (0) {
+		fprintf(stderr,"%s:%d: Showing search input...\r\n",FL);
 		int state = ui_input(canvas_x, 0, canvas_x + canvas_w, ui.lineheight+4, &search_input);
 		if (state == -1)
 		{
 			ui.focus = NULL;
 			showsearch = 0;
-			//			glutPostRedisplay();
 		}
 		else if (state == 1)
 		{
@@ -2149,9 +2163,7 @@ static void ddi_check( void ) {
 
 						p.x = (canvas_w/2) *72 / (currentzoom );
 						p.y = (canvas_h/2) *72 / (currentzoom );
-
 						bb = search_hit_bbox[search_inpage_index];
-
 						jump_to_page_xy(search_hit_page, bb.x0 -p.x, bb.y0 -p.y );
 					} // if search hit count > 0
 
@@ -2218,6 +2230,7 @@ static void usage(const char *argv0)
 }
 
 
+/*
 	void GLAPIENTRY
 MessageCallback( GLenum source,
 		GLenum type,
@@ -2231,6 +2244,7 @@ MessageCallback( GLenum source,
 			( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
 			type, severity, message );
 }
+*/
 
 
 //do other stuff.
@@ -2241,6 +2255,7 @@ int main(int argc, char **argv)
 #endif
 {
 	int c;
+	int check_again = 0;
 
 	fprintf(stderr,"start.\r\n");
 
@@ -2293,9 +2308,8 @@ int main(int argc, char **argv)
 	if (fz_optind < argc)
 		anchor = argv[fz_optind++];
 
-	snprintf(filename, sizeof(filename), "%s", argv[1] );
-
-	fprintf(stderr,"Processing filename '%s'\r\n", filename);
+//	snprintf(filename, sizeof(filename), "%s", argv[1] );
+//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
 
 	/* ddi setup */
 	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
@@ -2303,7 +2317,7 @@ int main(int argc, char **argv)
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
-	if (1){
+	{
 		/*
 		 * DDI setup package, is the first one we receive
 		 * and may contain multiple commands for us to process.
@@ -2311,9 +2325,12 @@ int main(int argc, char **argv)
 		 */
 		char s[10240];
 		int x = 10;
+		fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
 			char *p, *q;
 			usleep(10000); // 0.1 sec
+		
+			fprintf(stderr,"%s:%d: DDI PICKUP (FIRST TIME)\r\n",FL);
 
 			if ((p = strstr(s, "!debug:"))) {
 				debug = 1;
@@ -2496,9 +2513,12 @@ int main(int argc, char **argv)
 						break;
 					case SDL_KEYDOWN:
 						{
-							if (sdlEvent.key.keysym.sym == SDLK_q) {
-								quit = 1;
-							}
+							ui.key = sdlEvent.key.keysym.sym;
+							if (SDL_GetModState() & KMOD_SHIFT) ui.key = toupper(ui.key);
+							do_keypress();
+//							if (sdlEvent.key.keysym.sym == SDLK_q) {
+//								quit = 1;
+//							}
 						}
 						break;
 
@@ -2536,10 +2556,17 @@ int main(int argc, char **argv)
 						break;
 				}
 
-			} // if SDL POLL
+			} // while SDL event
+			
+				if (check_again) {
+					check_again--;
+				} else {
+					ddi_check();
+					check_again = 10;
+				}
 
-			ddi_check();
 			run_main_loop();
+			ui.key = ui.mod = ui.plain = 0;
 
 		//		do_canvas();
 				SDL_GL_SwapWindow(sdlWindow);
