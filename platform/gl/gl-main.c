@@ -312,11 +312,11 @@ static void update_title(void)
 			sprintf(buf, "%s - %d / %d (R%d)", title, currentpage + 1, fz_count_pages(ctx, doc), GIT_BUILD);
 		}
 	}
-	fprintf(stderr,"%s:%d: Setting glut window title '%s'\r\n", FL, buf);
+	fprintf(stderr,"%s:%d: Setting window title '%s'\r\n", FL, buf);
 	SDL_SetWindowTitle( sdlWindow, buf );
-	//	glutSetWindowTitle(buf);
+//	glutSetWindowTitle(buf);
 	//	fprintf(stderr,"%s:%d: Setting glut icon title", FL);
-	//glutSetIconTitle(buf);
+//	glutSetIconTitle(buf);
 }
 
 void texture_from_pixmap(struct texture *tex, fz_pixmap *pix)
@@ -2048,6 +2048,8 @@ static void ddi_check( void ) {
 				search_not_found = 0;
 
 				if (raise_on_search == 1) {
+					fprintf(stderr,"%s:%d: RAISE window\r\n",FL);
+					SDL_RaiseWindow(sdlWindow);
 #ifdef __WIN32__
 					//					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
 					//					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
@@ -2353,14 +2355,17 @@ int main(int argc, char **argv)
 			}
 
 			if ((p = strstr(s, "!cinvert:"))) {
+				if (debug) fprintf(stderr,"%s:%d: Colour invert: ENABLED\r\n", FL);
 				currentinvert = !currentinvert;
 			}
 
 			if ((p = strstr(s, "!ss:"))) {
+				if (debug) fprintf(stderr,"%s:%d: Zoom on scroll: ENABLED\r\n", FL);
 				scroll_wheel_swap = 1;
 			}
 
 			if ((p = strstr(s, "!raise:"))) {
+				if (debug) fprintf(stderr,"%s:%d: Raise on search: ENABLED\r\n", FL);
 				raise_on_search = 1;
 			}
 
