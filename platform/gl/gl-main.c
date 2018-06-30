@@ -1,5 +1,7 @@
 #include "gl-app.h"
 
+#include <SDL2/SDL.h>
+
 #include "mupdf/pdf.h" /* for pdf specifics and forms */
 #include "mupdf/ddi.h"
 
@@ -15,14 +17,22 @@
 #include <unistd.h> /* for fork and exec */
 #endif
 
+int windowx, windowy;
+SDL_Window *sdlWindow;
+SDL_Renderer *sdlRenderer;
+SDL_Surface *sdlSurface;
+SDL_Texture *sdlTexture;
+SDL_Event sdlEvent;
+SDL_GLContext glcontext;
+
 /* set the timer cycle rate, 50ms is more than fast enough! */
 #define GLUT_TIMER_DURATION 50 
 #ifndef FREEGLUT
 /* freeglut extension no-ops */
-void glutExit(void) {}
-void glutMouseWheelFunc(void *fn) {}
-void glutInitErrorFunc(void *fn) {}
-void glutInitWarningFunc(void *fn) {}
+//void glutExit(void) {}
+//void glutMouseWheelFunc(void *fn) {}
+//v/oid glutInitErrorFunc(void *fn) {}
+//void glutInitWarningFunc(void *fn) {}
 #endif
 
 enum
@@ -138,7 +148,7 @@ void ui_draw_image(struct texture *tex, float x, float y)
 	glDisable(GL_BLEND);
 }
 
-static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 550, 700, 900 };
+static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350 };
 
 /*
 	static int zoom_in(int oldres)
@@ -217,6 +227,7 @@ static fz_outline *outline = NULL;
 static fz_link *links = NULL;
 
 static int number = 0;
+static int show_help = 0;
 
 static struct texture page_tex = { 0 };
 static int scroll_x = 0, scroll_y = 0;
@@ -226,6 +237,7 @@ static int canvas_y = 0, canvas_h = 100;
 static struct texture annot_tex[256];
 static int annot_count = 0;
 
+//static int window_w = 1, window_h = 1;
 static int window_w = 1, window_h = 1;
 
 static int debug = 0;
@@ -236,7 +248,7 @@ static float oldzoom = DEFRES, currentzoom = DEFRES;
 static float oldrotate = 0, currentrotate = 0;
 static fz_matrix page_ctm, page_inv_ctm;
 static int loaded = 0;
-static int window = 0;
+//static int window = 0;
 #ifdef __WIN32__
 //HWND hwnd;
 #endif
@@ -300,8 +312,11 @@ static void update_title(void)
 			sprintf(buf, "%s - %d / %d (R%d)", title, currentpage + 1, fz_count_pages(ctx, doc), GIT_BUILD);
 		}
 	}
-	glutSetWindowTitle(buf);
-	glutSetIconTitle(buf);
+	fprintf(stderr,"%s:%d: Setting glut window title '%s'\r\n", FL, buf);
+	SDL_SetWindowTitle( sdlWindow, buf );
+	//	glutSetWindowTitle(buf);
+	//	fprintf(stderr,"%s:%d: Setting glut icon title", FL);
+	//glutSetIconTitle(buf);
 }
 
 void texture_from_pixmap(struct texture *tex, fz_pixmap *pix)
@@ -388,18 +403,20 @@ void render_page(void)
 	texture_from_pixmap(&page_tex, pix);
 	fz_drop_pixmap(ctx, pix);
 
-	annot_count = 0;
-	for (annot = fz_first_annot(ctx, page); annot; annot = fz_next_annot(ctx, annot))
-	{
+	/*
+		annot_count = 0;
+		for (annot = fz_first_annot(ctx, page); annot; annot = fz_next_annot(ctx, annot))
+		{
 		pix = fz_new_pixmap_from_annot(ctx, annot, &page_ctm, fz_device_rgb(ctx), 1);
 		texture_from_pixmap(&annot_tex[annot_count++], pix);
 		fz_drop_pixmap(ctx, pix);
 		if (annot_count >= nelem(annot_tex))
 		{
-			fz_warn(ctx, "too many annotations to display!");
-			break;
+		fz_warn(ctx, "too many annotations to display!");
+		break;
 		}
-	}
+		}
+		*/
 
 	loaded = 0;
 }
@@ -595,7 +612,7 @@ static int do_outline_imp(fz_outline *node, int end, int x0, int x1, int x, int 
 				{
 					ui.active = node;
 					jump_to_page_xy(p, node->x, node->y);
-					glutPostRedisplay(); /* we changed the current page, so force a redraw */
+					//glutPostRedisplay(); /* we changed the current page, so force a redraw */
 				}
 			}
 
@@ -717,7 +734,7 @@ static void do_links(fz_link *link, int xofs, int yofs)
 						jump_to_page_xy(p, link_x, link_y);
 					else
 						fz_warn(ctx, "cannot find link destination '%s'", link->uri);
-					glutPostRedisplay(); /* we changed the current page, so force a redraw */
+					//glutPostRedisplay(); /* we changed the current page, so force a redraw */
 				}
 			}
 		}
@@ -782,7 +799,7 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			if (debug) fprintf(stderr,"%s:%d: Dispatching request '%s'\n", FL, s);
 			DDI_dispatch( &ddi, s );
 			fz_free(ctx, s);
-			glutPostRedisplay();
+			//glutPostRedisplay();
 		}
 	}
 }
@@ -843,7 +860,7 @@ static void do_forms(float xofs, float yofs)
 				ui.active = &do_forms_tag;
 			pdf_update_page(ctx, (pdf_page*)page);
 			render_page();
-			glutPostRedisplay();
+			//glutPostRedisplay();
 		}
 	}
 	else if (ui.active == &do_forms_tag && !ui.down)
@@ -856,7 +873,7 @@ static void do_forms(float xofs, float yofs)
 		{
 			pdf_update_page(ctx, (pdf_page*)page);
 			render_page();
-			glutPostRedisplay();
+			//glutPostRedisplay();
 		}
 	}
 }
@@ -867,34 +884,41 @@ static void toggle_fullscreen(void)
 	static int win_w = 100, win_h = 100;
 	if (!isfullscreen)
 	{
-		win_w = glutGet(GLUT_WINDOW_WIDTH);
-		win_h = glutGet(GLUT_WINDOW_HEIGHT);
-		win_x = glutGet(GLUT_WINDOW_X);
-		win_y = glutGet(GLUT_WINDOW_Y);
-		glutFullScreen();
+		SDL_GetWindowSize( sdlWindow, &win_w, &win_h );
+		SDL_GetWindowPosition( sdlWindow, &win_x, &win_y );
+		SDL_SetWindowFullscreen( sdlWindow, 0 );
+		//		win_w = glutGet(GLUT_WINDOW_WIDTH);
+		//		win_h = glutGet(GLUT_WINDOW_HEIGHT);
+		//		win_x = glutGet(GLUT_WINDOW_X);
+		//		win_y = glutGet(GLUT_WINDOW_Y);
+		//		glutFullScreen();
 		isfullscreen = 1;
-	}
-	else
-	{
-		glutPositionWindow(win_x, win_y);
-		glutReshapeWindow(win_w, win_h);
+	} else {
+		SDL_SetWindowPosition( sdlWindow, win_x, win_y );
+		SDL_SetWindowSize( sdlWindow, win_w, win_h );
+		//		glutPositionWindow(win_x, win_y);
+		//		glutReshapeWindow(win_w, win_h);
 		isfullscreen = 0;
 	}
 }
 
 static void shrinkwrap(void)
 {
-	int screen_w = glutGet(GLUT_SCREEN_WIDTH) - SCREEN_FURNITURE_W;
-	int screen_h = glutGet(GLUT_SCREEN_HEIGHT) - SCREEN_FURNITURE_H;
-	int w = page_tex.w + canvas_x;
-	int h = page_tex.h + canvas_y;
-	if (screen_w > 0 && w > screen_w)
-		w = screen_w;
-	if (screen_h > 0 && h > screen_h)
-		h = screen_h;
-	if (isfullscreen)
-		toggle_fullscreen();
-	glutReshapeWindow(w, h);
+	int x, y;
+	int screen_w, screen_h;
+	int w, h;
+
+	SDL_GetWindowSize( sdlWindow, &x, &y );
+	screen_w = x - SCREEN_FURNITURE_W;
+	screen_h = y - SCREEN_FURNITURE_H;
+	w = page_tex.w + canvas_x;
+	h = page_tex.h + canvas_y;
+
+	if (screen_w > 0 && w > screen_w) w = screen_w;
+	if (screen_h > 0 && h > screen_h) h = screen_h;
+	if (isfullscreen) toggle_fullscreen();
+	//glutReshapeWindow(w, h);
+	SDL_SetWindowSize( sdlWindow, w, h);
 }
 
 static void load_document(void)
@@ -1061,13 +1085,17 @@ static void do_app(void)
 			case 'q': quit(); break;
 
 			case 'I': currentinvert = !currentinvert; break;
-			case 'f': toggle_fullscreen(); break;
-			case 'W': shrinkwrap(); break;
+			case 'f':
+						 fprintf(stderr,"%s:%d: Full screen\r\n",FL);
+						 toggle_fullscreen(); break;
+			case 'W': 
+						 fprintf(stderr,"%s:%d: Shrinkwrapping\r\n",FL);
+						 shrinkwrap(); break;
 			case 'w': auto_zoom_w(); break;
 			case 'h': auto_zoom_h(); break;
 			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-//			case '+': currentzoom = zoom_in(currentzoom); break;
-//`			case '-': currentzoom = zoom_out(currentzoom); break;
+						 //			case '+': currentzoom = zoom_in(currentzoom); break;
+						 //`			case '-': currentzoom = zoom_out(currentzoom); break;
 			case '=': currentzoom *= 1.25; break;
 			case '-': currentzoom /= 1.25; break;
 			case '[': currentrotate += 90; break;
@@ -1139,15 +1167,15 @@ static void do_app(void)
 							 if (search_needle)
 								 search_active = 1;
 						 }
-						 glutPostRedisplay();
+						 //glutPostRedisplay();
 						 break;
 			case 'n':
 						 if (debug) fprintf(stderr,"%s:%d: NEXT search pressed\r\n",FL);
 						 if (!search_needle) {
-							if (debug) fprintf(stderr,"%s:%d: Needle is NULL\r\n",FL);
+							 if (debug) fprintf(stderr,"%s:%d: Needle is NULL\r\n",FL);
 
 							 if (strlen(prior_search)) {
-									if (debug) fprintf(stderr,"%s:%d: Prior exists, setting  needle to prior\r\n",FL);
+								 if (debug) fprintf(stderr,"%s:%d: Prior exists, setting  needle to prior\r\n",FL);
 								 search_needle = prior_search;
 							 } else {
 								 if (debug) fprintf(stderr,"%s:%d: Search needle is NULL, and prior search is empty. Ignoring next search request\r\n", FL);
@@ -1155,29 +1183,29 @@ static void do_app(void)
 
 							 break;
 						 }  else {
-							if (debug) fprintf(stderr,"%s:%d: Needle is '%s'\r\n",FL, search_needle);
+							 if (debug) fprintf(stderr,"%s:%d: Needle is '%s'\r\n",FL, search_needle);
 						 }
 
 
-//						 if ((search_current_page >= 0)&&(search_needle)) {
-//							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
-//						 } else {
+						 //						 if ((search_current_page >= 0)&&(search_needle)) {
+						 //							 ddi_simulate_option = DDI_SIMULATE_OPTION_SEARCH_NEXT;
+						 //						 } else {
 
-							 if (strlen(search_needle)) {
-								 search_dir = 1;
-								 if (search_hit_page == currentpage)
-									 search_page = currentpage + search_dir;
-								 else
-									 search_page = currentpage;
-								 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
-								 {
-									 search_hit_page = -1;
-									 if (search_needle)
-										 search_active = 1;
-								 }
-								 glutPostRedisplay();
+						 if (strlen(search_needle)) {
+							 search_dir = 1;
+							 if (search_hit_page == currentpage)
+								 search_page = currentpage + search_dir;
+							 else
+								 search_page = currentpage;
+							 if (search_page >= 0 && search_page < fz_count_pages(ctx, doc))
+							 {
+								 search_hit_page = -1;
+								 if (search_needle)
+									 search_active = 1;
 							 }
-//						 }
+							 //glutPostRedisplay();
+						 }
+						 //						 }
 						 break;
 		}
 
@@ -1269,11 +1297,13 @@ static int do_help_line(int x, int y, char *label, char *text)
 
 static void do_help(void)
 {
-	int x = canvas_x + 4 * ui.lineheight;
-	int y = canvas_y + 4 * ui.lineheight;
-	int w = canvas_w - 8 * ui.lineheight;
-	int h = 38 * ui.lineheight;
+	float x = canvas_x + 4 * ui.lineheight;
+	float y = canvas_y + 4 * ui.lineheight;
+	float w = canvas_w - 8 * ui.lineheight;
+	float h = 15 * ui.lineheight;
 
+	fprintf(stderr,"%s:%d: Do help, %0.2f %0.2f %0.2f %0.2f\r\n",FL, x, y, w, h);
+		
 	glBegin(GL_TRIANGLE_STRIP);
 	{
 		glColor4f(0.9f, 0.9f, 0.9f, 1.0f);
@@ -1284,11 +1314,15 @@ static void do_help(void)
 	}
 	glEnd();
 
+
 	x += ui.lineheight;
 	y += ui.lineheight + ui.baseline;
 
-	glColor4f(0, 0, 0, 1);
+	glColor4f(1, 1, 1, 1);
 	y = do_help_line(x, y, "FlexBV-MuPDF", FZ_VERSION);
+	return ;
+
+
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
 	y = do_help_line(x, y, "i", "show document information");
@@ -1296,13 +1330,14 @@ static void do_help(void)
 	y = do_help_line(x, y, "L", "show/hide links");
 	y = do_help_line(x, y, "r", "reload file");
 	y = do_help_line(x, y, "q", "quit");
-	y += ui.lineheight;
-	y = do_help_line(x, y, "I", "toggle inverted color mode");
-	y = do_help_line(x, y, "f", "fullscreen window");
-	y = do_help_line(x, y, "W", "shrink wrap window");
-	y = do_help_line(x, y, "w or h", "fit to width or height");
-	y = do_help_line(x, y, "z", "fit to window");
-	y = do_help_line(x, y, "N z", "set zoom to N");
+	/*
+		y += ui.lineheight;
+		y = do_help_line(x, y, "I", "toggle inverted color mode");
+		y = do_help_line(x, y, "f", "fullscreen window");
+		y = do_help_line(x, y, "W", "shrink wrap window");
+		y = do_help_line(x, y, "w or h", "fit to width or height");
+		y = do_help_line(x, y, "z", "fit to window");
+		y = do_help_line(x, y, "N z", "set zoom to N");
 	//	y = do_help_line(x, y, "+ or -", "zoom in or out");
 	//	y = do_help_line(x, y, "[ or ]", "rotate left or right");
 	//	y = do_help_line(x, y, "arrow keys", "pan in small increments");
@@ -1323,6 +1358,7 @@ static void do_help(void)
 	y += ui.lineheight;
 	y = do_help_line(x, y, "/ or ?", "search for text");
 	y = do_help_line(x, y, "n or N", "repeat search");
+	*/
 }
 
 static void do_canvas(void)
@@ -1400,7 +1436,7 @@ static void do_canvas(void)
 
 	ui_draw_image(&page_tex, x - page_tex.x, y - page_tex.y);
 
-	do_forms(x, y);
+	//FIXME do_forms(x, y);
 
 	if (!search_active)
 	{
@@ -1432,8 +1468,13 @@ int ddi_get(char *buf, size_t size) {
 static void run_main_loop(void)
 {
 
-	glViewport(0, 0, window_w, window_h);
-	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+	//	SDL_GL_MakeCurrent(sdlWindow, glcontext);
+	//	SDL_RenderClear(sdlWindow);
+
+	/*
+		glViewport(0, 0, window_w, window_h);
+	//glClearColor(0.4f, 0.4f, 0.4f, 1.0f);
+	glClearColor(0.9f, 0.7f, 0.7f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glMatrixMode(GL_PROJECTION);
@@ -1442,12 +1483,13 @@ static void run_main_loop(void)
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
+	*/
 
 	ui_begin();
 
-	if (search_active)
-	{
-		int start_time = glutGet(GLUT_ELAPSED_TIME);
+	//if (search_active) {
+	if (0) {
+		//		int start_time = glutGet(GLUT_ELAPSED_TIME);
 
 		if (ui.key == KEY_ESCAPE)
 			search_active = 0;
@@ -1456,8 +1498,8 @@ static void run_main_loop(void)
 		ui.key = ui.mod = ui.plain = 0;
 		ui.down = ui.middle = ui.right = 0;
 
-		while (glutGet(GLUT_ELAPSED_TIME) < start_time + 200)
-		{
+		while (0) {
+			//glutGet(GLUT_ELAPSED_TIME) < start_time + 200)
 			search_hit_count = fz_search_page_number(ctx, doc, search_page, search_needle,
 					search_hit_bbox, nelem(search_hit_bbox));
 			if (debug) fprintf(stderr,"%s:%d: Main loop search - %d hits on '%s' at page %d\r\n", FL, search_hit_count, search_needle, search_page);
@@ -1484,45 +1526,37 @@ static void run_main_loop(void)
 					break;
 				}
 			}
-		}
+		} // while loop
 
 		/* keep searching later */
-		if (search_active)
-			glutPostRedisplay();
-	}
+		if (search_active) {
+			//			glutPostRedisplay();
+		}
+	} // if search-active
 
-	do_app();
+	//do_app();
 
-	if (doquit)
-	{
-		glutDestroyWindow(window);
-#ifdef __APPLE__
-		exit(1); /* GLUT on MacOS keeps running even with no windows */
-#endif
-		return;
-	}
+	/*
+		if (doquit) { //		glutDestroyWindow(window); #ifdef __APPLE__ exit(1); #endif return; }
+		*/
 
 	canvas_w = window_w - canvas_x;
 	canvas_h = window_h - canvas_y;
 
-	do_canvas();
+	//	do_canvas();
 
-	if (showinfo)
-		do_info();
-	else if (showhelp)
-		do_help();
+	//	if (showinfo) do_info();
+	//	else if (showhelp) do_help();
+	//	if (showoutline) do_outline(outline, canvas_x);
 
-	if (showoutline)
-		do_outline(outline, canvas_x);
-
-	if (showsearch)
-	{
+	//if (showsearch) {
+	if (0) {
 		int state = ui_input(canvas_x, 0, canvas_x + canvas_w, ui.lineheight+4, &search_input);
 		if (state == -1)
 		{
 			ui.focus = NULL;
 			showsearch = 0;
-			glutPostRedisplay();
+			//			glutPostRedisplay();
 		}
 		else if (state == 1)
 		{
@@ -1531,12 +1565,12 @@ static void run_main_loop(void)
 			search_page = -1;
 			if ((search_needle)&&(search_needle != prior_search))
 			{
-//				fz_free(ctx, search_needle);
-//???FIXME				search_needle = NULL;
+				//				fz_free(ctx, search_needle);
+				//???FIXME				search_needle = NULL;
 			}
 			if (search_input.end > search_input.text)
 			{
-//				search_needle = fz_strdup(ctx, search_input.text);
+				//				search_needle = fz_strdup(ctx, search_input.text);
 				snprintf(prior_search,sizeof(prior_search),"%s", search_input.text);
 				search_needle = prior_search;
 				needle_has_hits = 0;
@@ -1544,13 +1578,14 @@ static void run_main_loop(void)
 				search_page = currentpage;
 				if (debug) fprintf(stderr,"%s:%d: Loading prior search / needle with '%s', currentpage = %d\n", FL, search_needle, currentpage);
 			}
-			glutPostRedisplay();
+			//glutPostRedisplay();
 		}
 	}
 
-	if (search_active)
+	//if (search_active)
+	if (1)
 	{
-		char buf[256];
+		char buf[] = "Hello Paul.";
 		int x = canvas_x; // + 1 * ui.lineheight;
 		int y = canvas_y; // + 1 * ui.lineheight;
 		int w = canvas_w - 8 * ui.lineheight;
@@ -1566,15 +1601,20 @@ static void run_main_loop(void)
 		}
 		glEnd();
 
-		sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
+		//	sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
 		glColor4f(0, 0, 0, 1);
 		do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
 	}
 
 	ui_end();
 
-	glutSwapBuffers();
+	//	glutSwapBuffers();
 
+	//	glFlush(); 
+	//	glFinish();search_active)
+	//	SDL_RenderCopy(sdlWindow);
+	//	SDL_RenderPresent(sdlWindow);
+	//	SDL_GL_SwapWindow(sdlWindow);
 	ogl_assert(ctx, "swap buffers");
 }
 
@@ -1592,54 +1632,56 @@ static void on_keyboard(unsigned char key, int x, int y)
 		key = 8;
 #endif
 	ui.key = key;
-	ui.mod = glutGetModifiers();
+	//FIXME	ui.mod = glutGetModifiers();
 	ui.plain = !(ui.mod & ~GLUT_ACTIVE_SHIFT);
-	run_main_loop();
+	//	run_main_loop();
 	ui.key = ui.mod = ui.plain = 0;
 }
 
-static void on_special(int key, int x, int y)
-{
+/*
+	static void on_special(int key, int x, int y)
+	{
 	ui.key = 0;
 
 	switch (key)
 	{
-		case GLUT_KEY_INSERT: ui.key = KEY_INSERT; break;
+	case GLUT_KEY_INSERT: ui.key = KEY_INSERT; break;
 #ifdef GLUT_KEY_DELETE
-		case GLUT_KEY_DELETE: ui.key = KEY_DELETE; break;
+case GLUT_KEY_DELETE: ui.key = KEY_DELETE; break;
 #endif
-		case GLUT_KEY_RIGHT: ui.key = KEY_RIGHT; break;
-		case GLUT_KEY_LEFT: ui.key = KEY_LEFT; break;
-		case GLUT_KEY_DOWN: ui.key = KEY_DOWN; break;
-		case GLUT_KEY_UP: ui.key = KEY_UP; break;
-		case GLUT_KEY_PAGE_UP: ui.key = KEY_PAGE_UP; break;
-		case GLUT_KEY_PAGE_DOWN: ui.key = KEY_PAGE_DOWN; break;
-		case GLUT_KEY_HOME: ui.key = KEY_HOME; break;
-		case GLUT_KEY_END: ui.key = KEY_END; break;
-		case GLUT_KEY_F1: ui.key = KEY_F1; break;
-		case GLUT_KEY_F2: ui.key = KEY_F2; break;
-		case GLUT_KEY_F3: ui.key = KEY_F3; break;
-		case GLUT_KEY_F4: ui.key = KEY_F4; break;
-		case GLUT_KEY_F5: ui.key = KEY_F5; break;
-		case GLUT_KEY_F6: ui.key = KEY_F6; break;
-		case GLUT_KEY_F7: ui.key = KEY_F7; break;
-		case GLUT_KEY_F8: ui.key = KEY_F8; break;
-		case GLUT_KEY_F9: ui.key = KEY_F9; break;
-		case GLUT_KEY_F10: ui.key = KEY_F10; break;
-		case GLUT_KEY_F11: ui.key = KEY_F11; break;
-		case GLUT_KEY_F12: ui.key = KEY_F12; break;
-	}
-
-	if (ui.key)
-	{
-		ui.mod = glutGetModifiers();
-		ui.plain = !(ui.mod & ~GLUT_ACTIVE_SHIFT);
-		run_main_loop();
-		ui.key = ui.mod = ui.plain = 0;
-	}
+case GLUT_KEY_RIGHT: ui.key = KEY_RIGHT; break;
+case GLUT_KEY_LEFT: ui.key = KEY_LEFT; break;
+case GLUT_KEY_DOWN: ui.key = KEY_DOWN; break;
+case GLUT_KEY_UP: ui.key = KEY_UP; break;
+case GLUT_KEY_PAGE_UP: ui.key = KEY_PAGE_UP; break;
+case GLUT_KEY_PAGE_DOWN: ui.key = KEY_PAGE_DOWN; break;
+case GLUT_KEY_HOME: ui.key = KEY_HOME; break;
+case GLUT_KEY_END: ui.key = KEY_END; break;
+case GLUT_KEY_F1: ui.key = KEY_F1; break;
+case GLUT_KEY_F2: ui.key = KEY_F2; break;
+case GLUT_KEY_F3: ui.key = KEY_F3; break;
+case GLUT_KEY_F4: ui.key = KEY_F4; break;
+case GLUT_KEY_F5: ui.key = KEY_F5; break;
+case GLUT_KEY_F6: ui.key = KEY_F6; break;
+case GLUT_KEY_F7: ui.key = KEY_F7; break;
+case GLUT_KEY_F8: ui.key = KEY_F8; break;
+case GLUT_KEY_F9: ui.key = KEY_F9; break;
+case GLUT_KEY_F10: ui.key = KEY_F10; break;
+case GLUT_KEY_F11: ui.key = KEY_F11; break;
+case GLUT_KEY_F12: ui.key = KEY_F12; break;
 }
 
-static void on_wheel(int wheel, int direction, int x, int y)
+if (ui.key)
+{
+//FIXME		ui.mod = glutGetModifiers();
+ui.plain = !(ui.mod & ~GLUT_ACTIVE_SHIFT);
+//run_main_loop();
+ui.key = ui.mod = ui.plain = 0;
+}
+}
+*/
+
+static void on_wheel(int direction, int x, int y)
 {
 
 	/*
@@ -1649,7 +1691,8 @@ static void on_wheel(int wheel, int direction, int x, int y)
 	 * call on_wheel() in a more predictable manner.
 	 */
 
-	if (!((glutGetModifiers() & (GLUT_ACTIVE_CTRL))) != (!scroll_wheel_swap)) {
+	//if (!((glutGetModifiers() & (GLUT_ACTIVE_CTRL))) != (!scroll_wheel_swap)) {
+	if (1) { //FIXME make this selectable again, without GLUT!
 		double oz;
 		double tx, ty, desx, desy;
 		double pct;
@@ -1685,16 +1728,17 @@ static void on_wheel(int wheel, int direction, int x, int y)
 		scroll_x = floor(tsx);
 		scroll_y = floor(tsy);
 
-		run_main_loop();
+		//run_main_loop();
 
 	} else {
 		int jump = 1;
-		if (glutGetModifiers()&GLUT_ACTIVE_SHIFT) jump=5; 
+		//FIXME		if (glutGetModifiers()&GLUT_ACTIVE_SHIFT) jump=5; 
 		if (direction < 0) currentpage += jump;
 		else currentpage -= jump;
 		if (currentpage < 0) currentpage = 0;
 		if (currentpage >= fz_count_pages(ctx,doc)) {  currentpage = fz_count_pages(ctx,doc) -1; }
-		run_main_loop();
+		fprintf(stderr,"%s:%d:Wheeeeeel...%d %d %d\r\n", FL, direction, x, y);
+		//run_main_loop();
 	}
 	/*
 
@@ -1719,12 +1763,12 @@ static void on_mouse(int button, int action, int x, int y)
 		case GLUT_LEFT_BUTTON: ui.down = (action == GLUT_DOWN); break;
 		case GLUT_MIDDLE_BUTTON: ui.middle = (action == GLUT_DOWN); break;
 		case GLUT_RIGHT_BUTTON: ui.right = (action == GLUT_DOWN); break;
-		case 3: if (action == GLUT_DOWN) on_wheel(0, 1, x, y); break;
-		case 4: if (action == GLUT_DOWN) on_wheel(0, -1, x, y); break;
-		case 5: if (action == GLUT_DOWN) on_wheel(1, 1, x, y); break;
-		case 6: if (action == GLUT_DOWN) on_wheel(1, -1, x, y); break;
+										//		case 3: if (action == GLUT_DOWN) on_wheel(0, 1, x, y); break;
+										//		case 4: if (action == GLUT_DOWN) on_wheel(0, -1, x, y); break;
+										//		case 5: if (action == GLUT_DOWN) on_wheel(1, 1, x, y); break;
+										//		case 6: if (action == GLUT_DOWN) on_wheel(1, -1, x, y); break;
 	}
-	run_main_loop();
+	//run_main_loop();
 }
 
 static void on_motion(int x, int y)
@@ -1747,7 +1791,7 @@ static void on_motion(int x, int y)
 		am_dragging = 0;
 	}
 
-	glutPostRedisplay();
+	//FIXME glutPostRedisplay();
 }
 
 static void on_reshape(int w, int h)
@@ -1760,7 +1804,7 @@ static void on_reshape(int w, int h)
 
 static void on_display(void)
 {
-	run_main_loop();
+	//run_main_loop();
 }
 
 static void on_error(const char *fmt, va_list ap)
@@ -1986,7 +2030,7 @@ static void ddi_check( void ) {
 
 			ui_begin();
 
-			{
+			if (0) {
 				//search_page = search_current_page;
 				search_active = 1;
 				search_not_found = 0;
@@ -2031,10 +2075,10 @@ static void ddi_check( void ) {
 
 						search_hit_count = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox, nelem(search_hit_bbox));
 						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, comp_b, search_hit_count);
-//						if (local_hits > 0) {
-//							snprintf(sn_a, sizeof(sn_a), "%s", comp_b);
-//							search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
-//						} else search_hit_count = 0;
+						//						if (local_hits > 0) {
+						//							snprintf(sn_a, sizeof(sn_a), "%s", comp_b);
+						//							search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
+						//						} else search_hit_count = 0;
 					}
 
 					/*
@@ -2065,7 +2109,7 @@ static void ddi_check( void ) {
 									search_page = 0;
 									document_has_hits = 0;
 									search_active = 1;
-//									continue;
+									//									continue;
 								} else {
 									char b[1024];
 									if (debug) fprintf(stderr,"%s:%d: End of document reached, no hits found at all\r\n", FL);
@@ -2122,14 +2166,15 @@ static void ddi_check( void ) {
 
 			} // block braces only
 
-			glutPostRedisplay();
+			// FIXME glutPostRedisplay();
 
 
-			do_app();
+			//			glViewport(0, 0, window_w, window_h);
+			//do_app();
 
 			if (doquit)
 			{
-				glutDestroyWindow(window);
+				//FIXME				glutDestroyWindow(window);
 #ifdef __APPLE__
 				exit(1); /* GLUT on MacOS keeps running even with no windows */
 #endif
@@ -2140,41 +2185,23 @@ static void ddi_check( void ) {
 	}
 }
 
-static void on_timer( int value ) {
-	ddi_check();
-	glutTimerFunc( GLUT_TIMER_DURATION, on_timer, 1 );
-}
-
-#if defined(FREEGLUT) && (GLUT_API_VERSION >= 6)
+/*
+ * FIXME - put this in the SDL event loop instead
+ static void on_timer( int value ) {
+ ddi_check();
+ glutTimerFunc( GLUT_TIMER_DURATION, on_timer, 1 );
+ }
+ */
 
 void ui_set_clipboard(const char *buf)
 {
-	glutSetClipboard(GLUT_CLIPBOARD, buf);
+	SDL_SetClipboardText(buf);
 }
 
 const char *ui_get_clipboard(void)
 {
-	return glutGetClipboard(GLUT_CLIPBOARD);
+	return SDL_GetClipboardText();
 }
-
-#else
-
-static char *clipboard_buffer = NULL;
-
-
-
-void ui_set_clipboard(const char *buf)
-{
-	fz_free(ctx, clipboard_buffer);
-	clipboard_buffer = fz_strdup(ctx, buf);
-}
-
-const char *ui_get_clipboard(void)
-{
-	return clipboard_buffer;
-}
-
-#endif
 
 static void usage(const char *argv0)
 {
@@ -2191,6 +2218,23 @@ static void usage(const char *argv0)
 	fprintf(stderr, "\t-X\tdisable document styles for EPUB layout\n");
 	exit(1);
 }
+
+
+	void GLAPIENTRY
+MessageCallback( GLenum source,
+		GLenum type,
+		GLuint id,
+		GLenum severity,
+		GLsizei length,
+		const GLchar* message,
+		const void* userParam )
+{
+	fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+			( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+			type, severity, message );
+}
+
+
 //do other stuff.
 #ifdef _MSC_VER
 int main_utf8(int argc, char **argv)
@@ -2199,16 +2243,56 @@ int main(int argc, char **argv)
 #endif
 {
 	int c;
-	int windowx, windowy;
 
+	fprintf(stderr,"start.\r\n");
+
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
+		return 3;
+	}
+
+	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+
+	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_DisplayMode current;
+	SDL_GetCurrentDisplayMode(0, &current);
+	SDL_Window *sdlWindow = SDL_CreateWindow("FlexBV PDF", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+	SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
+	//	glutInit( &argc, argv );
+
+	//	glEnable              ( GL_DEBUG_OUTPUT );
+	//	glDebugMessageCallback( MessageCallback, 0 );
+	//	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	//	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+	//if (SDL_CreateWindowAndRenderer(1280, 720, SDL_WINDOW_RESIZABLE|SDL_WINDOW_OPENGL, &sdlWindow, &sdlRenderer)) {
+	//	if (SDL_CreateWindowAndRenderer(1280, 720, SDL_WINDOW_RESIZABLE|SDL_WINDOW_OPENGL, &sdlWindow, &sdlRenderer)) {
+	//		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create window and renderer: %s", SDL_GetError());
+	//		return 3;
+	//	}
+
+	//	sdlWindow = SDL_CreateWindow( "SDL2 test", 0, 0, 1280, 720 , SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
+
+	//	glcontext = SDL_GL_CreateContext(sdlWindow);
+	//SDL_GL_SetSwapInterval(1);
+
+	window_w = 1280;
+	window_h = 720;
 	windowx = 1280;
 	windowy = 720;
+
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
 	//	fprintf(stderr,"Initialising glut\r\n");
-	glutInit(&argc, argv);
-	//	fprintf(stderr,"Parsing parameters\r\n");
+	//glutInit(&argc, argv);
+	fprintf(stderr,"Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X:D:")) != -1)
 	{
 		switch (c)
@@ -2229,15 +2313,17 @@ int main(int argc, char **argv)
 	if (fz_optind < argc)
 		anchor = argv[fz_optind++];
 
-	//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
+	snprintf(filename, sizeof(filename), "%s", argv[1] );
+
+	fprintf(stderr,"Processing filename '%s'\r\n", filename);
 
 	/* ddi setup */
-	//	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
+	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
 	DDI_init(&ddi);
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
-	{
+	if (0){
 		/*
 		 * DDI setup package, is the first one we receive
 		 * and may contain multiple commands for us to process.
@@ -2339,7 +2425,7 @@ int main(int argc, char **argv)
 	else
 		title = filename;
 
-	//	fprintf(stderr,"Initialising muPDF\r\n");
+	fprintf(stderr,"Initialising FlexBV-PDF\r\n");
 	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
@@ -2356,11 +2442,11 @@ int main(int argc, char **argv)
 
 	fz_set_use_document_css(ctx, layout_use_doc_css);
 
-	//	fprintf(stderr,"%s:%d: Loading document\r\n", FL);
+	fprintf(stderr,"%s:%d: Loading document\r\n", FL);
 	load_document();
-	//	fprintf(stderr,"%s:%d: Loading page\r\n", FL);
+	fprintf(stderr,"%s:%d: Loading page\r\n", FL);
 	load_page();
-	//	fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
+	fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
 
 	/* Init IMGUI */
 
@@ -2370,41 +2456,8 @@ int main(int argc, char **argv)
 	search_input.q = search_input.p;
 	search_input.end = search_input.p;
 
-
-	//glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
-
-	glutInitErrorFunc(on_error);
-	glutInitWarningFunc(on_warning);
-	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-	//glutInitWindowSize(page_tex.w, page_tex.h);
-	glutInitWindowSize(windowx, windowy);
-	//	fprintf(stderr,"%s:%d: glut init done\r\n", FL);
-	window = glutCreateWindow(title);
-#ifdef __WIN32__
-	//	hwnd = FindWindow( "GLUT", title );
-#endif
-	glutTimerFunc( GLUT_TIMER_DURATION, on_timer,1);
-	glutReshapeFunc(on_reshape);
-	glutDisplayFunc(on_display);
-#if defined(FREEGLUT) && (GLUT_API_VERSION >= 6)
-	glutKeyboardExtFunc(on_keyboard);
-#else
-	glutKeyboardFunc(on_keyboard);
-#endif
-	glutSpecialFunc(on_special);
-	glutMouseFunc(on_mouse);
-	glutMotionFunc(on_motion);
-	glutPassiveMotionFunc(on_motion);
-#ifdef __WIN32__ || __APPLE__
-	glutMouseWheelFunc(on_wheel);
-#else
-	glutMouseWheelFunc(on_mouse);
-#endif
-	//fprintf(stderr,"%s:%d: glut callbacks done\r\n", FL);
-
-	has_ARB_texture_non_power_of_two = glutExtensionSupported("GL_ARB_texture_non_power_of_two");
-	if (!has_ARB_texture_non_power_of_two)
-		fz_warn(ctx, "OpenGL implementation does not support non-power of two texture sizes");
+	fprintf(stderr,"%s:%d: ARB non-power-of-two test\r\n", FL);
+	has_ARB_texture_non_power_of_two = 0;
 
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
 
@@ -2412,20 +2465,117 @@ int main(int argc, char **argv)
 	ui.baseline = DEFAULT_UI_BASELINE;
 	ui.lineheight = DEFAULT_UI_LINEHEIGHT;
 
+	fprintf(stderr,"%s:%d: ui init fonts\r\n", FL);
 	ui_init_fonts(ctx, ui.fontsize);
 
+	fprintf(stderr,"%s:%d: render page\r\n", FL);
 	render_page();
+
+	fprintf(stderr,"%s:%d: update title\r\n", FL);
 	update_title();
 
-	//	fprintf(stderr,"%s:%d: Into the glut main loop.\n", FL);
+	fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
+	{
+		//
+		//glutMainLoop();
+		//
+		int quit = 0;
+		while (!quit) {
+			//			int x, y;
+			//			SDL_GetMouseState( &x, &y );
 
-	glutMainLoop();
+			glViewport(0,0,window_w, window_h);
+			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glMatrixMode(GL_PROJECTION);
+			glLoadIdentity();
+			glOrtho(0, window_w, window_h, 0, -1, 1);
+			glMatrixMode(GL_MODELVIEW);
+			glLoadIdentity();
 
-	//	fprintf(stderr,"%s:%d: Out of main loop.\n", FL);
+			if (SDL_PollEvent(&sdlEvent) ) {
+				switch (sdlEvent.type) {
+					case SDL_QUIT:
+						quit = 1;
+						break;
+					case SDL_KEYDOWN:
+						fprintf(stderr,"Key hit\r\n");
+						quit = 1;
+						//						on_keyboard( sdlEvent.key.keysym.scancode, 0, 0);
+						break;
+					case SDL_MOUSEWHEEL:
+						//						on_wheel(  sdlEvent.wheel.y, x, y );
+						break;
+					case SDL_MOUSEBUTTONDOWN:
+						//						do_help();
+						show_help ^= 1;
+						//						fprintf(stderr,"Shrink wrap\r\n");
+						//						shrinkwrap();
+						//						on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y);
+						break;
+				}
+			} // if SDL POLL
+
+
+			//			run_main_loop();
+
+			if (1)
+			{
+				char buf[256];
+				float x = canvas_x; // + 1 * ui.lineheight;
+				float y = canvas_y; // + 1 * ui.lineheight;
+				float w = 50;
+				float h = 50;
+
+
+				glBegin(GL_TRIANGLE_STRIP);
+				{
+					glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
+					glVertex2f(x, y);
+					glVertex2f(x, y + h);
+					glVertex2f(x + w, y);
+					glVertex2f(x + w, y + h);
+				}
+				glEnd();
+
+				/*
+				glBegin(GL_TRIANGLE_STRIP);
+				{
+					glColor4f(0.9f, 0.1f, 0.1f, 0.3f);
+					glVertex2f(-0.1,-0.1);
+					glVertex2f(-0.1,0.1);
+					glVertex2f(0.1,-0.1);
+					glVertex2f(0.1,0.1);
+				}
+				glEnd();
+				*/
+
+			}
+
+			do_canvas();
+//			do_help();
+
+			SDL_GL_SwapWindow(sdlWindow);
+			//				quit = 1;
+			//if (show_help == 1) do_help;
+			fprintf(stderr,".");
+			usleep(10000);
+		} // while
+	}
+
+	fprintf(stderr,"%s:%d: SDL loop ended\r\n", FL);
+
+	SDL_DestroyTexture(sdlTexture);
+	SDL_DestroyRenderer(sdlRenderer);
+	SDL_GL_DeleteContext(glcontext);
+	SDL_DestroyWindow(sdlWindow);
+
 
 	ui_finish_fonts(ctx);
 
-	glutExit();
+	SDL_DestroyWindow(sdlWindow);
+
+	SDL_Quit();
 
 #ifndef NDEBUG
 	if (fz_atoi(getenv("FZ_DEBUG_STORE")))

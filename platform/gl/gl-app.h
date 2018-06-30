@@ -4,14 +4,18 @@ void win_install(void);
 int win_open_file(char *buf, int len);
 #endif
 
-#include "mupdf/fitz.h"
-#include "mupdf/ucdn.h"
+#include <SDL2/SDL.h>
 
 #ifndef __APPLE__
+//#include <Renderers/imgui_impl_sdl3_gl3.h>
+//#include <GL/glad.h>
 #include <GL/freeglut.h>
 #else
 #include <GLUT/glut.h>
 #endif
+
+#include "mupdf/fitz.h"
+#include "mupdf/ucdn.h"
 
 extern fz_context *ctx;
 
