@@ -312,7 +312,7 @@ static void update_title(void)
 			sprintf(buf, "%s - %d / %d (R%d)", title, currentpage + 1, fz_count_pages(ctx, doc), GIT_BUILD);
 		}
 	}
-	fprintf(stderr,"%s:%d: Setting window title '%s'\r\n", FL, buf);
+	if (debug) fprintf(stderr,"%s:%d: Setting window title '%s'\r\n", FL, buf);
 	SDL_SetWindowTitle( sdlWindow, buf );
 }
 
@@ -1065,9 +1065,7 @@ static void do_keypress(void)
 {
 
 	ui.plain = 1;
-	fprintf(stderr,"%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
-//	if (ui.key == KEY_F4 && ui.mod == GLUT_ACTIVE_ALT)
-//		quit();
+	if (debug) fprintf(stderr,"%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
 
 	/*
 	 * close the help/info if we've pressed something else 
@@ -1078,7 +1076,7 @@ static void do_keypress(void)
 
 	if (!ui.focus && ui.key && ui.plain)
 	{
-		fprintf(stderr,"%s:%d: Acting on key '%c'\r\n", FL, ui.key );
+		if (debug) fprintf(stderr,"%s:%d: Acting on key '%c'\r\n", FL, ui.key );
 		switch (ui.key)
 		{
 			case KEY_ESCAPE: clear_search(); break;
@@ -1307,8 +1305,6 @@ static void do_help(void)
 	float w = canvas_w - 8 * ui.lineheight;
 	float h = 15 * ui.lineheight;
 
-	fprintf(stderr,"%s:%d: Do help, %0.2f %0.2f %0.2f %0.2f\r\n",FL, x, y, w, h);
-		
 	glBegin(GL_TRIANGLE_STRIP);
 	{
 		glColor4f(0.9f, 0.9f, 0.9f, 1.0f);
@@ -1377,7 +1373,6 @@ static void do_canvas(void)
 
 	if (oldpage != currentpage || oldzoom != currentzoom || oldrotate != currentrotate || oldinvert != currentinvert)
 	{
-		fprintf(stderr,"%s:%d: Rendering page again\r\n", FL);
 		render_page();
 		update_title();
 		oldpage = currentpage;
@@ -1563,7 +1558,6 @@ static void run_main_loop(void)
 	if (showoutline) do_outline(outline, canvas_x);
 
 	if (showsearch) {
-		fprintf(stderr,"%s:%d: Showing search input...\r\n",FL);
 		int state = ui_input(canvas_x, 0, canvas_x + canvas_w, ui.lineheight+4, &search_input);
 		if (state == -1)
 		{
@@ -1738,28 +1732,13 @@ static void on_wheel(int direction, int x, int y)
 		scroll_x = floor(tsx);
 		scroll_y = floor(tsy);
 
-		//run_main_loop();
-
 	} else {
 		int jump = 1;
-		//FIXME		if (glutGetModifiers()&GLUT_ACTIVE_SHIFT) jump=5; 
 		if (direction < 0) currentpage += jump;
 		else currentpage -= jump;
 		if (currentpage < 0) currentpage = 0;
 		if (currentpage >= fz_count_pages(ctx,doc)) {  currentpage = fz_count_pages(ctx,doc) -1; }
-		fprintf(stderr,"%s:%d:Wheeeeeel...%d %d %d\r\n", FL, direction, x, y);
-		//run_main_loop();
 	}
-	/*
-
-
-		ui.scroll_x = wheel == 1 ? direction : 0;
-		ui.scroll_y = wheel == 0 ? direction : 0;
-		ui.scroll_x = ui.scroll_y = 0;
-		}
-		*/
-
-
 }
 
 static void on_mouse(int button, int action, int x, int y)
@@ -1767,18 +1746,13 @@ static void on_mouse(int button, int action, int x, int y)
 	ui.x = x;
 	ui.y = y;
 
-	fprintf(stderr,"%s:%d: button: %d %d\r\n", FL, button, action);
+	if (debug) fprintf(stderr,"%s:%d: button: %d %d\r\n", FL, button, action);
 	switch (button)
 	{
 		case SDL_BUTTON_LEFT: ui.down = (action == SDL_MOUSEBUTTONDOWN); break;
 		case SDL_BUTTON_MIDDLE: ui.middle = (action == SDL_MOUSEBUTTONDOWN); break;
 		case SDL_BUTTON_RIGHT: ui.right = (action == SDL_MOUSEBUTTONDOWN); break;
-										//		case 3: if (action == GLUT_DOWN) on_wheel(0, 1, x, y); break;
-										//		case 4: if (action == GLUT_DOWN) on_wheel(0, -1, x, y); break;
-										//		case 5: if (action == GLUT_DOWN) on_wheel(1, 1, x, y); break;
-										//		case 6: if (action == GLUT_DOWN) on_wheel(1, -1, x, y); break;
 	}
-	//run_main_loop();
 }
 
 static void on_motion(int x, int y)
@@ -1802,25 +1776,12 @@ static void on_motion(int x, int y)
 	}
 }
 
-static void on_reshape(int w, int h)
-{
-	showinfo = 0;
-	showhelp = 0;
-	window_w = w;
-	window_h = h;
-}
-
-static void on_display(void)
-{
-	//run_main_loop();
-}
-
 static void on_error(const char *fmt, va_list ap)
 {
 #ifdef _WIN32
 	char buf[1000];
 	fz_vsnprintf(buf, sizeof buf, fmt, ap);
-	MessageBoxA(NULL, buf, "MuPDF GLUT Error", MB_ICONERROR);
+	MessageBoxA(NULL, buf, "PDF Error", MB_ICONERROR);
 #else
 	fprintf(stderr, "GLUT error: ");
 	vfprintf(stderr, fmt, ap);
@@ -1867,7 +1828,7 @@ static void ddi_check( void ) {
 
 		if (strlen(sn_a) < 2) return;
 
-		fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
+		if (debug) fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
 		if ((cmd = strstr(sn_a, "!strictmatch:"))) {
 			char tmp[1024];
 			snprintf(tmp,sizeof(tmp),"%s",sn_a);
@@ -2045,12 +2006,7 @@ static void ddi_check( void ) {
 				search_not_found = 0;
 
 				if (raise_on_search == 1) {
-					fprintf(stderr,"%s:%d: RAISE window\r\n",FL);
 					SDL_RaiseWindow(sdlWindow);
-#ifdef __WIN32__
-					//					HWND hwnd = FindWindow( "GLUT", title ); //get its handle "GLUT" = class name "ogl" = window caption
-					//					SetWindowPos( hwnd, HWND_TOPMOST, NULL, NULL, NULL, NULL, SWP_NOREPOSITION | SWP_NOSIZE ); //set the window always-on-top
-#endif
 				}
 
 				while (search_active) {
@@ -2256,7 +2212,7 @@ int main(int argc, char **argv)
 	int c;
 	int check_again = 0;
 
-	fprintf(stderr,"start.\r\n");
+	if (debug) fprintf(stderr,"start.\r\n");
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
@@ -2288,7 +2244,7 @@ int main(int argc, char **argv)
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
-	fprintf(stderr,"Parsing parameters\r\n");
+	if (debug) fprintf(stderr,"Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X:D:")) != -1)
 	{
 		switch (c)
@@ -2309,11 +2265,8 @@ int main(int argc, char **argv)
 	if (fz_optind < argc)
 		anchor = argv[fz_optind++];
 
-//	snprintf(filename, sizeof(filename), "%s", argv[1] );
-//	fprintf(stderr,"Processing filename '%s'\r\n", filename);
-
 	/* ddi setup */
-	fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
+	if (debug) fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
 	DDI_init(&ddi);
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
@@ -2326,13 +2279,11 @@ int main(int argc, char **argv)
 		 */
 		char s[10240];
 		int x = 10;
-		fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
+		if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
 			char *p, *q;
 			usleep(10000); // 0.1 sec
 		
-			fprintf(stderr,"%s:%d: DDI PICKUP (FIRST TIME)\r\n",FL);
-
 			if ((p = strstr(s, "!debug:"))) {
 				debug = 1;
 				if (debug) fprintf(stderr,"%s:%d:DDI Data---------\r\n%s\r\n-------------\r\n",FL,s);
@@ -2426,7 +2377,7 @@ int main(int argc, char **argv)
 	else
 		title = filename;
 
-	fprintf(stderr,"Initialising FlexBV-PDF\r\n");
+	if (debug) fprintf(stderr,"Initialising FlexBV-PDF\r\n");
 	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
@@ -2443,11 +2394,11 @@ int main(int argc, char **argv)
 
 	fz_set_use_document_css(ctx, layout_use_doc_css);
 
-	fprintf(stderr,"%s:%d: Loading document\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: Loading document\r\n", FL);
 	load_document();
-	fprintf(stderr,"%s:%d: Loading page\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: Loading page\r\n", FL);
 	load_page();
-	fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
 
 	/* Init IMGUI */
 
@@ -2457,7 +2408,7 @@ int main(int argc, char **argv)
 	search_input.q = search_input.p;
 	search_input.end = search_input.p;
 
-	fprintf(stderr,"%s:%d: ARB non-power-of-two test\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: ARB non-power-of-two test\r\n", FL);
 	has_ARB_texture_non_power_of_two = 0;
 
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
@@ -2466,19 +2417,19 @@ int main(int argc, char **argv)
 	ui.baseline = DEFAULT_UI_BASELINE;
 	ui.lineheight = DEFAULT_UI_LINEHEIGHT;
 
-	fprintf(stderr,"%s:%d: ui init fonts\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: ui init fonts\r\n", FL);
 	ui_init_fonts(ctx, ui.fontsize);
 
-	fprintf(stderr,"%s:%d: render page\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: render page\r\n", FL);
 	render_page();
 
 //	shrinkwrap();
 
 
-	fprintf(stderr,"%s:%d: update title\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: update title\r\n", FL);
 	update_title();
 
-	fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
 	{
 		while (!doquit) {
 
@@ -2575,7 +2526,7 @@ int main(int argc, char **argv)
 		} // while
 	}
 
-	fprintf(stderr,"%s:%d: SDL loop ended\r\n", FL);
+	if (debug) fprintf(stderr,"%s:%d: SDL loop ended\r\n", FL);
 
 	SDL_DestroyTexture(sdlTexture);
 	SDL_DestroyRenderer(sdlRenderer);
