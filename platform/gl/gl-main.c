@@ -205,7 +205,7 @@ static int ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 static int search_type = SEARCH_TYPE_NONE;
 static int document_has_hits = 0;
 //static int search_status = SEARCH_STATUS_NONE;
-static char am_dragging = 0;
+static int am_dragging = 0;
 static fz_point dragging_start;
 
 
@@ -1372,6 +1372,7 @@ static void do_canvas(void)
 
 	if (oldpage != currentpage || oldzoom != currentzoom || oldrotate != currentrotate || oldinvert != currentinvert)
 	{
+		fprintf(stderr,"%s:%d: Rendering page again\r\n", FL);
 		render_page();
 		update_title();
 		oldpage = currentpage;
@@ -1487,8 +1488,8 @@ static void run_main_loop(void)
 
 	ui_begin();
 
-	//if (search_active) {
-	if (0) {
+	if (search_active) {
+	//if (0) {
 		//		int start_time = glutGet(GLUT_ELAPSED_TIME);
 
 		if (ui.key == KEY_ESCAPE)
@@ -1534,7 +1535,7 @@ static void run_main_loop(void)
 		}
 	} // if search-active
 
-	//do_app();
+	do_app();
 
 	/*
 		if (doquit) { //		glutDestroyWindow(window); #ifdef __APPLE__ exit(1); #endif return; }
@@ -1543,14 +1544,14 @@ static void run_main_loop(void)
 	canvas_w = window_w - canvas_x;
 	canvas_h = window_h - canvas_y;
 
-	//	do_canvas();
+	do_canvas();
 
-	//	if (showinfo) do_info();
-	//	else if (showhelp) do_help();
-	//	if (showoutline) do_outline(outline, canvas_x);
+	if (showinfo) do_info();
+	else if (showhelp) do_help();
+	if (showoutline) do_outline(outline, canvas_x);
 
-	//if (showsearch) {
-	if (0) {
+	if (showsearch) {
+	//if (0) {
 		int state = ui_input(canvas_x, 0, canvas_x + canvas_w, ui.lineheight+4, &search_input);
 		if (state == -1)
 		{
@@ -1582,10 +1583,9 @@ static void run_main_loop(void)
 		}
 	}
 
-	//if (search_active)
-	if (1)
+	if (search_active)
 	{
-		char buf[] = "Hello Paul.";
+		char buf[256];
 		int x = canvas_x; // + 1 * ui.lineheight;
 		int y = canvas_y; // + 1 * ui.lineheight;
 		int w = canvas_w - 8 * ui.lineheight;
@@ -1601,7 +1601,7 @@ static void run_main_loop(void)
 		}
 		glEnd();
 
-		//	sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
+		sprintf(buf, "%d of %d.", search_page + 1, fz_count_pages(ctx, doc));
 		glColor4f(0, 0, 0, 1);
 		do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
 	}
@@ -1691,8 +1691,7 @@ static void on_wheel(int direction, int x, int y)
 	 * call on_wheel() in a more predictable manner.
 	 */
 
-	//if (!((glutGetModifiers() & (GLUT_ACTIVE_CTRL))) != (!scroll_wheel_swap)) {
-	if (1) { //FIXME make this selectable again, without GLUT!
+	if (!(SDL_GetModState() & KMOD_CTRL ) != (!scroll_wheel_swap)) {
 		double oz;
 		double tx, ty, desx, desy;
 		double pct;
@@ -1757,12 +1756,12 @@ static void on_mouse(int button, int action, int x, int y)
 	ui.x = x;
 	ui.y = y;
 
-	fprintf(stderr,"%s:%d: button: %x\r\n", FL, button);
+	fprintf(stderr,"%s:%d: button: %d %d\r\n", FL, button, action);
 	switch (button)
 	{
-		case GLUT_LEFT_BUTTON: ui.down = (action == GLUT_DOWN); break;
-		case GLUT_MIDDLE_BUTTON: ui.middle = (action == GLUT_DOWN); break;
-		case GLUT_RIGHT_BUTTON: ui.right = (action == GLUT_DOWN); break;
+		case SDL_BUTTON_LEFT: ui.down = (action == SDL_MOUSEBUTTONDOWN); break;
+		case SDL_BUTTON_MIDDLE: ui.middle = (action == SDL_MOUSEBUTTONDOWN); break;
+		case SDL_BUTTON_RIGHT: ui.right = (action == SDL_MOUSEBUTTONDOWN); break;
 										//		case 3: if (action == GLUT_DOWN) on_wheel(0, 1, x, y); break;
 										//		case 4: if (action == GLUT_DOWN) on_wheel(0, -1, x, y); break;
 										//		case 5: if (action == GLUT_DOWN) on_wheel(1, 1, x, y); break;
@@ -1776,7 +1775,7 @@ static void on_motion(int x, int y)
 	ui.x = x;
 	ui.y = y;
 
-	if (ui.down) {
+	if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT)) {
 		if (!am_dragging) {
 			am_dragging = 1;
 			dragging_start.x = x;
@@ -1790,8 +1789,6 @@ static void on_motion(int x, int y)
 	} else {
 		am_dragging = 0;
 	}
-
-	//FIXME glutPostRedisplay();
 }
 
 static void on_reshape(int w, int h)
@@ -1859,6 +1856,7 @@ static void ddi_check( void ) {
 
 		if (strlen(sn_a) < 2) return;
 
+		fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
 		if ((cmd = strstr(sn_a, "!strictmatch:"))) {
 			char tmp[1024];
 			snprintf(tmp,sizeof(tmp),"%s",sn_a);
@@ -2030,7 +2028,7 @@ static void ddi_check( void ) {
 
 			ui_begin();
 
-			if (0) {
+			{
 				//search_page = search_current_page;
 				search_active = 1;
 				search_not_found = 0;
@@ -2264,23 +2262,7 @@ int main(int argc, char **argv)
 	SDL_GetCurrentDisplayMode(0, &current);
 	SDL_Window *sdlWindow = SDL_CreateWindow("FlexBV PDF", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
-	//	glutInit( &argc, argv );
-
-	//	glEnable              ( GL_DEBUG_OUTPUT );
-	//	glDebugMessageCallback( MessageCallback, 0 );
-	//	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	//	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-
-	//if (SDL_CreateWindowAndRenderer(1280, 720, SDL_WINDOW_RESIZABLE|SDL_WINDOW_OPENGL, &sdlWindow, &sdlRenderer)) {
-	//	if (SDL_CreateWindowAndRenderer(1280, 720, SDL_WINDOW_RESIZABLE|SDL_WINDOW_OPENGL, &sdlWindow, &sdlRenderer)) {
-	//		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create window and renderer: %s", SDL_GetError());
-	//		return 3;
-	//	}
-
-	//	sdlWindow = SDL_CreateWindow( "SDL2 test", 0, 0, 1280, 720 , SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
-
-	//	glcontext = SDL_GL_CreateContext(sdlWindow);
-	//SDL_GL_SetSwapInterval(1);
+//	SDL_GL_SetSwapInterval(1);
 
 	window_w = 1280;
 	window_h = 720;
@@ -2290,8 +2272,6 @@ int main(int argc, char **argv)
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
-	//	fprintf(stderr,"Initialising glut\r\n");
-	//glutInit(&argc, argv);
 	fprintf(stderr,"Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:IW:H:S:U:X:D:")) != -1)
 	{
@@ -2323,7 +2303,7 @@ int main(int argc, char **argv)
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
-	if (0){
+	if (1){
 		/*
 		 * DDI setup package, is the first one we receive
 		 * and may contain multiple commands for us to process.
@@ -2471,6 +2451,9 @@ int main(int argc, char **argv)
 	fprintf(stderr,"%s:%d: render page\r\n", FL);
 	render_page();
 
+//	shrinkwrap();
+
+
 	fprintf(stderr,"%s:%d: update title\r\n", FL);
 	update_title();
 
@@ -2481,8 +2464,7 @@ int main(int argc, char **argv)
 		//
 		int quit = 0;
 		while (!quit) {
-			//			int x, y;
-			//			SDL_GetMouseState( &x, &y );
+
 
 			glViewport(0,0,window_w, window_h);
 			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
@@ -2493,73 +2475,75 @@ int main(int argc, char **argv)
 			glMatrixMode(GL_MODELVIEW);
 			glLoadIdentity();
 
-			if (SDL_PollEvent(&sdlEvent) ) {
+			//if (SDL_PollEvent(&sdlEvent) ) {
+			while (SDL_PollEvent(&sdlEvent) ) {
+			//if (SDL_WaitEvent(&sdlEvent) ) {
 				switch (sdlEvent.type) {
+					case SDL_WINDOWEVENT:
+						switch (sdlEvent.window.event) {
+							case SDL_WINDOWEVENT_RESIZED:
+							case SDL_WINDOWEVENT_SIZE_CHANGED:
+//							case SDL_WINDOWEVENT_MAXIMIZED:
+//							case SDL_WINDOWEVENT_RESTORED:
+								window_w = sdlEvent.window.data1;
+								window_h = sdlEvent.window.data2;
+								break;
+						}
+						break;
+
 					case SDL_QUIT:
 						quit = 1;
 						break;
 					case SDL_KEYDOWN:
-						fprintf(stderr,"Key hit\r\n");
-						quit = 1;
-						//						on_keyboard( sdlEvent.key.keysym.scancode, 0, 0);
+						{
+							if (sdlEvent.key.keysym.sym == SDLK_q) {
+								quit = 1;
+							}
+						}
 						break;
+
+					case SDL_MOUSEMOTION:
+						{
+							int x, y;
+							SDL_GetMouseState( &x, &y );
+							on_motion( x, y );
+						}
+						break;
+
 					case SDL_MOUSEWHEEL:
-						//						on_wheel(  sdlEvent.wheel.y, x, y );
+						{
+							int x, y;
+							SDL_GetMouseState( &x, &y );
+							on_wheel(  sdlEvent.wheel.y, x, y );
+						}
 						break;
+
 					case SDL_MOUSEBUTTONDOWN:
-						//						do_help();
-						show_help ^= 1;
-						//						fprintf(stderr,"Shrink wrap\r\n");
-						//						shrinkwrap();
-						//						on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y);
+						{
+							int x, y;
+							SDL_GetMouseState( &x, &y );
+							on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y);
+						}
+						break;
+
+
+					case SDL_MOUSEBUTTONUP:
+						{
+							int x, y;
+							SDL_GetMouseState( &x, &y );
+							on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y);
+						}
 						break;
 				}
+
 			} // if SDL POLL
 
+			ddi_check();
+			run_main_loop();
 
-			//			run_main_loop();
+		//		do_canvas();
+				SDL_GL_SwapWindow(sdlWindow);
 
-			if (1)
-			{
-				char buf[256];
-				float x = canvas_x; // + 1 * ui.lineheight;
-				float y = canvas_y; // + 1 * ui.lineheight;
-				float w = 50;
-				float h = 50;
-
-
-				glBegin(GL_TRIANGLE_STRIP);
-				{
-					glColor4f(0.9f, 0.9f, 0.1f, 1.0f);
-					glVertex2f(x, y);
-					glVertex2f(x, y + h);
-					glVertex2f(x + w, y);
-					glVertex2f(x + w, y + h);
-				}
-				glEnd();
-
-				/*
-				glBegin(GL_TRIANGLE_STRIP);
-				{
-					glColor4f(0.9f, 0.1f, 0.1f, 0.3f);
-					glVertex2f(-0.1,-0.1);
-					glVertex2f(-0.1,0.1);
-					glVertex2f(0.1,-0.1);
-					glVertex2f(0.1,0.1);
-				}
-				glEnd();
-				*/
-
-			}
-
-			do_canvas();
-//			do_help();
-
-			SDL_GL_SwapWindow(sdlWindow);
-			//				quit = 1;
-			//if (show_help == 1) do_help;
-			fprintf(stderr,".");
-			usleep(10000);
 		} // while
 	}
 
