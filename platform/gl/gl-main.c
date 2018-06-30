@@ -314,15 +314,12 @@ static void update_title(void)
 	}
 	fprintf(stderr,"%s:%d: Setting window title '%s'\r\n", FL, buf);
 	SDL_SetWindowTitle( sdlWindow, buf );
-//	glutSetWindowTitle(buf);
-	//	fprintf(stderr,"%s:%d: Setting glut icon title", FL);
-//	glutSetIconTitle(buf);
 }
 
 void texture_from_pixmap(struct texture *tex, fz_pixmap *pix)
 {
-	if (!tex->id)
-		glGenTextures(1, &tex->id);
+	if (!tex->id) glGenTextures(1, &tex->id);
+
 	glBindTexture(GL_TEXTURE_2D, tex->id);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -2277,9 +2274,11 @@ int main(int argc, char **argv)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 	SDL_DisplayMode current;
 	SDL_GetCurrentDisplayMode(0, &current);
-	SDL_Window *sdlWindow = SDL_CreateWindow("FlexBV PDF", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+	sdlWindow = SDL_CreateWindow("FlexBV PDF", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
 //	SDL_GL_SetSwapInterval(1);
+	SDL_EnableScreenSaver();
+
 
 	window_w = 1280;
 	window_h = 720;
@@ -2481,11 +2480,7 @@ int main(int argc, char **argv)
 
 	fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
 	{
-		//
-		//glutMainLoop();
-		//
-		int quit = 0;
-		while (!quit) {
+		while (!doquit) {
 
 
 			glViewport(0,0,window_w, window_h);
@@ -2514,8 +2509,9 @@ int main(int argc, char **argv)
 						break;
 
 					case SDL_QUIT:
-						quit = 1;
+						quit();
 						break;
+
 					case SDL_KEYDOWN:
 						{
 							ui.key = sdlEvent.key.keysym.sym;
