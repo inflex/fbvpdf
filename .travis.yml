@@ -16,8 +16,7 @@ matrix:
 dist: trusty
 sudo: required
 branches:
-  only:
-    master
+  only: master
 install: |-
   if [ "$TRAVIS_OS_NAME" == "linux" ]
   then
@@ -43,8 +42,10 @@ before_deploy: |-
 deploy:
   provider: releases
   api_key:
-    secure: qxkbaBiM52f6Cz9bap1ZiOYD5RZJIW4066o2AeK6XKxBFFrz0Abt2f8GdBAyKOWqksOIgbfICPAhMTlQeADeCsiUCIbsjjo4rZj1HVZcVyZuIKFt1+P9jKiuXjaC7RS3SkeQLlGhyPPGYgE/nAflgGXuEYD3zzwIFwaoRh4g3Fl0zwj5Sse/C/ks9advFgMkJ1Hmvhxr7xVnT+c/6ZyWlSPmi2paw+Sti4oGfdb50LyOS2kozwyuP9ugFCYmhUffGrdeL/bdch8FwCkIzr6kBahaA5vq/Uxw7ru8H//IBK4dviaHYDcnUHUwo6Gb0ExuHFHXXTYa2vkRYnVjiZAaRnuvdlHEW3P/4f1ZQ53HNDV27BXIuRUMCEin5BlDbsm300doSnwT9bil7J7+wm76ZCt9tk5FEiwLrdgyy23u05QjnB6SwWm76QMTD+cCAm7Y1mARf2wghBYpPoKEbOY/0bLDqi3NjNztjU/z9k8xNZlSYTqbpA4bRwBG5I3jD9RDqXQlJYVvB3Dju4fLdie4kmYRipEIgAalrG8nv1KSbOnhdPk+0aJd15uSEb6d54fgvVWSOeukdCZTbv+8ob4nNX9P2NzfvaT8SmhqAfdRP8ynD4p3UdB29SL9+poGxaV4Ol+p2sh0HaZrgMm9lBzxvm0yrZKlFd3RWu5XF1kwcvk=
+    secure: o5ExTB/ZjbOApYfN5T51+hocscx+fQvs0fiejjBkxnKV7MDZv2kFX5i5AB6JFWLnHgQTCJP4dTR0AsUF9nmoyugzE/qHj2UoIDKbaPI+FZuYvzKV11qSPy9xmRvaDYIKV+13lsDODNCyyXfuGawuw4qQozu1KV7+U75rRvN30pl7xg346ZEMX8BObWXiQ3uMXTwNNcFcMIBLrQ3bcYBvrltRET3uj7Hm7tkdY4CVTqiWkPAJGEzQikiS13P8HJmAI4ed/d3XnjsJDJCl2j++FacBbpwZ7AA55PyFXcSOUSp9iS3kWR/n71uOIP9qti7z0qTFkd3J7S9zl3xgLycPBqyzEGDXmyzySZwz+ndwpBxGhfwJ4iSPHMVuMgbVVX9GfgApmB+efHMCzig+soplPMamLHKyhq2wQoNgOUbMMj+5b4CdmEEZ0yQTf7HlZ4XLYEl7GuilUZFpDJX0Xu20bq4mxb6GgqoODdaPKOvjONw0MaQ9C3oElScXSNVQxBzlQ5yDKIm9T8raw6bq9GjxUHTLld4R5BD3ZbtMZXmBn66WhrdfJafCiM5nogJUbfQha7/9yLOYF2CSBFqpts5bPJY7mqB6U9Hn5zxeThvm+uyOZxF0NfCm6/WmUx17N8k3G4vkwiH4GX66u/NuC4HSHzSPCyaWrp5+QjjCDI3rUl0=
   file: "${DEPLOY_FILES}"
   skip_cleanup: true
   on:
+    tags: true
+    condition: "$DEPLOY == yes"
     repo: pvtinflex/fbvpdf
