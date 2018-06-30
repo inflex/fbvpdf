@@ -46,6 +46,5 @@ deploy:
   file: "${DEPLOY_FILES}"
   skip_cleanup: true
   on:
-    tags: true
     condition: "$DEPLOY == yes"
     repo: pvtinflex/fbvpdf
