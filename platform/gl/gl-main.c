@@ -1079,8 +1079,8 @@ static void do_keypress(void)
 		if (debug) fprintf(stderr,"%s:%d: Acting on key '%c'\r\n", FL, ui.key );
 		switch (ui.key)
 		{
-			case KEY_ESCAPE: clear_search(); break;
-			case KEY_F1: showhelp = !showhelp; break;
+			case SDLK_ESCAPE: clear_search(); break;
+			case SDLK_F1: showhelp = !showhelp; break;
 			case 'o': toggle_outline(); break;
 			case 'L': showlinks = !showlinks; break;
 			case 'i': showinfo = !showinfo; break;
@@ -1110,8 +1110,8 @@ static void do_keypress(void)
 
 			case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
 			case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
-			case ',': case KEY_PAGE_UP: currentpage -= fz_maxi(number, 1); break;
-			case '.': case KEY_PAGE_DOWN: currentpage += fz_maxi(number, 1); break;
+			case ',': case KEY_PAGE_UP: case SDLK_PAGEUP: currentpage -= fz_maxi(number, 1); break;
+			case '.': case KEY_PAGE_DOWN: case SDLK_PAGEDOWN: currentpage += fz_maxi(number, 1); break;
 			case '<': currentpage -= 10 * fz_maxi(number, 1); break;
 			case '>': currentpage += 10 * fz_maxi(number, 1); break;
 			case 'g': jump_to_page(number - 1); break;
