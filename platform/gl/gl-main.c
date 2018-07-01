@@ -1557,8 +1557,8 @@ static void on_special(int key, int x, int y)
 		case SDLK_LEFT: ui.key = KEY_LEFT; break;
 		case SDLK_DOWN: ui.key = KEY_DOWN; break;
 		case SDLK_UP: ui.key = KEY_UP; break;
-		case SDLK_PAGE_UP: ui.key = KEY_PAGE_UP; break;
-		case SDLK_PAGE_DOWN: ui.key = KEY_PAGE_DOWN; break;
+		case SDLK_PAGEUP: ui.key = KEY_PAGE_UP; break;
+		case SDLK_PAGEDOWN: ui.key = KEY_PAGE_DOWN; break;
 		case SDLK_HOME: ui.key = KEY_HOME; break;
 		case SDLK_END: ui.key = KEY_END; break;
 		case SDLK_F1: ui.key = KEY_F1; break;
