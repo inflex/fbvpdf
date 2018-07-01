@@ -1529,6 +1529,9 @@ static void run_main_loop(void)
 					if (needle_has_hits) {
 						search_page = 0;
 					} else {
+						snprintf(last_search_string,sizeof(last_search_string),"%s", search_needle);
+						search_not_found = 1;
+						update_title();
 						search_active = 0;
 					}
 					break;
