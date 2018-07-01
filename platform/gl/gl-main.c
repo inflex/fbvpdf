@@ -1303,7 +1303,7 @@ static void do_help(void)
 	float x = canvas_x + 4 * ui.lineheight;
 	float y = canvas_y + 4 * ui.lineheight;
 	float w = canvas_w - 8 * ui.lineheight;
-	float h = 15 * ui.lineheight;
+	float h = 38 * ui.lineheight;
 
 	glBegin(GL_TRIANGLE_STRIP);
 	{
@@ -1319,10 +1319,8 @@ static void do_help(void)
 	x += ui.lineheight;
 	y += ui.lineheight + ui.baseline;
 
-	glColor4f(1, 1, 1, 1);
+	glColor4f(0, 0, 0, 1);
 	y = do_help_line(x, y, "FlexBV-MuPDF", FZ_VERSION);
-	return ;
-
 
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
@@ -1331,7 +1329,6 @@ static void do_help(void)
 	y = do_help_line(x, y, "L", "show/hide links");
 	y = do_help_line(x, y, "r", "reload file");
 	y = do_help_line(x, y, "q", "quit");
-	/*
 		y += ui.lineheight;
 		y = do_help_line(x, y, "I", "toggle inverted color mode");
 		y = do_help_line(x, y, "f", "fullscreen window");
@@ -1359,7 +1356,6 @@ static void do_help(void)
 	y += ui.lineheight;
 	y = do_help_line(x, y, "/ or ?", "search for text");
 	y = do_help_line(x, y, "n or N", "repeat search");
-	*/
 }
 
 static void do_canvas(void)
@@ -1710,7 +1706,7 @@ static void on_wheel(int direction, int x, int y)
 		tsx = scroll_x;
 		tsy = scroll_y;
 
-		pct = 1.5;
+		pct = 1.2;
 
 		tx = (tsx + x);
 		ty = (tsy + y);
