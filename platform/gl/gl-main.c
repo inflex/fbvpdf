@@ -47,7 +47,7 @@ enum
 	DEFAULT_LAYOUT_EM = 12,
 
 	/* Default UI sizes */
-	DEFAULT_UI_FONTSIZE = 15,
+	DEFAULT_UI_FONTSIZE = 18,
 	DEFAULT_UI_BASELINE = 14,
 	DEFAULT_UI_LINEHEIGHT = 18,
 };
@@ -1148,6 +1148,8 @@ static void do_keypress(void)
 						 clear_search();
 						 search_dir = 1;
 						 showsearch = 1;
+						 search_not_found = 0;
+						 update_title();
 						 search_input.p = search_input.text;
 						 search_input.q = search_input.end;
 						 break;
