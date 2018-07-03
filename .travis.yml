@@ -42,7 +42,7 @@ script: |-
     ./makecrosswin.sh
   else
     if [ "$CXX" == "g++" ]; then export CXX="g++-6" CC="gcc-6"; fi
-    ./build.sh $TRAVIS_OS_NAME || exit 1
+    ./build.sh || exit 1
     if [ "$DEPLOY_DEB" == "yes" ] || [ "$DEPLOY_RPM" == "yes" ]
     then
       pushd release_build
