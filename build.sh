@@ -4,7 +4,7 @@ set -x
 LOS=${TRAVIS_OS_NAME:-linux}
 export G=`git rev-list HEAD --count`
 echo $G
-make -f Makefile.general GIT_BUILD='${G}' 
+make -f Makefile.general GIT_BUILD='${G}'  $1
 MR=$?
 if [ $MR -eq 0 ]; then
 	if [ "$LOS" == "linux" ]; then
