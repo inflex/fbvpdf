@@ -1,5 +1,6 @@
 #include "gl-app.h"
 
+#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 
 #include "mupdf/pdf.h" /* for pdf specifics and forms */
@@ -2100,7 +2101,7 @@ static void usage(const char *argv0)
 
 
 //do other stuff.
-#ifdef _MSC_VER
+#ifdef __WIN32
 int main_utf8(int argc, char **argv)
 #else
 int main(int argc, char **argv)
@@ -2452,7 +2453,7 @@ int main(int argc, char **argv)
 		return 0;
 		}
 
-#ifdef _MSC_VER
+#ifdef __WIN32
 		int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 		{
 			int argc;
