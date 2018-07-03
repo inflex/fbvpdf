@@ -54,8 +54,10 @@ before_deploy: |-
   if [ "$TRAVIS_OS_NAME" == "osx" ]
   then
     export DEPLOY_FILES=build/release/mupdf-macos
-  elif [ "$TRAVIS_OS_NAME" == "linux" ]
+  elif [ "$TRAVIS_OS_NAME" == "linux" ] && [ "$CROSS" == "mingw64" ]
   then
+    export DEPLOY_FILES=build/release/mupdf-win.exe
+  else
     export DEPLOY_FILES=build/release/mupdf-linux
   fi
 deploy:
