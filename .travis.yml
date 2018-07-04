@@ -9,13 +9,13 @@ matrix:
   include:
   - os: linux
     compiler: gcc
-    env: DEPLOY=yes OS_TYPE=linux
+    env: VERS=linux DEPLOY=yes
   - os: osx
     compiler: clang
-    env: DEPLOY=yes OS_TYPE=macos
+    env: VERS=macos DEPLOY=yes
   - os: linux
     compiler: gcc
-    env: CROSS=mingw64 DEPLOY=yes
+    env: VERS=win DEPLOY=yes
 dist: trusty
 sudo: required
 branches:
@@ -23,7 +23,7 @@ branches:
 install: |-
   if [ "$TRAVIS_OS_NAME" == "linux" ]
   then
-    if [ "$CROSS" == "mingw64" ] # Cross compiling for Windows
+    if [ "$VERS" == "win" ] # Cross compiling for Windows
     then
       sudo add-apt-repository "deb http://fr.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse" # We need an up-to-date MinGW
       sudo apt-get update
@@ -37,27 +37,27 @@ install: |-
     brew install sdl2
   fi
 script: |-
-  if [ "$CROSS" == "mingw64" ]
+  if [ "$VERS" == "win" ]
   then
-    ./makecrosswin.sh
-  else
+    ./makecrosswin.sh || exit 1
+  elif [ "$VERS" == "linux" ]
+  then
     if [ "$CXX" == "g++" ]; then export CXX="g++-6" CC="gcc-6"; fi
-    ./build.sh || exit 1
-    if [ "$DEPLOY_DEB" == "yes" ] || [ "$DEPLOY_RPM" == "yes" ]
-    then
-      pushd release_build
-      make package
-      popd
-    fi
+    ./makelinux.sh || exit 1
+  elif [ "$VERS" == "macos" ]
+  then
+    if [ "$CXX" == "g++" ]; then export CXX="g++-6" CC="gcc-6"; fi
+    ./makemacos.sh || exit 1
   fi
 before_deploy: |-
-  if [ "$TRAVIS_OS_NAME" == "osx" ]
+  if [ "$VERS" == "macos" ]
   then
     export DEPLOY_FILES=build/release/mupdf-macos
-  elif [ "$TRAVIS_OS_NAME" == "linux" ] && [ "$CROSS" == "mingw64" ]
+  elif [ "$VERS" == "win" ]
   then
     export DEPLOY_FILES=build/release/mupdf-win.exe
-  else
+  elif [ "$VERS" == "linux" ]
+  then
     export DEPLOY_FILES=build/release/mupdf-linux
   fi
 deploy:
