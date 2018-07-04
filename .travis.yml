@@ -9,29 +9,27 @@ matrix:
   include:
   - os: linux
     compiler: gcc
-    env: VERS=linux DEPLOY=yes
+    env: VERS=win DEPLOY=yes
   - os: osx
     compiler: clang
     env: VERS=macos DEPLOY=yes
   - os: linux
     compiler: gcc
-    env: VERS=win DEPLOY=yes
+    env: VERS=linux DEPLOY=yes
 dist: trusty
 sudo: required
 branches:
   only: master
 install: |-
-  if [ "$TRAVIS_OS_NAME" == "linux" ]
+  if [ "$VERS" == "win" ] # Cross compiling for Windows
   then
-    if [ "$VERS" == "win" ] # Cross compiling for Windows
-    then
-      sudo add-apt-repository "deb http://fr.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse" # We need an up-to-date MinGW
-      sudo apt-get update
-      sudo apt-get install -t xenial gcc-mingw-w64-i686 g++-mingw-w64-i686 mingw32-runtime
-    else
-      sudo apt-get -qy install libsdl2-dev rpm libegl1-mesa-dev libgles2-mesa-dev libxi-dev libxrandr-dev freeglut3  # freeglut probably pulls libxi-dev in
-    fi
-  elif [ "$TRAVIS_OS_NAME" == "osx" ]
+    sudo add-apt-repository "deb http://fr.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse" # We need an up-to-date MinGW
+    sudo apt-get update
+    sudo apt-get install -t xenial gcc-mingw-w64-i686 g++-mingw-w64-i686 mingw32-runtime
+  elif [ "$VERS" == "linux" ]
+  then
+    sudo apt-get -qy install libsdl2-dev rpm libegl1-mesa-dev libgles2-mesa-dev libxi-dev libxrandr-dev freeglut3  # freeglut probably pulls libxi-dev in
+  elif [ "$VERS" == "macos" ]
   then
     brew update
     brew install sdl2

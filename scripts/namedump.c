@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define SDM_MAIN_HANDLED
+
 char buffer[256];
 
 static char *get_line(FILE *in)
@@ -24,9 +26,7 @@ static char *get_line(FILE *in)
 	return buffer;
 }
 
-int
-main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 	FILE *in;
 	FILE *out_c;
 	FILE *out_h;
