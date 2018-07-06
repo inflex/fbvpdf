@@ -16,5 +16,8 @@ make -f Makefile.mingw OS=w64_x86-cross-mingw32 GIT_BUILD='${G}'  $1
 MR=$?
 if [ $MR -eq 0 ]; then
 	mv build/release/mupdf-gl build/release/mupdf-win.exe
+	mkdir fbvpdf
+	cp build/release/mupdf-win.exe fbvpdf/fbvpdf.exe
+	zip -r fbvpdf.zip fbvpdf
 fi
 exit $MR

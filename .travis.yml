@@ -51,19 +51,24 @@ script: |-
 before_deploy: |-
   if [ "$VERS" == "macos" ]
   then
-    export DEPLOY_FILES=build/release/mupdf-macos
+    export DEPLOY_BIN=build/release/mupdf-macos
+    export DEPLOY_PKG=fbvpdf.dmg
   elif [ "$VERS" == "win" ]
   then
-    export DEPLOY_FILES=build/release/mupdf-win.exe
+    export DEPLOY_BIN=build/release/mupdf-win.exe
+    export DEPLOY_PKG=fbvpdf.zip
   elif [ "$VERS" == "linux" ]
   then
-    export DEPLOY_FILES=build/release/mupdf-linux
+    export DEPLOY_BIN=build/release/mupdf-linux
+    export DEPLOY_PKG=fbvpdf.tar.gz
   fi
 deploy:
   provider: releases
   api_key:
     secure: o5ExTB/ZjbOApYfN5T51+hocscx+fQvs0fiejjBkxnKV7MDZv2kFX5i5AB6JFWLnHgQTCJP4dTR0AsUF9nmoyugzE/qHj2UoIDKbaPI+FZuYvzKV11qSPy9xmRvaDYIKV+13lsDODNCyyXfuGawuw4qQozu1KV7+U75rRvN30pl7xg346ZEMX8BObWXiQ3uMXTwNNcFcMIBLrQ3bcYBvrltRET3uj7Hm7tkdY4CVTqiWkPAJGEzQikiS13P8HJmAI4ed/d3XnjsJDJCl2j++FacBbpwZ7AA55PyFXcSOUSp9iS3kWR/n71uOIP9qti7z0qTFkd3J7S9zl3xgLycPBqyzEGDXmyzySZwz+ndwpBxGhfwJ4iSPHMVuMgbVVX9GfgApmB+efHMCzig+soplPMamLHKyhq2wQoNgOUbMMj+5b4CdmEEZ0yQTf7HlZ4XLYEl7GuilUZFpDJX0Xu20bq4mxb6GgqoODdaPKOvjONw0MaQ9C3oElScXSNVQxBzlQ5yDKIm9T8raw6bq9GjxUHTLld4R5BD3ZbtMZXmBn66WhrdfJafCiM5nogJUbfQha7/9yLOYF2CSBFqpts5bPJY7mqB6U9Hn5zxeThvm+uyOZxF0NfCm6/WmUx17N8k3G4vkwiH4GX66u/NuC4HSHzSPCyaWrp5+QjjCDI3rUl0=
-  file: "${DEPLOY_FILES}"
+  file: 
+    - "${DEPLOY_BIN}"
+    - "${DEPLOY_PKG}"
   skip_cleanup: true
   on:
     condition: "$DEPLOY == yes"
