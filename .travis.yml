@@ -7,13 +7,12 @@ compiler:
 - clang
 matrix:
   include:
+  - os: osx
+    compiler: clang
+    env: VERS=macos DEPLOY=yes
   - os: linux
     compiler: gcc
     env: VERS=win DEPLOY=yes
-  - os: osx
-    osx_image: xcode9.4
-    compiler: clang
-    env: VERS=macos DEPLOY=yes
   - os: linux
     compiler: gcc
     env: VERS=linux DEPLOY=yes
@@ -33,6 +32,7 @@ install: |-
     sudo apt-get -qy install libsdl2-dev rpm libegl1-mesa-dev libgles2-mesa-dev libxi-dev libxrandr-dev freeglut3  # freeglut probably pulls libxi-dev in
   elif [ "$VERS" == "macos" ]
   then
+    echo "Building macOS"
     brew update
     brew install sdl2
   fi

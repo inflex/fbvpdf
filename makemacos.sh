@@ -1,6 +1,7 @@
 #!/bin/bash
 set -x
 
+brew install sdl2
 export G=`git rev-list HEAD --count`
 echo $G
 make -f Makefile.macos GIT_BUILD='${G}'  $1

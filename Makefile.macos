@@ -14,8 +14,9 @@ include Makethird
 # Do not specify CFLAGS or LIBS on the make invocation line - specify
 # XCFLAGS or XLIBS instead. Make ignores any lines in the makefile that
 # set a variable that was set on the command line.
-CFLAGS += $(XCFLAGS)  -F resources/Frameworks -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -Iimgui -IRenderers
-LIBS += $(XLIBS) -lm -framework SDL2
+SDL_FRAMEWORK = -F resources/Frameworks -framework SDL2
+CFLAGS += $(XCFLAGS)  -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -Iimgui -IRenderers
+LIBS += $(XLIBS) -lm 
 ifeq "$(HAVE_WIN32)" "yes"
 CFLAGS += -static -mwindows
 LIBS += -static
@@ -429,7 +430,7 @@ MUVIEW_GLUT_OBJ += $(addprefix $(OUT)/platform/gl/, gl-win32.o gl-winres.o)
 endif
 $(MUVIEW_GLUT_OBJ) : $(FITZ_HDR) $(PDF_HDR) platform/gl/gl-app.h
 $(MUVIEW_GLUT_EXE) : $(MUVIEW_GLUT_OBJ) $(MUPDF_LIB) $(THIRD_LIB) $(GLUT_LIB)
-	$(LINK_CMD) $(GLUT_LIB) $(GLUT_LIBS)
+	$(LINK_CMD) $(GLUT_LIB) $(GLUT_LIBS) $(SDL_FRAMEWORK)
 endif
 
 ifeq "$(HAVE_WIN32)" "yes"
