@@ -11,6 +11,7 @@ matrix:
     compiler: gcc
     env: VERS=win DEPLOY=yes
   - os: osx
+    osx_image: xcode9.4
     compiler: clang
     env: VERS=macos DEPLOY=yes
   - os: linux
