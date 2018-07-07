@@ -6,6 +6,14 @@ set -x
 D=fbvpdf.app
 PL=$D/Info.plist
 mkdir $D
+if [ -d tmp ]; then
+	rm -rf tmp
+fi
+
+if [ -f fbvpdfInstall.dmg ]; then
+	rm fbvpdfInstall.dmg
+fi
+
 mkdir tmp
 mkdir $D/Contents
 mkdir $D/Contents/MacOS
