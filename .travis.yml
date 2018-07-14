@@ -33,7 +33,6 @@ install: |-
   elif [ "$VERS" == "macos" ]
   then
     echo "Building macOS"
-    brew update
     brew install sdl2
   fi
 script: |-

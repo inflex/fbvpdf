@@ -18,7 +18,6 @@
 #include <unistd.h> /* for fork and exec */
 #endif
 
-int windowx, windowy;
 SDL_Window *sdlWindow;
 SDL_Renderer *sdlRenderer;
 SDL_Surface *sdlSurface;
@@ -2109,35 +2108,18 @@ int main(int argc, char **argv)
 {
 	int c;
 	int check_again = 0;
+	int wait_for_ddi = 10;
+	int origin_x, origin_y;
 
 	if (debug) fprintf(stderr,"start.\r\n");
-
-	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
-		return 3;
-	}
-
-	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-
-	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-	SDL_DisplayMode current;
-	SDL_GetCurrentDisplayMode(0, &current);
-	sdlWindow = SDL_CreateWindow("FlexBV PDF", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
-	SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
-	//	SDL_GL_SetSwapInterval(1);
-	SDL_EnableScreenSaver();
 
 
 	window_w = 1280;
 	window_h = 720;
-	windowx = 1280;
-	windowy = 720;
+//	windowx = 1280;
+//	windowy = 720;
+	origin_x = SDL_WINDOWPOS_CENTERED;
+	origin_y = SDL_WINDOWPOS_CENTERED;
 
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
@@ -2176,9 +2158,8 @@ int main(int argc, char **argv)
 		 *
 		 */
 		char s[10240];
-		int x = 10;
 		if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
-		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(x--)) {
+		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(wait_for_ddi--)) {
 			char *p, *q;
 			usleep(10000); // 0.1 sec
 
@@ -2198,7 +2179,16 @@ int main(int argc, char **argv)
 			if ((p = strstr(s, "!setwindowsize:"))) {
 				q = strchr(p,'\n');
 				if (q) *q = '\0';
-				sscanf(p +strlen("!setwindowsize:"),"%d %d", &windowx, &windowy );
+				sscanf(p +strlen("!setwindowsize:"),"%d %d", &window_w, &window_h );
+				if (debug) fprintf(stderr,"%s:%d: Set window size: %d %d\r\n", FL, window_w, window_h );
+				if (q) *q = '\n';
+			}
+
+			if ((p = strstr(s, "!setwindowsizepos:"))) {
+				q = strchr(p,'\n');
+				if (q) *q = '\0';
+				sscanf(p +strlen("!setwindowsizepos:"),"%d %d %d %d", &window_w, &window_h, &origin_x, &origin_y );
+				if (debug) fprintf(stderr,"%s:%d: Set window size pos: %d %d @ %d %d\r\n",FL, window_w, window_h, origin_x, origin_y );
 				if (q) *q = '\n';
 			}
 
@@ -2244,26 +2234,50 @@ int main(int argc, char **argv)
 
 		} // while we're trying to read the DDI packet
 
-		if (x == 0) {
-
-			if (fz_optind < argc)
-			{
-				fz_strlcpy(filename, argv[fz_optind++], sizeof filename);
-			}
-			else
-			{
-#ifdef _WIN32
-				win_install();
-				if (!win_open_file(filename, sizeof filename))
-					exit(0);
-#else
-				usage(argv[0]);
-#endif
-			}
-
-
-		}
 	} // DDI read block
+
+
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
+		return 3;
+	}
+
+	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_DisplayMode current;
+	SDL_GetCurrentDisplayMode(0, &current);
+	sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+	SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
+	//	SDL_GL_SetSwapInterval(1);
+	SDL_EnableScreenSaver();
+
+
+
+	if (wait_for_ddi == 0) {
+
+		if (fz_optind < argc)
+		{
+			fz_strlcpy(filename, argv[fz_optind++], sizeof filename);
+		}
+		else
+		{
+#ifdef _WIN32
+			win_install();
+			if (!win_open_file(filename, sizeof filename))
+				exit(0);
+#else
+			usage(argv[0]);
+#endif
+		}
+
+
+	}
 
 
 
