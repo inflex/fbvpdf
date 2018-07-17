@@ -91,9 +91,10 @@ void ui_init_fonts(fz_context *ctx, float pixelsize)
 
 	clear_font_cache();
 
-	data = fz_lookup_builtin_font(ctx, "Charis SIL", 0, 0, &size);
-	if (!data)
-		data = fz_lookup_builtin_font(ctx, "Times", 0, 0, &size);
+	data = fz_lookup_builtin_font(ctx, "Helvetica", 0, 0, &size);
+	if (!data) data = fz_lookup_builtin_font(ctx, "Arial", 0, 0, &size);
+	if (!data) data = fz_lookup_builtin_font(ctx, "Charis SIL", 0, 0, &size);
+	if (!data) data = fz_lookup_builtin_font(ctx, "Times", 0, 0, &size);
 	g_font = fz_new_font_from_memory(ctx, NULL, data, size, 0, 0);
 	g_font_size = pixelsize;
 }
