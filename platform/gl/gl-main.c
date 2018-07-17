@@ -1059,6 +1059,8 @@ static void clear_search(void)
 {
 	search_hit_page = -1;
 	search_hit_count = 0;
+	search_not_found = 0;
+	last_search_string[0] = '\0';
 }
 
 static void do_keypress(void)
@@ -1286,6 +1288,66 @@ static void do_info(void)
 	}
 }
 
+static int do_status_footer( void ) {
+	char s[1024];
+	char ss[1024];
+
+		int x = canvas_x; // + 1 * ui.lineheight;
+		int w = canvas_w;
+		int h = 1.25 * ui.lineheight;
+		int y = canvas_h -h; // + 1 * ui.lineheight;
+
+		glBegin(GL_TRIANGLE_STRIP);
+		{
+			if ((search_not_found) && (search_hit_count == 0)) {
+				glColor4f(1.0f, 0.2f, 0.2f, 1.0f );
+			} else {
+				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+			}
+			glVertex2f(x, y);
+			glVertex2f(x, y + h);
+			glVertex2f(x + w, y);
+			glVertex2f(x + w, y + h);
+		}
+		glEnd();
+
+		glLineWidth(1.0); 
+		glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+		glBegin(GL_LINES);
+		{
+			glVertex2f(x, y);
+			glVertex2f(x + w, y);
+		}
+		glEnd();
+
+		ss[0] = 0;
+		s[0] = 0;
+
+		if ((search_hit_count) && (last_search_string[0])) {
+			snprintf(ss,sizeof(ss),"Searching '%s'. %d hits on current page [ N = Next item, ESC = Clear ]", last_search_string, search_hit_count );
+		}  else if (search_not_found ) {
+			snprintf(ss,sizeof(ss),"Search not found '%s' [ Press ESC to clear ]", last_search_string);
+		} else {
+			snprintf(ss,sizeof(ss),"[ / = Search, PgUp = Previous Page, PgDn = Next Page ]");
+		}
+
+		snprintf(s,sizeof(s),"V.%d | Page %d of %d. %s"
+				, GIT_BUILD
+				, search_page +1
+				, fz_count_pages(ctx, doc)
+				, ss
+				);
+
+		{
+			float gs = ui_get_font_size( ctx );
+
+			ui_set_font_size( ctx, gs *0.75 );
+			glColor4f(0, 0, 0, 1);
+			ui_draw_string( ctx, 1, canvas_h -5, s );
+			ui_set_font_size( ctx, gs );
+		}
+}
+
 static int do_help_line(int x, int y, char *label, char *text)
 {
 	ui_draw_string(ctx, x, y, label);
@@ -1399,15 +1461,19 @@ int ddi_get(char *buf, size_t size) {
 	return result;
 }
 
-static void run_main_loop(void)
-{
+static void run_main_loop(void) {
 
 	ui_begin();
 
 	if (search_active) {
 
-		if (ui.key == KEY_ESCAPE)
+		if (ui.key == KEY_ESCAPE) {
 			search_active = 0;
+			search_not_found = 0;
+			last_search_string[0] = 0;
+			search_hit_count = 0;
+		}
+
 
 		/* ignore events during search */
 		ui.key = ui.mod = ui.plain = 0;
@@ -1424,6 +1490,7 @@ static void run_main_loop(void)
 				search_active = 0;
 				needle_has_hits = 1;
 				search_hit_page = search_page;
+				snprintf(last_search_string,sizeof(last_search_string),"%s", search_needle);
 
 				p.x = (canvas_w/2) *72 / (currentzoom );
 				p.y = (canvas_h/2) *72 / (currentzoom );
@@ -1467,7 +1534,7 @@ static void run_main_loop(void)
 	if (showoutline) do_outline(outline, canvas_x);
 
 	if (showsearch) {
-		int state = ui_input(canvas_x, 0, canvas_x + canvas_w, ui.lineheight+4, &search_input);
+		int state = ui_input(canvas_x +ui.lineheight, ui.lineheight, canvas_x + canvas_w-10, ui.lineheight *2 +2, &search_input);
 		if (state == -1)
 		{
 			ui.focus = NULL;
@@ -1518,6 +1585,8 @@ static void run_main_loop(void)
 		glColor4f(0, 0, 0, 1);
 		do_info_line(x, y +(1.1 * ui.lineheight), "Searching: ", buf);
 	}
+
+	do_status_footer();
 
 	ui_end();
 
@@ -1845,6 +1914,7 @@ static void ddi_check( void ) {
 			 */
 
 			sn_b[0] = '\0';
+			snprintf(last_search_string,sizeof(last_search_string),"%s", sn_a);
 			if (search_heuristics == 1) {
 				if (strchr(sn_a,'_')) {
 					int i;

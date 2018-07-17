@@ -86,6 +86,8 @@ float ui_draw_character(fz_context *ctx, int ucs, float x, float y);
 void ui_end_text(fz_context *ctx);
 float ui_draw_string(fz_context *ctx, float x, float y, const char *str);
 float ui_measure_string(fz_context *ctx, char *str);
+void ui_set_font_size(fz_context *ctx, float size );
+float ui_get_font_size(fz_context *ctx );
 
 struct texture
 {

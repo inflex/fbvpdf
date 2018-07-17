@@ -29,6 +29,7 @@
 struct key
 {
 	fz_font *font;
+	float size;
 	short gid;
 	unsigned char subx;
 	unsigned char suby;
@@ -57,6 +58,14 @@ static int g_cache_row_h = 0;
 
 static fz_font *g_font = NULL;
 static float g_font_size = 16;
+
+void ui_set_font_size(fz_context *ctx, float size ) {
+	g_font_size = size;
+}
+
+float ui_get_font_size(fz_context *ctx ) {
+	return g_font_size;
+}
 
 static void clear_font_cache(void)
 {
@@ -154,6 +163,7 @@ static struct glyph *lookup_glyph(fz_font *font, int gid, float *xp, float *yp)
 	key.gid = gid;
 	key.subx = subx;
 	key.suby = suby;
+	key.size = g_font_size;
 
 	pos = lookup_table(&key);
 	if (g_table[pos].key.font)
