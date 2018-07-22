@@ -51,7 +51,7 @@ script: |-
 before_deploy: |-
   if [ "$VERS" == "macos" ]
   then
-    export DEPLOY_BIN=build/release/mupdf-macos
+    export DEPLOY_BIN=fbvpdf-macos.zip
     export DEPLOY_PKG=fbvpdf.dmg
   elif [ "$VERS" == "win" ]
   then
