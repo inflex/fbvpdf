@@ -27,4 +27,4 @@ cp -v icon-128.png $D/Contents/Resources/fbvpdf.icns
 hdiutil create tmp/tmp.dmg -ov -volname "FlexBV PDF Viewer" -fs HFS+ -srcfolder fbvpdf.app
 hdiutil convert tmp/tmp.dmg -format UDZO -o fbvpdf.dmg
 
-zip -r $D fbvpdf-macos.zip 
+zip -r fbvpdf-macos.zip $D
