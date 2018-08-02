@@ -15,7 +15,9 @@
 
 #define FL __FILE__,__LINE__
 #ifndef _WIN32
-#include <unistd.h> /* for fork and exec */
+#include <unistd.h> // for fork and exec 
+#else
+#include <tlhelp32.h> // for getppid()
 #endif
 
 SDL_Window *sdlWindow;
@@ -59,6 +61,44 @@ struct ddi_s ddi;
 /* OpenGL capabilities */
 static int has_ARB_texture_non_power_of_two = 1;
 static GLint max_texture_size = 8192;
+
+
+
+#include    <stdio.h>
+
+#ifdef __WIN32
+
+#include    <windows.h>
+
+DWORD getppid() {
+    HANDLE hSnapshot;
+    PROCESSENTRY32 pe32;
+    DWORD ppid = 0, pid = GetCurrentProcessId();
+
+    hSnapshot = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, 0 );
+    __try{
+        if( hSnapshot == INVALID_HANDLE_VALUE ) __leave;
+
+        ZeroMemory( &pe32, sizeof( pe32 ) );
+        pe32.dwSize = sizeof( pe32 );
+        if( !Process32First( hSnapshot, &pe32 ) ) __leave;
+
+        do{
+            if( pe32.th32ProcessID == pid ){
+                ppid = pe32.th32ParentProcessID;
+                break;
+            }
+        }while( Process32Next( hSnapshot, &pe32 ) );
+
+    }
+    __finally{
+        if( hSnapshot != INVALID_HANDLE_VALUE ) CloseHandle( hSnapshot );
+    }
+    return ppid;
+}
+#else
+
+#endif
 
 // Menu handling function declaration
 void menucb(int mitem) {
@@ -276,7 +316,7 @@ static struct mark marks[10];
 static int search_active = 0;
 static struct input search_input = { { 0 }, 0 };
 static char search_string[10240];
-static char *search_needle = 0;
+static char *search_needle = NULL;
 static int needle_has_hits = 0;
 static int search_dir = 1;
 static int search_page = 0;
@@ -1710,7 +1750,7 @@ static void on_wheel(int direction, int x, int y)
 	}
 }
 
-static void on_mouse(int button, int action, int x, int y)
+static void on_mouse(int button, int action, int x, int y, int clicks)
 {
 	ui.x = x;
 	ui.y = y;
@@ -1718,7 +1758,9 @@ static void on_mouse(int button, int action, int x, int y)
 	if (debug) fprintf(stderr,"%s:%d: button: %d %d\r\n", FL, button, action);
 	switch (button)
 	{
-		case SDL_BUTTON_LEFT: ui.down = (action == SDL_MOUSEBUTTONDOWN); break;
+		case SDL_BUTTON_LEFT:
+			ui.down = (action == SDL_MOUSEBUTTONDOWN); 
+			break;
 		case SDL_BUTTON_MIDDLE: ui.middle = (action == SDL_MOUSEBUTTONDOWN); break;
 		case SDL_BUTTON_RIGHT: ui.right = (action == SDL_MOUSEBUTTONDOWN); break;
 	}
@@ -1847,7 +1889,23 @@ static void ddi_check( void ) {
 			snprintf(sn_a, sizeof(sn_a), "%s", tmp);
 		}
 
-		if (strstr(sn_a, "!quit:")) {
+		if (strstr(sn_a, "!gotopg:")) {
+			char *p = strstr(sn_a, "!gotopg:");
+			if (p) {
+				if (debug) fprintf(stderr,"%s:%d: decoding %s\r\n", FL, p +strlen("!gotopg:"));
+				currentpage = strtol(p +strlen("!gotopg:"), NULL, 10);
+				if (debug) fprintf(stderr,"%s:%d: page set to %d\r\n", FL, currentpage);
+				if (currentpage > fz_count_pages(ctx, doc)) currentpage = fz_count_pages(ctx,doc);
+				currentpage--;
+			}
+
+		} else if (strstr(sn_a, "!getstats:")) {
+			char tmp[1024];
+			snprintf(tmp,sizeof(tmp),"!pdfstats:page=%d\r\n", currentpage+1);
+			if (debug) fprintf(stderr,"%s:%d: Dispatching '%s'\r\n", FL, tmp);
+			DDI_dispatch(&ddi, tmp);
+
+		} else if (strstr(sn_a, "!quit:")) {
 			if (time(NULL) -process_start_time > 2) quit();
 
 		} else if (strstr(sn_a, "!debug:")) {
@@ -2479,7 +2537,7 @@ int main(int argc, char **argv)
 						{
 							int x, y;
 							SDL_GetMouseState( &x, &y );
-							on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y);
+							on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y, sdlEvent.button.clicks);
 						}
 						break;
 
@@ -2488,7 +2546,7 @@ int main(int argc, char **argv)
 						{
 							int x, y;
 							SDL_GetMouseState( &x, &y );
-							on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y);
+							on_mouse( sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y, sdlEvent.button.clicks);
 						}
 						break;
 				}
