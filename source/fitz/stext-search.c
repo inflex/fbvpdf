@@ -565,7 +565,7 @@ fz_search_stext_page(fz_context *ctx, fz_stext_page *page, const char *needle, f
 					if (nc == 0 && !ch) word_match = 1;
 
 					if (word_match == 1) {
-						fprintf(stderr,"%s:%d: WORD match in search '", __FILE__, __LINE__);
+//						fprintf(stderr,"%s:%d: WORD match in search '", __FILE__, __LINE__);
 						for (ch = line->first_char; ch; ch = ch->next) {
 							fprintf(stderr,"%c",ch->c);
 							on_highlight_char(ctx, &hits, line, ch);

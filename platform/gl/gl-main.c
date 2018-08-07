@@ -188,7 +188,7 @@ void ui_draw_image(struct texture *tex, float x, float y)
 	glDisable(GL_BLEND);
 }
 
-static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350 };
+static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 500, 650 };
 
 /*
 	static int zoom_in(int oldres)
@@ -1139,8 +1139,8 @@ static void do_keypress(void)
 			case 'w': auto_zoom_w(); break;
 			case 'h': auto_zoom_h(); break;
 			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-						 //			case '+': currentzoom = zoom_in(currentzoom); break;
-						 //`			case '-': currentzoom = zoom_out(currentzoom); break;
+	//		case '+': currentzoom = zoom_in(currentzoom); break;
+	//		case '-': currentzoom = zoom_out(currentzoom); break;
 			case '=': currentzoom *= 1.25; break;
 			case '-': currentzoom /= 1.25; break;
 			case '[': currentrotate += 90; break;
@@ -1149,6 +1149,7 @@ static void do_keypress(void)
 						 //			case 'j': case KEY_DOWN: scroll_y += 10; break;
 						 //			case 'h': case KEY_LEFT: scroll_x -= 10; break;
 						 //			case 'l': case KEY_RIGHT: scroll_x += 10; break;
+			//case SDL_SCANCODE_KP_5: auto_zoom_w(); break;
 
 			case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
 			case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
@@ -1434,7 +1435,7 @@ static void do_help(void)
 	y = do_help_line(x, y, "f", "fullscreen window");
 	y = do_help_line(x, y, "W", "shrink wrap window");
 	y = do_help_line(x, y, "w or h", "fit to width or height");
-	y = do_help_line(x, y, "z", "fit to window");
+	y = do_help_line(x, y, "z or num-5", "fit to window");
 	y = do_help_line(x, y, "N z", "set zoom to N");
 	//	y = do_help_line(x, y, "+ or -", "zoom in or out");
 	//	y = do_help_line(x, y, "[ or ]", "rotate left or right");
