@@ -202,6 +202,7 @@ static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288
 #define SEARCH_TYPE_NONE 0
 #define SEARCH_TYPE_DDI_SEQUENCE 1
 #define SEARCH_TYPE_TEXT_ONLY 2
+//#define SEARCH_TYPE_PEDANTIC_WORD 4
 
 static char filename[PATH_MAX];
 static char *password = "";
