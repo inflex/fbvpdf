@@ -1167,6 +1167,8 @@ static void do_keypress(void)
 						 showsearch = 1;
 						 search_not_found = 0;
 						 update_title();
+						 search_input.text[0] = 0;
+						 search_input.end = search_input.text;
 						 search_input.p = search_input.text;
 						 search_input.q = search_input.end;
 						 break;
@@ -1555,13 +1557,16 @@ static void run_main_loop(void) {
 		int state = ui_input(canvas_x +ui.lineheight, ui.lineheight, canvas_x + canvas_w-10, ui.lineheight *2 +2, &search_input);
 		if (state == -1)
 		{
+			// User pressed ESCAPE
 			ui.focus = NULL;
 			showsearch = 0;
 		}
 		else if (state == 1)
 		{
+			// User pressed RETURN
 			ui.focus = NULL;
 			showsearch = 0;
+			currentpage = 1;
 			search_page = -1;
 			if ((search_needle)&&(search_needle != prior_search))
 			{
@@ -2481,10 +2486,46 @@ int main(int argc, char **argv)
 						quit();
 						break;
 
+					case SDL_TEXTINPUT:
+						if (showsearch) {
+//							if (search_input.text[0] == '/') {
+//								search_input.text[0] = 0;
+//								search_input.end = search_input.text;
+//							}
+							if ((search_input.text == search_input.end)&&(sdlEvent.text.text[0] == '/')) {
+								// do nothing
+							} else { 
+								ui.key = sdlEvent.text.text[0];
+							}
+//							strcat(search_input.text, sdlEvent.text.text);
+//							search_input.p = search_input.text;
+//							search_input.end = &(search_input.text[strlen(search_input.text)]);
+						}
+
+						break;
+
+					case SDL_TEXTEDITING:
+						break;
+
 					case SDL_KEYDOWN:
 						{
-							ui.key = sdlEvent.key.keysym.sym;
-							if (SDL_GetModState() & KMOD_SHIFT) ui.key = toupper(ui.key);
+							/*
+							if (showsearch) {
+								if (sdlEvent.key.keysym.sym == SDLK_RETURN) {
+									showsearch = 0;
+								}
+								if (sdlEvent.key.keysym.sym == SDLK_ESCAPE) {
+									search_input.text[0] = 0; 
+									showsearch = 0;
+								}
+
+							} else {
+							*/
+							  // ui.key = sdlEvent.text.text[0];
+								ui.key = sdlEvent.key.keysym.sym;
+//								ui.key = sdlEvent.key.keysym.scancode;
+							//	if (SDL_GetModState() & KMOD_SHIFT) ui.key = toupper(ui.key);
+//							}
 							do_keypress();
 							//							if (sdlEvent.key.keysym.sym == SDLK_q) {
 							//								quit = 1;

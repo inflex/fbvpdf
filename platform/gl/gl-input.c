@@ -111,7 +111,8 @@ static int ui_input_key(struct input *input)
 {
 	switch (ui.key)
 	{
-	case KEY_LEFT:
+	//case KEY_LEFT:
+	case SDLK_LEFT:
 		if (ui.mod == GLUT_ACTIVE_CTRL + GLUT_ACTIVE_SHIFT)
 		{
 			input->q = prev_word(input->q, input->text);
@@ -136,7 +137,7 @@ static int ui_input_key(struct input *input)
 				input->p = input->q = prev_char(input->q, input->text);
 		}
 		break;
-	case KEY_RIGHT:
+	case SDLK_RIGHT:
 		if (ui.mod == GLUT_ACTIVE_CTRL + GLUT_ACTIVE_SHIFT)
 		{
 			input->q = next_word(input->q, input->end);
@@ -161,8 +162,8 @@ static int ui_input_key(struct input *input)
 				input->p = input->q = next_char(input->q);
 		}
 		break;
-	case KEY_UP:
-	case KEY_HOME:
+	case SDLK_UP:
+	case SDLK_HOME:
 		if (ui.mod == GLUT_ACTIVE_CTRL + GLUT_ACTIVE_SHIFT)
 		{
 			input->q = input->text;
@@ -180,8 +181,8 @@ static int ui_input_key(struct input *input)
 			input->p = input->q = input->text;
 		}
 		break;
-	case KEY_DOWN:
-	case KEY_END:
+	case SDLK_DOWN:
+	case SDLK_END:
 		if (ui.mod == GLUT_ACTIVE_CTRL + GLUT_ACTIVE_SHIFT)
 		{
 			input->q = input->end;
@@ -199,7 +200,7 @@ static int ui_input_key(struct input *input)
 			input->p = input->q = input->end;
 		}
 		break;
-	case KEY_DELETE:
+	case SDLK_DELETE:
 		if (input->p != input->q)
 			ui_input_delete_selection(input);
 		else if (input->p < input->end)
@@ -211,11 +212,11 @@ static int ui_input_key(struct input *input)
 			input->q = input->p;
 		}
 		break;
-	case KEY_ESCAPE:
+	case SDLK_ESCAPE:
 		return -1;
-	case KEY_ENTER:
+	case SDLK_RETURN:
 		return 1;
-	case KEY_BACKSPACE:
+	case SDLK_BACKSPACE:
 		if (input->p != input->q)
 			ui_input_delete_selection(input);
 		else if (input->p > input->text)
@@ -270,6 +271,7 @@ static int ui_input_key(struct input *input)
 		if (ui.key >= 32 && ui.plain)
 		{
 			int cat = ucdn_get_general_category(ui.key);
+			//fprintf(stderr, "%s:%d: key = '%c'\r\n", __FILE__, __LINE__, ui.key);
 			if (ui.key == ' ' || (cat >= UCDN_GENERAL_CATEGORY_LL && cat < UCDN_GENERAL_CATEGORY_ZL))
 			{
 				char buf[8];
