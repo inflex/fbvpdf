@@ -297,7 +297,10 @@ static int search_page = 0;
 static int search_hit_page = -1;
 static int search_hit_count = 0;
 static int search_compound = 0;
-static fz_rect search_hit_bbox[5000];
+static fz_rect search_hit_bbox[500];
+static fz_rect search_hit_bbox_b[500];
+static fz_rect search_hit_bbox_c[500];
+
 
 static unsigned int next_power_of_two(unsigned int n)
 {
@@ -1789,7 +1792,7 @@ static void on_warning(const char *fmt, va_list ap)
 
 static void ddi_check( void ) {
 	char sn_a[10240];
-	char comp_a[128], comp_b[128];
+	char comp_a[128], comp_b[128], comp_c[128];
 	char *cmd;
 
 	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
@@ -1848,13 +1851,18 @@ static void ddi_check( void ) {
 
 			snprintf(comp_a, sizeof(comp_a), "%s", cmd +strlen("!compsearch:"));
 			fprintf(stderr,"%s:%d: Comp search main:'%s' comp_a:'%s'\r\n", FL, sn_a, comp_a);
-			p = strrchr(comp_a, ':');
+			p = strchr(comp_a, ':');
 			if (p) {
 				fprintf(stderr,"%s:%d: Split found\r\n", FL);
 				snprintf(comp_b, sizeof(comp_b), "%s", p+1);
 				*p = '\0';
 				snprintf(sn_a,sizeof(sn_a),"%s", comp_a);
 				fprintf(stderr,"%s:%d: main = '%s', secondary = '%s'\r\n", FL, sn_a, comp_b);
+				p = strchr(comp_b,':');
+				if (p) {
+					*p = '\0';
+					snprintf(comp_c,sizeof(comp_c), "%s", p+1);
+				}
 				search_compound = 1;
 			} else {
 				fprintf(stderr,"%s:%d: No split in '%s'", FL, comp_a);
@@ -2045,15 +2053,72 @@ static void ddi_check( void ) {
 					 *
 					 */
 					if ((search_compound == 1)&&(search_hit_count > 0)) {
+						int search_hit_count_b;
 
-						if (debug) fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s'\r\n", FL, search_page+1, comp_b);
+						if (debug) fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, search_page+1, comp_b, comp_c);
 
-						search_hit_count = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox, nelem(search_hit_bbox));
+						search_hit_count_b = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox_b, nelem(search_hit_bbox_b));
 						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, comp_b, search_hit_count);
 						//						if (local_hits > 0) {
 						//							snprintf(sn_a, sizeof(sn_a), "%s", comp_b);
 						//							search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
 						//						} else search_hit_count = 0;
+						if ((comp_c)&&(search_hit_count > 0)) {
+							int search_hit_count_c;
+							search_hit_count_c = fz_search_page_number(ctx, doc, search_page, comp_c, search_hit_bbox_c, nelem(search_hit_bbox_c));
+
+							if (search_hit_count) {
+								int new_hit_count = 0;
+								int i;
+								/*
+								 * Now... let's try merge these boxes :-o 
+								 *
+								 */
+								for (i = 0; i < search_hit_count; i++) {
+									int j;
+									double dist_b, dist_c;
+									int closest_b = -1;
+									int closest_c = -1;
+
+									dist_b = 100000000.0f;
+									for (j = 0; j < search_hit_count_b; j++) {
+										double dx = search_hit_bbox[i].x0 - search_hit_bbox_b[j].x0;
+										double dy = search_hit_bbox[i].y0 - search_hit_bbox_b[j].y0;
+										double td = dx *dx +dy*dy;
+										if (td < dist_b){  dist_b = td; closest_b = j; }
+									}
+
+									dist_c = 1000000000.0f;
+									for (j = 0; j < search_hit_count_c; j++) {
+										double dx = search_hit_bbox[i].x0 - search_hit_bbox_c[j].x0;
+										double dy = search_hit_bbox[i].y0 - search_hit_bbox_c[j].y0;
+										double td = dx *dx +dy*dy;
+										if (td < dist_c){  dist_c = td; closest_c = j; }
+									}
+
+									if ((dist_b < 500.0) && (dist_c < 500)) {
+										static fz_rect a,b,c;
+										a = search_hit_bbox[i];
+										b = search_hit_bbox_b[closest_b];
+										c = search_hit_bbox_c[closest_c];
+
+										if (b.x1 > a.x1) a.x1 = b.x1;
+										if (c.x1 > a.x1) a.x1 = c.x1;
+										if (b.y1 > a.y1) a.y1 = b.y1;
+										if (c.y1 > a.y1) a.y1 = c.y1;
+
+										if (b.x0 < a.x0) a.x0 = b.x0;
+										if (c.x0 < a.x0) a.x0 = c.x0;
+										if (b.y0 < a.y0) a.y0 = b.y0;
+										if (c.y0 < a.y0) a.y0 = c.y0;
+
+										search_hit_bbox[new_hit_count] = a;
+										new_hit_count++;
+									}
+								}
+								search_hit_count = new_hit_count;
+							}
+						}
 					}
 
 					/*
