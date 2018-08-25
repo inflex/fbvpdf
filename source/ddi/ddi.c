@@ -108,6 +108,8 @@ int DDI_pickup( struct ddi_s *ddi, char *buffer, int bsize ) {
 	FILE *f;
 	char *fn;
 
+	buffer[0] = '\0';
+	
 	if (ddi->mode == DDI_MODE_NONE) return 1;
 
 	if (ddi->mode == DDI_MODE_SLAVE) {

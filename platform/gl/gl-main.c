@@ -254,6 +254,10 @@ static int annot_count = 0;
 //static int window_w = 1, window_h = 1;
 static int window_w = 1, window_h = 1;
 
+#define RUNMODE_NORMAL 0
+#define RUNMODE_HEADLESS 1
+
+static int runmode = 0; // 0 == standard
 static int debug = 0;
 static time_t process_start_time;
 static int oldinvert = 0, currentinvert = 0;
@@ -1084,7 +1088,7 @@ static void do_keypress(void)
 {
 
 	ui.plain = 1;
-	if (debug) fprintf(stderr,"%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
+//	if (debug) fprintf(stderr,"%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
 
 	/*
 	 * close the help/info if we've pressed something else 
@@ -1116,8 +1120,8 @@ static void do_keypress(void)
 			case 'w': auto_zoom_w(); break;
 			case 'h': auto_zoom_h(); break;
 			case 'z': currentzoom = number > 0 ? number : DEFRES; break;
-	//		case '+': currentzoom = zoom_in(currentzoom); break;
-	//		case '-': currentzoom = zoom_out(currentzoom); break;
+						 //		case '+': currentzoom = zoom_in(currentzoom); break;
+						 //		case '-': currentzoom = zoom_out(currentzoom); break;
 			case '=': currentzoom *= 1.25; break;
 			case '-': currentzoom /= 1.25; break;
 			case '[': currentrotate += 90; break;
@@ -1126,7 +1130,7 @@ static void do_keypress(void)
 						 //			case 'j': case KEY_DOWN: scroll_y += 10; break;
 						 //			case 'h': case KEY_LEFT: scroll_x -= 10; break;
 						 //			case 'l': case KEY_RIGHT: scroll_x += 10; break;
-			//case SDL_SCANCODE_KP_5: auto_zoom_w(); break;
+						 //case SDL_SCANCODE_KP_5: auto_zoom_w(); break;
 
 			case 'b': number = fz_maxi(number, 1); while (number--) smart_move_backward(); break;
 			case ' ': number = fz_maxi(number, 1); while (number--) smart_move_forward(); break;
@@ -1312,63 +1316,63 @@ static int do_status_footer( void ) {
 	char s[1024];
 	char ss[1024];
 
-		int x = canvas_x; // + 1 * ui.lineheight;
-		int w = canvas_w;
-		int h = 1.25 * ui.lineheight;
-		int y = canvas_h -h; // + 1 * ui.lineheight;
+	int x = canvas_x; // + 1 * ui.lineheight;
+	int w = canvas_w;
+	int h = 1.25 * ui.lineheight;
+	int y = canvas_h -h; // + 1 * ui.lineheight;
 
-		ss[0] = 0;
-		s[0] = 0;
+	ss[0] = 0;
+	s[0] = 0;
 
-		if ((search_hit_count) && (last_search_string[0])) {
-			snprintf(ss,sizeof(ss),"Searching '%s'. %d hits on current page [ N = Next item, ESC = Clear ]", last_search_string, search_hit_count );
-		}  else if (search_not_found ) {
-			snprintf(ss,sizeof(ss),"Search not found '%s' [ Press ESC to clear ]", last_search_string);
+	if ((search_hit_count) && (last_search_string[0])) {
+		snprintf(ss,sizeof(ss),"Searching '%s'. %d hits on current page [ N = Next item, ESC = Clear ]", last_search_string, search_hit_count );
+	}  else if (search_not_found ) {
+		snprintf(ss,sizeof(ss),"Search not found '%s' [ Press ESC to clear ]", last_search_string);
+	} else {
+		snprintf(ss,sizeof(ss),"[ / = Search, PgUp = Previous Page, PgDn = Next Page ]");
+	}
+
+	snprintf(s,sizeof(s),"V.%d | Page %d of %d. %s"
+			, GIT_BUILD
+			, currentpage +1
+			, fz_count_pages(ctx, doc)
+			, ss
+			);
+
+	glBegin(GL_TRIANGLE_STRIP);
+	{
+		if ((search_not_found) && (search_hit_count == 0)) {
+			glColor4f(1.0f, 0.2f, 0.2f, 1.0f );
+		} else if ((search_hit_count)&&(last_search_string[0])) {
+			glColor4f(0.7f, 1.0f, 0.7f, 1.0f);
 		} else {
-			snprintf(ss,sizeof(ss),"[ / = Search, PgUp = Previous Page, PgDn = Next Page ]");
+			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 		}
+		glVertex2f(x, y);
+		glVertex2f(x, y + h);
+		glVertex2f(x + w, y);
+		glVertex2f(x + w, y + h);
+	}
+	glEnd();
 
-		snprintf(s,sizeof(s),"V.%d | Page %d of %d. %s"
-				, GIT_BUILD
-				, currentpage +1
-				, fz_count_pages(ctx, doc)
-				, ss
-				);
-
-		glBegin(GL_TRIANGLE_STRIP);
-		{
-			if ((search_not_found) && (search_hit_count == 0)) {
-				glColor4f(1.0f, 0.2f, 0.2f, 1.0f );
-			} else if ((search_hit_count)&&(last_search_string[0])) {
-				glColor4f(0.7f, 1.0f, 0.7f, 1.0f);
-			} else {
-				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-			}
-			glVertex2f(x, y);
-			glVertex2f(x, y + h);
-			glVertex2f(x + w, y);
-			glVertex2f(x + w, y + h);
-		}
-		glEnd();
-
-		glLineWidth(1.0); 
-		glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-		glBegin(GL_LINES);
-		{
-			glVertex2f(x, y);
-			glVertex2f(x + w, y);
-		}
-		glEnd();
+	glLineWidth(1.0); 
+	glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+	glBegin(GL_LINES);
+	{
+		glVertex2f(x, y);
+		glVertex2f(x + w, y);
+	}
+	glEnd();
 
 
-		{
-			float gs = ui_get_font_size( ctx );
+	{
+		float gs = ui_get_font_size( ctx );
 
-			ui_set_font_size( ctx, gs *0.75 );
-			glColor4f(0, 0, 0, 1);
-			ui_draw_string( ctx, 1, canvas_h -5, s );
-			ui_set_font_size( ctx, gs );
-		}
+		ui_set_font_size( ctx, gs *0.75 );
+		glColor4f(0, 0, 0, 1);
+		ui_draw_string( ctx, 1, canvas_h -5, s );
+		ui_set_font_size( ctx, gs );
+	}
 }
 
 static int do_help_line(int x, int y, char *label, char *text)
@@ -1790,6 +1794,129 @@ static void on_warning(const char *fmt, va_list ap)
 	fprintf(stderr, "\n");
 }
 
+/* 
+ * Headless DDI check, with single shot run and results
+ *
+ */
+static int ddi_check_headless( char *sn_a ) {
+	char *comp_a, *comp_b, *comp_c;
+	char *cmd;
+	int new_hit_count = 0;
+	int pages;
+
+	comp_a = comp_b = comp_c = NULL;
+
+	if ((cmd = strstr(sn_a, "!compsearch:"))) {
+		/*
+		 * compound search requested.  First we find the page with the
+		 * first part, then we find the second part.
+		 *
+		 */
+		char *p;
+
+
+		comp_a = cmd +strlen("!compsearch:");
+		p = strpbrk(comp_a, "\r\n");
+		if (p) *p = '\0';
+		
+		p = strchr(comp_a, ':');
+		if (p) {
+			*p = '\0';
+			comp_b = p+1;
+			p = strchr(comp_b,':');
+			if (p) {
+				*p = '\0';
+				comp_c = p+1;
+				search_compound = 1;
+				if (debug) fprintf(stderr,"%s:%d: elements to search: %s %s %s\r\n", FL, comp_a, comp_b, comp_c );
+			}
+		}
+
+		pages = fz_count_pages(ctx, doc);
+		if (search_compound == 0) return 0;
+
+		search_page = 1;
+
+		while (search_page < pages ) {
+
+			/*
+			 * Because of the prevelance of space vs underscore strings in PDF schematics
+			 * we try search for both variants
+			 *
+			 */
+			search_hit_count = fz_search_page_number(ctx, doc, search_page, comp_a, search_hit_bbox, nelem(search_hit_bbox));
+
+			/*
+			 * With compound searching, we're using using the initial part just to locate our page
+			 *
+			 */
+			if (search_hit_count > 0) {
+				int search_hit_count_b;
+
+//				fprintf(stderr,"%s:%d:Searching for '%s', %d hits on page %d\n", FL, comp_a, search_hit_count, search_page +1);
+
+//				fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, search_page+1, comp_b, comp_c);
+
+				search_hit_count_b = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox_b, nelem(search_hit_bbox_b));
+				if ((comp_c)&&(search_hit_count_b > 0)) {
+					int search_hit_count_c;
+					search_hit_count_c = fz_search_page_number(ctx, doc, search_page, comp_c, search_hit_bbox_c, nelem(search_hit_bbox_c));
+
+					if (search_hit_count) {
+						int i;
+						/*
+						 * Now... let's try merge these boxes :-o 
+						 *
+						 */
+//1911G						fprintf(stderr,"%s:%d: all matches found on page, %d %d and %d counts\r\n", FL, search_hit_count, search_hit_count_b, search_hit_count_c );
+
+						for (i = 0; i < search_hit_count; i++) {
+							int j;
+							double dist_b, dist_c;
+
+							dist_b = 100000000.0f;
+							for (j = 0; j < search_hit_count_b; j++) {
+								double dx = search_hit_bbox[i].x0 - search_hit_bbox_b[j].x0;
+								double dy = search_hit_bbox[i].y0 - search_hit_bbox_b[j].y0;
+								double td = dx *dx +dy*dy;
+								if (td < dist_b){  dist_b = td; }
+							}
+
+							dist_c = 1000000000.0f;
+							for (j = 0; j < search_hit_count_c; j++) {
+								double dx = search_hit_bbox[i].x0 - search_hit_bbox_c[j].x0;
+								double dy = search_hit_bbox[i].y0 - search_hit_bbox_c[j].y0;
+								double td = dx *dx +dy*dy;
+								if (td < dist_c){  dist_c = td;  }
+							}
+
+							if ((dist_b < 500.0) && (dist_c < 500.0)) {
+//								fprintf(stderr,"%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
+								new_hit_count++;
+							} // test to see if we have a triple hit in the same vacinity
+							else 
+							{
+//								fprintf(stderr,"%s:%d: NO hit :( ( %f %f )\r\n", FL, dist_b, dist_c );
+							}
+						}  // for each of our original parameter hits
+					} // if this page has hits for the third parameter
+				} // if this page has hits for the second parameter
+			} // if this page has hits for first parameter
+			search_page++;
+		} // while search is active
+
+	} //  If the search actually has the compsrch field
+
+	//fprintf(stderr,"%s:%d: %d matches for %s, %s, %s in %s\r\n", FL, new_hit_count, comp_a, comp_b, comp_c, filename);
+	return new_hit_count;
+}
+
+
+
+/*
+ * Standard DDI check with normal GUI searching processing
+ *
+ */
 static void ddi_check( void ) {
 	char sn_a[10240];
 	char comp_a[128], comp_b[128], comp_c[128];
@@ -2063,7 +2190,7 @@ static void ddi_check( void ) {
 						//							snprintf(sn_a, sizeof(sn_a), "%s", comp_b);
 						//							search_hit_count = fz_search_page_number(ctx, doc, search_page, sn_a, search_hit_bbox, nelem(search_hit_bbox));
 						//						} else search_hit_count = 0;
-						if ((comp_c)&&(search_hit_count > 0)) {
+						if ((comp_c != NULL)&&(search_hit_count > 0)) {
 							int search_hit_count_c;
 							search_hit_count_c = fz_search_page_number(ctx, doc, search_page, comp_c, search_hit_bbox_c, nelem(search_hit_bbox_c));
 
@@ -2223,14 +2350,6 @@ static void ddi_check( void ) {
 	}
 }
 
-/*
- * FIXME - put this in the SDL event loop instead
- static void on_timer( int value ) {
- ddi_check();
- glutTimerFunc( GLUT_TIMER_DURATION, on_timer, 1 );
- }
- */
-
 void ui_set_clipboard(const char *buf)
 {
 	SDL_SetClipboardText(buf);
@@ -2286,14 +2405,16 @@ int main(int argc, char **argv)
 	int check_again = 0;
 	int wait_for_ddi = 10;
 	int origin_x, origin_y;
+	char s[10240];
+	char *headless_data;
 
 	if (debug) fprintf(stderr,"start.\r\n");
 
 
 	window_w = 1280;
 	window_h = 720;
-//	windowx = 1280;
-//	windowy = 720;
+	//	windowx = 1280;
+	//	windowy = 720;
 	origin_x = SDL_WINDOWPOS_CENTERED;
 	origin_y = SDL_WINDOWPOS_CENTERED;
 
@@ -2333,7 +2454,6 @@ int main(int argc, char **argv)
 		 * and may contain multiple commands for us to process.
 		 *
 		 */
-		char s[10240];
 		if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
 		while ((DDI_pickup(&ddi, s, sizeof(s))==0)&&(wait_for_ddi--)) {
 			char *p, *q;
@@ -2342,6 +2462,11 @@ int main(int argc, char **argv)
 			if ((p = strstr(s, "!debug:"))) {
 				debug = 1;
 				if (debug) fprintf(stderr,"%s:%d:DDI Data---------\r\n%s\r\n-------------\r\n",FL,s);
+			}
+
+			if (strstr(s,"!headless:")) {
+				headless_data = strdup(s);
+				runmode = RUNMODE_HEADLESS;
 			}
 
 			if ((p = strstr(s,"!load:"))!=NULL) {
@@ -2413,25 +2538,23 @@ int main(int argc, char **argv)
 	} // DDI read block
 
 
-	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
-		return 3;
-	}
+	if (runmode == RUNMODE_NORMAL) {
+		if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
+			return 3;
+		}
 
-	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-	//	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-	SDL_DisplayMode current;
-	SDL_GetCurrentDisplayMode(0, &current);
-	sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
-	SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
-	//	SDL_GL_SetSwapInterval(1);
-	SDL_EnableScreenSaver();
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+		SDL_DisplayMode current;
+		SDL_GetCurrentDisplayMode(0, &current);
+		sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+		SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
+		SDL_EnableScreenSaver();
+	}
 
 
 
@@ -2514,11 +2637,30 @@ int main(int argc, char **argv)
 	//	shrinkwrap();
 
 
-	if (debug) fprintf(stderr,"%s:%d: update title\r\n", FL);
-	update_title();
+	if (runmode == RUNMODE_HEADLESS) {
+		int r;
+			glViewport(0,0,window_w, window_h);
+			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glMatrixMode(GL_PROJECTION);
+			glLoadIdentity();
+			glOrtho(0, window_w, window_h, 0, -1, 1);
+			glMatrixMode(GL_MODELVIEW);
+			glLoadIdentity();
 
-	if (debug) fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
-	{
+//		fprintf(stderr,"%s:%d: Invoking special headless search with '%s'\r\n", FL, headless_data);
+		r = ddi_check_headless(headless_data);
+		snprintf(s,sizeof(s),"!headlessHits:%d", r );
+		//fprintf(stderr,"%s:%d: %s => %s\n", FL, ddi.prefix, s);
+		DDI_dispatch(&ddi, s);
+		exit(0);
+	}
+
+	if (runmode == RUNMODE_NORMAL) {
+		if (debug) fprintf(stderr,"%s:%d: update title\r\n", FL);
+		update_title();
+
+		if (debug) fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
 		while (!doquit) {
 
 
@@ -2553,18 +2695,18 @@ int main(int argc, char **argv)
 
 					case SDL_TEXTINPUT:
 						if (showsearch) {
-//							if (search_input.text[0] == '/') {
-//								search_input.text[0] = 0;
-//								search_input.end = search_input.text;
-//							}
+							//							if (search_input.text[0] == '/') {
+							//								search_input.text[0] = 0;
+							//								search_input.end = search_input.text;
+							//							}
 							if ((search_input.text == search_input.end)&&(sdlEvent.text.text[0] == '/')) {
 								// do nothing
 							} else { 
 								ui.key = sdlEvent.text.text[0];
 							}
-//							strcat(search_input.text, sdlEvent.text.text);
-//							search_input.p = search_input.text;
-//							search_input.end = &(search_input.text[strlen(search_input.text)]);
+							//							strcat(search_input.text, sdlEvent.text.text);
+							//							search_input.p = search_input.text;
+							//							search_input.end = &(search_input.text[strlen(search_input.text)]);
 						}
 
 						break;
@@ -2575,22 +2717,22 @@ int main(int argc, char **argv)
 					case SDL_KEYDOWN:
 						{
 							/*
-							if (showsearch) {
+								if (showsearch) {
 								if (sdlEvent.key.keysym.sym == SDLK_RETURN) {
-									showsearch = 0;
+								showsearch = 0;
 								}
 								if (sdlEvent.key.keysym.sym == SDLK_ESCAPE) {
-									search_input.text[0] = 0; 
-									showsearch = 0;
+								search_input.text[0] = 0; 
+								showsearch = 0;
 								}
 
-							} else {
-							*/
-							  // ui.key = sdlEvent.text.text[0];
-								ui.key = sdlEvent.key.keysym.sym;
-//								ui.key = sdlEvent.key.keysym.scancode;
+								} else {
+								*/
+							// ui.key = sdlEvent.text.text[0];
+							ui.key = sdlEvent.key.keysym.sym;
+							//								ui.key = sdlEvent.key.keysym.scancode;
 							//	if (SDL_GetModState() & KMOD_SHIFT) ui.key = toupper(ui.key);
-//							}
+							//							}
 							do_keypress();
 							//							if (sdlEvent.key.keysym.sym == SDLK_q) {
 							//								quit = 1;
@@ -2648,21 +2790,23 @@ int main(int argc, char **argv)
 			SDL_GL_SwapWindow(sdlWindow);
 
 			} // while
-		}
 
-		if (debug) fprintf(stderr,"%s:%d: SDL loop ended\r\n", FL);
+			if (debug) fprintf(stderr,"%s:%d: SDL loop ended\r\n", FL);
 
-		SDL_DestroyTexture(sdlTexture);
-		SDL_DestroyRenderer(sdlRenderer);
-		SDL_GL_DeleteContext(glcontext);
-		SDL_DestroyWindow(sdlWindow);
+			SDL_DestroyTexture(sdlTexture);
+			SDL_DestroyRenderer(sdlRenderer);
+			SDL_GL_DeleteContext(glcontext);
+			SDL_DestroyWindow(sdlWindow);
+
+		} // if runmode == RUNMODE_NORMAL
 
 
 		ui_finish_fonts(ctx);
 
-		SDL_DestroyWindow(sdlWindow);
-
-		SDL_Quit();
+		if (runmode == RUNMODE_NORMAL) {
+			SDL_DestroyWindow(sdlWindow);
+			SDL_Quit();
+		}
 
 #ifndef NDEBUG
 		if (fz_atoi(getenv("FZ_DEBUG_STORE")))
@@ -2678,6 +2822,9 @@ int main(int argc, char **argv)
 
 		return 0;
 		}
+
+
+
 
 #ifdef __WIN32
 		int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
