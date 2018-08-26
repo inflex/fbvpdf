@@ -1857,10 +1857,21 @@ static int ddi_check_headless( char *sn_a ) {
 
 //				fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, search_page+1, comp_b, comp_c);
 
+				/*
+				 * short circuit the search process here, if we've been sent only a single parameter
+				 * then it sometimes is a specific part code, so we can just jump out right here.
+				 *
+				 */
+				if (strlen(comp_b) == 0) {
+					new_hit_count = search_hit_count;
+					return new_hit_count;
+				}
+
 				search_hit_count_b = fz_search_page_number(ctx, doc, search_page, comp_b, search_hit_bbox_b, nelem(search_hit_bbox_b));
 				if ((comp_c)&&(search_hit_count_b > 0)) {
-					int search_hit_count_c;
-					search_hit_count_c = fz_search_page_number(ctx, doc, search_page, comp_c, search_hit_bbox_c, nelem(search_hit_bbox_c));
+					int search_hit_count_c = 0;
+
+					if (strlen(comp_c)) search_hit_count_c = fz_search_page_number(ctx, doc, search_page, comp_c, search_hit_bbox_c, nelem(search_hit_bbox_c));
 
 					if (search_hit_count) {
 						int i;
@@ -1882,13 +1893,15 @@ static int ddi_check_headless( char *sn_a ) {
 								if (td < dist_b){  dist_b = td; }
 							}
 
-							dist_c = 1000000000.0f;
-							for (j = 0; j < search_hit_count_c; j++) {
-								double dx = search_hit_bbox[i].x0 - search_hit_bbox_c[j].x0;
-								double dy = search_hit_bbox[i].y0 - search_hit_bbox_c[j].y0;
-								double td = dx *dx +dy*dy;
-								if (td < dist_c){  dist_c = td;  }
-							}
+							if (strlen(comp_c)) {
+								dist_c = 1000000000.0f;
+								for (j = 0; j < search_hit_count_c; j++) {
+									double dx = search_hit_bbox[i].x0 - search_hit_bbox_c[j].x0;
+									double dy = search_hit_bbox[i].y0 - search_hit_bbox_c[j].y0;
+									double td = dx *dx +dy*dy;
+									if (td < dist_c){  dist_c = td;  }
+								}
+							} else dist_c = 0.0f;
 
 							if ((dist_b < 500.0) && (dist_c < 500.0)) {
 //								fprintf(stderr,"%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
@@ -1902,6 +1915,8 @@ static int ddi_check_headless( char *sn_a ) {
 					} // if this page has hits for the third parameter
 				} // if this page has hits for the second parameter
 			} // if this page has hits for first parameter
+			if (new_hit_count) break;
+
 			search_page++;
 		} // while search is active
 
@@ -2579,7 +2594,6 @@ int main(int argc, char **argv)
 	}
 
 
-
 	title = strrchr(filename, '/');
 	if (!title)
 		title = strrchr(filename, '\\');
@@ -2607,6 +2621,7 @@ int main(int argc, char **argv)
 
 	if (debug) fprintf(stderr,"%s:%d: Loading document\r\n", FL);
 	load_document();
+
 	if (debug) fprintf(stderr,"%s:%d: Loading page\r\n", FL);
 	load_page();
 	if (debug) fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
@@ -2631,32 +2646,23 @@ int main(int argc, char **argv)
 	if (debug) fprintf(stderr,"%s:%d: ui init fonts\r\n", FL);
 	ui_init_fonts(ctx, ui.fontsize);
 
-	if (debug) fprintf(stderr,"%s:%d: render page\r\n", FL);
-	render_page();
 
 	//	shrinkwrap();
 
 
 	if (runmode == RUNMODE_HEADLESS) {
 		int r;
-			glViewport(0,0,window_w, window_h);
-			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glMatrixMode(GL_PROJECTION);
-			glLoadIdentity();
-			glOrtho(0, window_w, window_h, 0, -1, 1);
-			glMatrixMode(GL_MODELVIEW);
-			glLoadIdentity();
 
-//		fprintf(stderr,"%s:%d: Invoking special headless search with '%s'\r\n", FL, headless_data);
 		r = ddi_check_headless(headless_data);
 		snprintf(s,sizeof(s),"!headlessHits:%d", r );
-		//fprintf(stderr,"%s:%d: %s => %s\n", FL, ddi.prefix, s);
 		DDI_dispatch(&ddi, s);
 		exit(0);
 	}
 
 	if (runmode == RUNMODE_NORMAL) {
+		if (debug) fprintf(stderr,"%s:%d: render page\r\n", FL);
+		render_page();
+
 		if (debug) fprintf(stderr,"%s:%d: update title\r\n", FL);
 		update_title();
 
