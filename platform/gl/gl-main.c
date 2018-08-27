@@ -194,6 +194,7 @@ static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288
 #define DDI_SIMULATE_OPTION_NONE 0
 #define DDI_SIMULATE_OPTION_SEARCH_NEXT 1
 #define DDI_SIMULATE_OPTION_SEARCH_PREV 2
+#define DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH 3
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -1639,6 +1640,7 @@ int ddi_process( char *ddi_data ) {
 		debug = 1;
 		this_search.a[0] = this_search.b[0] = this_search.c[0] = '\0';
 		this_search.mode = SEARCH_MODE_COMPOUND;
+		this_search.page = 1;
 		snprintf(this_search.search_raw,sizeof(this_search.search_raw),"%s", cmd);
 		snprintf(tmp,sizeof(tmp),"%s", cmd +strlen("!compsearch:"));
 
@@ -1710,10 +1712,115 @@ static void run_main_loop(void) {
 		}
 
 		while (1) {
-			this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-			if (debug) fprintf(stderr,"%s:%d: Main loop search: %d hits on '%s' at page %d\r\n", FL, this_search.hit_count_a, this_search.a, this_search.page);
+					/*
+					 * Because of the prevelance of space vs underscore strings in PDF schematics
+					 * we try search for both variants
+					 *
+					 */
+					if (this_search.mode != SEARCH_MODE_COMPOUND ) {
+						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+						if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
+						if ((this_search.hit_count_a == 0)&&(strlen(this_search.alt))) {
+							this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+							if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.alt, this_search.hit_count_a, this_search.page +1);
+						} 
+					}
 
-			if (this_search.hit_count_a) {
+					/*
+					 * With compound searching, we're using using the initial part just to locate our page
+					 *
+					 */
+					if (this_search.mode == SEARCH_MODE_COMPOUND) {
+
+						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+						fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
+
+
+						if (this_search.hit_count_a)  {
+							int new_hit_count = 0;
+							int i;
+
+							if (strlen(this_search.b)) {
+								this_search.hit_count_b = fz_search_page_number(ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
+								fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
+							}
+
+							if (strlen(this_search.c)) {
+								this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
+								fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
+							}
+
+							/*
+							 * Now... let's try merge these boxes :-o 
+							 *
+							 */
+							for (i = 0; i < this_search.hit_count_a; i++) {
+								int j;
+								double dist_b, dist_c;
+								int closest_b = -1;
+								int closest_c = -1;
+
+								if (this_search.hit_count_b) {
+									dist_b = 100000000.0f;
+									for (j = 0; j < this_search.hit_count_b; j++) {
+										double dx = this_search.hit_bbox_a[i].x0 - this_search.hit_bbox_b[j].x0;
+										double dy = this_search.hit_bbox_a[i].y0 - this_search.hit_bbox_b[j].y0;
+										double td = dx *dx +dy*dy;
+										if (td < dist_b){  dist_b = td; closest_b = j; }
+									}
+								} else dist_b = 0;
+
+								if (this_search.hit_count_c) {
+									dist_c = 100000000.0f;
+									for (j = 0; j < this_search.hit_count_c; j++) {
+										double dx = this_search.hit_bbox_a[i].x0 - this_search.hit_bbox_c[j].x0;
+										double dy = this_search.hit_bbox_a[i].y0 - this_search.hit_bbox_c[j].y0;
+										double td = dx *dx +dy*dy;
+										if (td < dist_c){  dist_c = td; closest_c = j; }
+									}
+								} else dist_c = 0;
+
+
+								if (strlen(this_search.b) && (this_search.hit_count_b == 0)) this_search.hit_count_a = 0;
+								if (strlen(this_search.c) && (this_search.hit_count_c == 0)) this_search.hit_count_a = 0;
+
+								if (this_search.hit_count_a) {
+									if ((dist_b < 500.0) && (dist_c < 500)) {
+										static fz_rect a,b,c;
+										a = this_search.hit_bbox_a[i];
+
+										if (this_search.hit_count_b) {
+											b = this_search.hit_bbox_b[closest_b];
+											if (b.x1 > a.x1) a.x1 = b.x1;
+											if (b.y1 > a.y1) a.y1 = b.y1;
+											if (b.x0 < a.x0) a.x0 = b.x0;
+											if (b.y0 < a.y0) a.y0 = b.y0;
+										}
+
+										if (this_search.hit_count_c) {
+											c = this_search.hit_bbox_c[closest_c];
+											if (c.x1 > a.x1) a.x1 = c.x1;
+											if (c.y1 > a.y1) a.y1 = c.y1;
+											if (c.x0 < a.x0) a.x0 = c.x0;
+											if (c.y0 < a.y0) a.y0 = c.y0;
+										}
+
+										this_search.hit_bbox_a[new_hit_count] = a;
+										new_hit_count++;
+									} // if distances are within 500
+								}
+							} // for each main search hit
+							this_search.hit_count_a = new_hit_count;
+						} // if search hit count
+						fprintf(stderr,"%s:%d: hit count = %d\r\n", FL, this_search.hit_count_a);
+					} // if search compound
+
+
+//			this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+//			if (debug) fprintf(stderr,"%s:%d: Main loop search: %d hits on '%s' at page %d\r\n", FL, this_search.hit_count_a, this_search.a, this_search.page);
+
+
+			if (this_search.hit_count_a > 0) {
 				fz_point p;
 				fz_rect bb;
 				search_active = 0;
@@ -2037,9 +2144,14 @@ static int ddi_check_headless( char *sn_a ) {
 				}
 
 				this_search.hit_count_b = fz_search_page_number(ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
+				if (this_search.hit_count_b == 0) return 0;
+
 				if (this_search.hit_count_b > 0) {
 
-					this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
+					if (strlen(this_search.c) > 0) {
+						this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
+						if (this_search.hit_count_c == 0) return 0;
+					} else this_search.hit_count_c = 0;
 
 					{
 						int i;
@@ -2126,18 +2238,15 @@ static void ddi_check( void ) {
 
 	if ((ddi_simulate_option)||(ddi_get( sn_a, sizeof(sn_a)))) {
 
-		if (ddi_simulate_option == DDI_SIMULATE_OPTION_NONE) {
+		if (ddi_simulate_option == DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH) {
 //			search_type = SEARCH_TYPE_DDI_SEQUENCE;
-		} 
+			ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
+		} else {
+			if (strlen(sn_a) < 2) return;
+			if (debug) fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
+			ddi_process(sn_a);
+		}
 
-		ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
-
-		if (strlen(sn_a) < 2) return;
-
-		if (debug) fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
-
-
-		ddi_process(sn_a);
 		debug = 1;
 
 		if (this_search.mode != SEARCH_MODE_NONE) {
@@ -2152,7 +2261,7 @@ static void ddi_check( void ) {
 			 *
 			 */
 
-			fprintf(stderr,"%s:%d: SEARCHING '%s'\r\n", FL, this_search.search_raw);
+			fprintf(stderr,"%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.search_raw);
 
 			this_search.alt[0] = '\0';
 			if (search_heuristics == 1) {
@@ -2254,6 +2363,8 @@ static void ddi_check( void ) {
 					if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+						fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
+
 
 						if (this_search.hit_count_a)  {
 							int new_hit_count = 0;
@@ -2521,6 +2632,7 @@ int main(int argc, char **argv)
 		if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
 		DDI_pickup(&ddi, s, sizeof(s));
 		ddi_process(s);
+		if (this_search.mode != SEARCH_MODE_NONE) ddi_simulate_option = DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH;
 	} // DDI read block
 
 
