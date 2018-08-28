@@ -281,6 +281,7 @@ static struct texture annot_tex[256];
 static int annot_count = 0;
 
 //static int window_w = 1, window_h = 1;
+static double compsearch_radius = 500.0f;
 static char *headless_data;
 static int window_w = 1, window_h = 1;
 static int origin_x, origin_y;
@@ -1496,6 +1497,11 @@ int ddi_process( char *ddi_data ) {
 		runmode = RUNMODE_HEADLESS;
 	}
 
+	if ((cmd = strstr(ddi_data,"!csradius:"))) {
+		int t = atof( cmd +strlen("!csradius:") );
+		if ((t >= 1.0)||(t <= 5000.0)) compsearch_radius = t; // default fall back
+	}
+
 
 	if ((p = strstr(ddi_data, "!setwindowsize:"))) {
 		q = strchr(p,'\n');
@@ -1783,7 +1789,7 @@ static void run_main_loop(void) {
 								if (strlen(this_search.c) && (this_search.hit_count_c == 0)) this_search.hit_count_a = 0;
 
 								if (this_search.hit_count_a) {
-									if ((dist_b < 500.0) && (dist_c < 500)) {
+									if ((dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
 										static fz_rect a,b,c;
 										a = this_search.hit_bbox_a[i];
 
@@ -2182,7 +2188,7 @@ static int ddi_check_headless( char *sn_a ) {
 									}
 								} else dist_c = 0;
 
-							if ((dist_b < 500.0) && (dist_c < 500.0)) {
+							if ((dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
 								if (debug) fprintf(stderr,"%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
 								new_hit_count++;
 							} // test to see if we have a triple hit in the same vacinity
@@ -2414,7 +2420,7 @@ static void ddi_check( void ) {
 								if (strlen(this_search.c) && (this_search.hit_count_c == 0)) this_search.hit_count_a = 0;
 
 								if (this_search.hit_count_a) {
-									if ((dist_b < 500.0) && (dist_c < 500)) {
+									if ((dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
 										static fz_rect a,b,c;
 										a = this_search.hit_bbox_a[i];
 
