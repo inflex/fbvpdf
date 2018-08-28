@@ -1656,7 +1656,7 @@ int ddi_process( char *ddi_data ) {
 				snprintf(this_search.c,sizeof(this_search.c),"%s", p+1);
 			}
 		}
-		fprintf(stderr,"%s:%d: elements to comp-search: %s %s %s\r\n", FL, this_search.a, this_search.b, this_search.c );
+		if (debug) fprintf(stderr,"%s:%d: elements to comp-search: %s %s %s\r\n", FL, this_search.a, this_search.b, this_search.c );
 	} // compsearch
 
 	return 0;
