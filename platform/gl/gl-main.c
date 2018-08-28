@@ -1564,7 +1564,6 @@ int ddi_process( char *ddi_data ) {
 		 * load a file, not searching.
 		 */
 
-		debug = 1;
 		fnp = strstr(ddi_data, "!load:");
 		if (debug) fprintf(stderr,"%s:%d: fnp = '%s'\r\n", FL, fnp );
 		snprintf(filename,sizeof(filename),"%s", fnp +strlen("!load:"));
@@ -1637,7 +1636,6 @@ int ddi_process( char *ddi_data ) {
 		char tmp[1024];
 		char *p;
 
-		debug = 1;
 		this_search.a[0] = this_search.b[0] = this_search.c[0] = '\0';
 		this_search.mode = SEARCH_MODE_COMPOUND;
 		this_search.page = 1;
@@ -1733,7 +1731,7 @@ static void run_main_loop(void) {
 					if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
+						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
 
 
 						if (this_search.hit_count_a)  {
@@ -1742,12 +1740,12 @@ static void run_main_loop(void) {
 
 							if (strlen(this_search.b)) {
 								this_search.hit_count_b = fz_search_page_number(ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
-								fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
+								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
 							}
 
 							if (strlen(this_search.c)) {
 								this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
-								fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
+								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
 							}
 
 							/*
@@ -1812,7 +1810,7 @@ static void run_main_loop(void) {
 							} // for each main search hit
 							this_search.hit_count_a = new_hit_count;
 						} // if search hit count
-						fprintf(stderr,"%s:%d: hit count = %d\r\n", FL, this_search.hit_count_a);
+						//fprintf(stderr,"%s:%d: hit count = %d\r\n", FL, this_search.hit_count_a);
 					} // if search compound
 
 
@@ -2130,9 +2128,9 @@ static int ddi_check_headless( char *sn_a ) {
 			 */
 			if (this_search.hit_count_a > 0) {
 
-								fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
+								if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
 
-								fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, this_search.page+1, this_search.b, this_search.c);
+								if (debug) fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, this_search.page+1, this_search.b, this_search.c);
 
 				/*
 				 * short circuit the search process here, if we've been sent only a single parameter
@@ -2185,7 +2183,7 @@ static int ddi_check_headless( char *sn_a ) {
 								} else dist_c = 0;
 
 							if ((dist_b < 500.0) && (dist_c < 500.0)) {
-								fprintf(stderr,"%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
+								if (debug) fprintf(stderr,"%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
 								new_hit_count++;
 							} // test to see if we have a triple hit in the same vacinity
 							else 
@@ -2202,7 +2200,7 @@ static int ddi_check_headless( char *sn_a ) {
 		} // while search is active
 
 
-	fprintf(stderr,"%s:%d: %d matches for %s, %s, %s in %s\r\n", FL, new_hit_count, this_search.a, this_search.b, this_search.c, filename);
+	if (debug) fprintf(stderr,"%s:%d: %d matches for %s, %s, %s in %s\r\n", FL, new_hit_count, this_search.a, this_search.b, this_search.c, filename);
 	return new_hit_count;
 }
 
@@ -2245,9 +2243,10 @@ static void ddi_check( void ) {
 			if (strlen(sn_a) < 2) return;
 			if (debug) fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
 			ddi_process(sn_a);
+			if (debug) fprintf(stderr,"%s:%d: After DDI Processing Searching: '%s'\r\n", FL, this_search.a);
+
 		}
 
-		debug = 1;
 
 		if (this_search.mode != SEARCH_MODE_NONE) {
 
@@ -2261,7 +2260,7 @@ static void ddi_check( void ) {
 			 *
 			 */
 
-			fprintf(stderr,"%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.search_raw);
+			if (debug) fprintf(stderr,"%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.search_raw);
 
 			this_search.alt[0] = '\0';
 			if (search_heuristics == 1) {
@@ -2300,7 +2299,7 @@ static void ddi_check( void ) {
 				this_search.page = 1;
 				this_search.inpage_index = -1;
 				memcpy(&prior_search, &this_search, sizeof(struct search_s));
-				fprintf(stderr,"%s:%d: Setting prior search to '%s'\r\n", FL, prior_search.search_raw);
+				if (debug) fprintf(stderr,"%s:%d: Setting prior search to '%s'\r\n", FL, prior_search.search_raw);
 			}
 
 

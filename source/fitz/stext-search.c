@@ -567,10 +567,10 @@ fz_search_stext_page(fz_context *ctx, fz_stext_page *page, const char *needle, f
 					if (word_match == 1) {
 //						fprintf(stderr,"%s:%d: WORD match in search '", __FILE__, __LINE__);
 						for (ch = line->first_char; ch; ch = ch->next) {
-							fprintf(stderr,"%c",ch->c);
+//							fprintf(stderr,"%c",ch->c);
 							on_highlight_char(ctx, &hits, line, ch);
 						}
-						fprintf(stderr,"'\r\n");
+//						fprintf(stderr,"'\r\n");
 					}
 
 				} else {
