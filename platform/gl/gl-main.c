@@ -2362,7 +2362,7 @@ static void ddi_check( void ) {
 					if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
+						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
 
 
 						if (this_search.hit_count_a)  {
@@ -2371,12 +2371,12 @@ static void ddi_check( void ) {
 
 							if (strlen(this_search.b)) {
 								this_search.hit_count_b = fz_search_page_number(ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
-								fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
+								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
 							}
 
 							if (strlen(this_search.c)) {
 								this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
-								fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
+								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
 							}
 
 							/*
