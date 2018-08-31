@@ -131,6 +131,7 @@ static int find_closest_in_page(fz_stext_page *page, fz_point p)
 		for (line = block->u.t.first_line; line; line = line->next)
 		{
 			fz_rect box = line->bbox;
+			if ((line->dir.x *line->dir.x *line->dir.y *line->dir.y) > 0.1) { idx += line_length(line); continue; }
 			if (p.x >= box.x0 && p.x <= box.x1)
 			{
 				if (p.y < box.y0)
@@ -261,12 +262,12 @@ fz_enumerate_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poin
 							return;
 							idx = end;
 						} // end word mode
-					}
-				}
+					} // if word mode
+				} // if idx == start
 
 				if (inside) {
 					cb->on_char(ctx, cb->arg, line, ch);
-//					fprintf(stderr,"[%c]",ch->c);
+//					fprintf(stderr,"[%c %f %f]",ch->c, line->dir.x, line->dir.y);
 				}
 
 //				fprintf(stderr,"%d ",idx);
