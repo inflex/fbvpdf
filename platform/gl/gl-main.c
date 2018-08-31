@@ -1111,6 +1111,7 @@ static void clear_search(void)
 {
 	search_not_found = 0;
 	memset(&this_search, 0, sizeof(this_search));
+	this_search.mode = SEARCH_MODE_NONE;
 }
 
 static void do_keypress(void)
@@ -1522,6 +1523,7 @@ int ddi_process( char *ddi_data ) {
 	if (strstr(ddi_data, "!gotopg:")) {
 		char *p = strstr(ddi_data, "!gotopg:");
 		if (p) {
+			clear_search();
 			if (debug) fprintf(stderr,"%s:%d: decoding %s\r\n", FL, p +strlen("!gotopg:"));
 			currently_viewed_page = strtol(p +strlen("!gotopg:"), NULL, 10);
 			if (debug) fprintf(stderr,"%s:%d: page set to %d\r\n", FL, currently_viewed_page);
@@ -1532,6 +1534,7 @@ int ddi_process( char *ddi_data ) {
 
 	if (strstr(ddi_data, "!getstats:")) {
 		char tmp[1024];
+			clear_search();
 		snprintf(tmp,sizeof(tmp),"!pdfstats:page=%d\r\n", currently_viewed_page+1);
 		if (debug) fprintf(stderr,"%s:%d: Dispatching '%s'\r\n", FL, tmp);
 		DDI_dispatch(&ddi, tmp);
@@ -1570,6 +1573,7 @@ int ddi_process( char *ddi_data ) {
 		 * load a file, not searching.
 		 */
 
+		clear_search();
 		fnp = strstr(ddi_data, "!load:");
 		if (debug) fprintf(stderr,"%s:%d: fnp = '%s'\r\n", FL, fnp );
 		snprintf(filename,sizeof(filename),"%s", fnp +strlen("!load:"));
