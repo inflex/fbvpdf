@@ -290,6 +290,7 @@ static int origin_x, origin_y;
 #define RUNMODE_NORMAL 0
 #define RUNMODE_HEADLESS 1
 
+static int reload_required = 0;
 static int runmode = 0; // 0 == standard
 static int debug = 0;
 static time_t process_start_time;
@@ -459,6 +460,7 @@ void render_page(void)
 		}
 		}
 		*/
+
 
 	loaded = 0;
 }
@@ -1602,7 +1604,9 @@ int ddi_process( char *ddi_data ) {
 
 		fz_set_use_document_css(ctx, layout_use_doc_css);
 
-		reload();
+		if (debug) fprintf(stderr,"%s:%d: about to reload (%s)\r\n", FL, filename );
+		reload_required = 1;
+		if (debug) fprintf(stderr,"%s:%d: reload done (%s)\r\n", FL, filename );
 
 	} 
 
@@ -2652,7 +2656,7 @@ int main(int argc, char **argv)
 		} // DDI read block
 
 
-	if (runmode == RUNMODE_NORMAL) {
+//	if (runmode == RUNMODE_NORMAL) {
 		if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
 			return 3;
@@ -2665,11 +2669,16 @@ int main(int argc, char **argv)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 		SDL_DisplayMode current;
 		SDL_GetCurrentDisplayMode(0, &current);
-		sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+		if (runmode == RUNMODE_HEADLESS) sdlWindow = SDL_CreateWindow("FlexBV PDF", 0,0,0,0, SDL_WINDOW_HIDDEN|SDL_WINDOW_OPENGL);
+		else sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
 		SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
 		SDL_EnableScreenSaver();
-	}
+//	}
 
+	if (reload_required) {
+		reload_required = 0;
+		reload();
+	}
 
 
 	if (wait_for_ddi == 0) {
