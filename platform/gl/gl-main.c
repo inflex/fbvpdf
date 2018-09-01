@@ -289,6 +289,7 @@ static int origin_x, origin_y;
 #define RUNMODE_NORMAL 0
 #define RUNMODE_HEADLESS 1
 
+static int noddi = 0; // by default we use ddi, sometimes for testing, we don't want ddi.
 static int runmode = 0; // 0 == standard
 static int debug = 0;
 static time_t process_start_time;
@@ -1486,6 +1487,7 @@ static void do_canvas(void)
 int ddi_process( char *ddi_data ) {
 	char *cmd, *p, *q;
 
+	if (noddi) return 0;
 
 	if (strstr(ddi_data, "!debug:")) {
 		fprintf(stderr,"%s:%d: DEBUG mode ACTIVE\r\n", FL);
@@ -1676,6 +1678,7 @@ int ddi_process( char *ddi_data ) {
 int ddi_get(char *buf, size_t size) {
 	int result = 0;
 
+	if (noddi) return 0;
 	if (!ddiprefix) return 0;
 
 	if (DDI_pickup( &ddi, buf, size ) == 0) {
@@ -2228,6 +2231,7 @@ static void ddi_check( void ) {
 	char sn_a[10240];
 	char *cmd;
 
+	if (noddi) return;
 
 //	if (ddi_simulate_option == DDI_SIMULATE_OPTION_SEARCH_NEXT) {
 //		if (search_needle) snprintf(sn_a,sizeof(sn_a),"%s", search_needle);
@@ -2620,29 +2624,35 @@ int main(int argc, char **argv)
 			case 'U': layout_css = fz_optarg; break;
 			case 'X': layout_use_doc_css = 0; break;
 			case 'D': ddiprefix = fz_optarg; break;
+			case 'n': noddi = 1; break;
 		}
 	}
 
 	if (fz_optind < argc)
 		anchor = argv[fz_optind++];
 
-	/* ddi setup */
-	if (debug) fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
-	DDI_init(&ddi);
-	DDI_set_prefix(&ddi, ddiprefix);
-	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
+	if (!noddi) {
+		/* ddi setup */
+		if (debug) fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
+		DDI_init(&ddi);
+		DDI_set_prefix(&ddi, ddiprefix);
+		DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
-	{
-		/*
-		 * DDI setup package, is the first one we receive
-		 * and may contain multiple commands for us to process.
-		 *
-		 */
-		if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
-		DDI_pickup(&ddi, s, sizeof(s));
-		ddi_process(s);
-		if (this_search.mode != SEARCH_MODE_NONE) ddi_simulate_option = DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH;
-	} // DDI read block
+		{
+			/*
+			 * DDI setup package, is the first one we receive
+			 * and may contain multiple commands for us to process.
+			 *
+			 */
+			if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
+			DDI_pickup(&ddi, s, sizeof(s));
+			ddi_process(s);
+			if (this_search.mode != SEARCH_MODE_NONE) ddi_simulate_option = DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH;
+		} // DDI read block
+	} else {
+		wait_for_ddi = 0;
+		runmode = RUNMODE_NORMAL;
+	}
 
 
 	if (runmode == RUNMODE_NORMAL) {
@@ -2878,7 +2888,7 @@ int main(int argc, char **argv)
 			if (check_again) {
 				check_again--;
 			} else {
-				ddi_check();
+				if (!noddi) ddi_check();
 				check_again = 10;
 			}
 
