@@ -2656,7 +2656,7 @@ int main(int argc, char **argv)
 		} // DDI read block
 
 
-	if (runmode == RUNMODE_NORMAL) {
+//	if (runmode == RUNMODE_NORMAL) {
 		if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
 			return 3;
@@ -2669,12 +2669,12 @@ int main(int argc, char **argv)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 		SDL_DisplayMode current;
 		SDL_GetCurrentDisplayMode(0, &current);
-//		if (runmode == RUNMODE_HEADLESS) sdlWindow = SDL_CreateWindow("FlexBV PDF", 0,0,0,0, SDL_WINDOW_HIDDEN|SDL_WINDOW_OPENGL);
-//		else sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
+		if (runmode == RUNMODE_HEADLESS) sdlWindow = SDL_CreateWindow("FlexBV PDF", 0,0,0,0, SDL_WINDOW_HIDDEN|SDL_WINDOW_OPENGL);
+		else sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
 		sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
 		SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
 		SDL_EnableScreenSaver();
-	}
+//	}
 
 	if (reload_required) {
 		reload_required = 0;
