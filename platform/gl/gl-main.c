@@ -2735,6 +2735,14 @@ int main(int argc, char **argv)
 	load_page();
 	if (debug) fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
 
+	if (runmode == RUNMODE_HEADLESS) {
+		int r;
+
+		r = ddi_check_headless(headless_data);
+		snprintf(s,sizeof(s),"!headlessHits:%d", r );
+		DDI_dispatch(&ddi, s);
+		exit(0);
+	}
 	/* Init IMGUI */
 
 	memset(&ui, 0, sizeof ui);
@@ -2759,14 +2767,6 @@ int main(int argc, char **argv)
 	//	shrinkwrap();
 
 
-	if (runmode == RUNMODE_HEADLESS) {
-		int r;
-
-		r = ddi_check_headless(headless_data);
-		snprintf(s,sizeof(s),"!headlessHits:%d", r );
-		DDI_dispatch(&ddi, s);
-		exit(0);
-	}
 
 	if (runmode == RUNMODE_NORMAL) {
 		if (debug) fprintf(stderr,"%s:%d: render page\r\n", FL);
