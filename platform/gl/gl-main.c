@@ -73,35 +73,6 @@ static GLint max_texture_size = 8192;
 
 #endif
 
-int flog_init( void ) {
-	if (debug) {
-		FILE *f;
-		f = fopen("fbpdf.log", "w");
-		if (f) {
-			fprintf(f,"%s", ctime(time(NULL)));
-			fclose(f);
-		}
-	}
-	return 0;
-}
-
-int flog( const char *format, ... ) {
-	if (debug) {
-		va_list args;
-		va_start(args, format);
-
-		FILE *f;
-		f = fopen("fbpdf.log", "a");
-		if (f) {
-			fprintf(f,"%ld ", time(NULL));
-			vfprintf(f,format,args);
-			va_end(args);
-			fclose(f);
-		}
-	}
-	return 0;
-}
-
 
 // Menu handling function declaration
 void menucb(int mitem) {
@@ -374,6 +345,35 @@ static unsigned int next_power_of_two(unsigned int n)
 	n |= n >> 8;
 	n |= n >> 16;
 	return ++n;
+}
+
+int flog_init( void ) {
+	if (debug) {
+		FILE *f;
+		f = fopen("fbpdf.log", "w");
+		if (f) {
+			fprintf(f,"%s", ctime(time(NULL)));
+			fclose(f);
+		}
+	}
+	return 0;
+}
+
+int flog( const char *format, ... ) {
+	if (debug) {
+		va_list args;
+		va_start(args, format);
+
+		FILE *f;
+		f = fopen("fbpdf.log", "a");
+		if (f) {
+			fprintf(f,"%ld ", time(NULL));
+			vfprintf(f,format,args);
+			va_end(args);
+			fclose(f);
+		}
+	}
+	return 0;
 }
 
 static void update_title(void)
