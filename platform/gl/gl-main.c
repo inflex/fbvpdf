@@ -73,6 +73,36 @@ static GLint max_texture_size = 8192;
 
 #endif
 
+int flog_init( void ) {
+	if (debug) {
+		FILE *f;
+		f = fopen("fbpdf.log", "w");
+		if (f) {
+			fprintf(f,"%s", ctime(time(NULL)));
+			fclose(f);
+		}
+	}
+	return 0;
+}
+
+int flog( const char *format, ... ) {
+	if (debug) {
+		va_list args;
+		va_start(args, format);
+
+		FILE *f;
+		f = fopen("fbpdf.log", "a");
+		if (f) {
+			fprintf(f,"%ld ", time(NULL));
+			vfprintf(f,format,args);
+			va_end(args);
+			fclose(f);
+		}
+	}
+	return 0;
+}
+
+
 // Menu handling function declaration
 void menucb(int mitem) {
 }
@@ -356,7 +386,7 @@ static void update_title(void)
 		} else{
 			sprintf(buf, "%s - %d / %d (R%d)", title, this_search.page + 1, fz_count_pages(ctx, doc), GIT_BUILD);
 		}
-	if (debug) fprintf(stderr,"%s:%d: Setting window title '%s'\r\n", FL, buf);
+	flog("%s:%d: Setting window title '%s'\r\n", FL, buf);
 	SDL_SetWindowTitle( sdlWindow, buf );
 }
 
@@ -840,7 +870,7 @@ static void do_page_selection(int x0, int y0, int x1, int y1)
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
-			if (debug) fprintf(stderr,"%s:%d: Dispatching request '%s'\n", FL, s);
+			flog("%s:%d: Dispatching request '%s'\n", FL, s);
 			if (!detached) DDI_dispatch( &ddi, s );
 			fz_free(ctx, s);
 			//glutPostRedisplay();
@@ -1121,7 +1151,7 @@ static void do_keypress(void)
 {
 
 	ui.plain = 1;
-	//	if (debug) fprintf(stderr,"%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
+	//	flog("%s:%d key = %02x '%c' [ focus:%d, plain:%d]\r\n",FL, ui.key, ui.key, ui.focus, ui.plain );
 
 	/*
 	 * close the help/info if we've pressed something else 
@@ -1132,7 +1162,7 @@ static void do_keypress(void)
 
 	if (!ui.focus && ui.key && ui.plain)
 	{
-		if (debug) fprintf(stderr,"%s:%d: Acting on key '0x%08x'\r\n", FL, ui.key );
+		flog("%s:%d: Acting on key '0x%08x'\r\n", FL, ui.key );
 		switch (ui.key)
 		{
 //			case SDLK_PAGEDOWN: currently_viewed_page++; break;
@@ -1489,7 +1519,6 @@ static void do_canvas(void)
 int ddi_process( char *ddi_data ) {
 	char *cmd, *p, *q;
 
-
 	if (strstr(ddi_data, "!debug:")) {
 		fprintf(stderr,"%s:%d: DEBUG mode ACTIVE\r\n", FL);
 		fprintf(stderr,"%s:%d: DDI Data---------\r\n%s\r\n-------------\r\n",FL,ddi_data);
@@ -1511,7 +1540,7 @@ int ddi_process( char *ddi_data ) {
 		q = strchr(p,'\n');
 		if (q) *q = '\0';
 		sscanf(p +strlen("!setwindowsize:"),"%d %d", &window_w, &window_h );
-		if (debug) fprintf(stderr,"%s:%d: Set window size: %d %d\r\n", FL, window_w, window_h );
+		flog("%s:%d: Set window size: %d %d\r\n", FL, window_w, window_h );
 		if (q) *q = '\n';
 	}
 
@@ -1519,7 +1548,7 @@ int ddi_process( char *ddi_data ) {
 		q = strchr(p,'\n');
 		if (q) *q = '\0';
 		sscanf(p +strlen("!setwindowsizepos:"),"%d %d %d %d", &window_w, &window_h, &origin_x, &origin_y );
-		if (debug) fprintf(stderr,"%s:%d: Set window size pos: %d %d @ %d %d\r\n",FL, window_w, window_h, origin_x, origin_y );
+		flog("%s:%d: Set window size pos: %d %d @ %d %d\r\n",FL, window_w, window_h, origin_x, origin_y );
 		if (q) *q = '\n';
 	}
 
@@ -1527,11 +1556,12 @@ int ddi_process( char *ddi_data ) {
 		char *p = strstr(ddi_data, "!gotopg:");
 		if (p) {
 			clear_search();
-			if (debug) fprintf(stderr,"%s:%d: decoding %s\r\n", FL, p +strlen("!gotopg:"));
+			flog("%s:%d: decoding %s\r\n", FL, p +strlen("!gotopg:"));
 			currently_viewed_page = strtol(p +strlen("!gotopg:"), NULL, 10);
-			if (debug) fprintf(stderr,"%s:%d: page set to %d\r\n", FL, currently_viewed_page);
+			flog("%s:%d: page set to %d\r\n", FL, currently_viewed_page);
 			if (currently_viewed_page > fz_count_pages(ctx, doc)) currently_viewed_page = fz_count_pages(ctx,doc);
 			currently_viewed_page--;
+			this_search.mode = SEARCH_MODE_NONE;
 		}
 	} 
 
@@ -1539,7 +1569,7 @@ int ddi_process( char *ddi_data ) {
 		char tmp[1024];
 			clear_search();
 		snprintf(tmp,sizeof(tmp),"!pdfstats:page=%d\r\n", currently_viewed_page+1);
-		if (debug) fprintf(stderr,"%s:%d: Dispatching '%s'\r\n", FL, tmp);
+		flog("%s:%d: Dispatching '%s'\r\n", FL, tmp);
 		DDI_dispatch(&ddi, tmp);
 	}
 
@@ -1578,11 +1608,11 @@ int ddi_process( char *ddi_data ) {
 
 		clear_search();
 		fnp = strstr(ddi_data, "!load:");
-		if (debug) fprintf(stderr,"%s:%d: fnp = '%s'\r\n", FL, fnp );
+		flog("%s:%d: fnp = '%s'\r\n", FL, fnp );
 		snprintf(filename,sizeof(filename),"%s", fnp +strlen("!load:"));
 		fnp = strpbrk(filename,"\n\r");
 		if (fnp) *fnp = '\0';
-		if (debug) fprintf(stderr,"%s:%d: filename = '%s'\r\n", FL, filename );
+		flog("%s:%d: filename = '%s'\r\n", FL, filename );
 
 		title = strrchr(filename, '/');
 		if (!title)
@@ -1604,29 +1634,29 @@ int ddi_process( char *ddi_data ) {
 
 		fz_set_use_document_css(ctx, layout_use_doc_css);
 
-		if (debug) fprintf(stderr,"%s:%d: about to reload (%s)\r\n", FL, filename );
+		flog("%s:%d: about to reload (%s)\r\n", FL, filename );
 		reload_required = 1;
-		if (debug) fprintf(stderr,"%s:%d: reload done (%s)\r\n", FL, filename );
+		flog("%s:%d: reload done (%s)\r\n", FL, filename );
 
 	} 
 
 	if (strstr(ddi_data, "!noheuristics:")) {
-		if (debug) fprintf(stderr,"%s:%d: No heuristics", FL);
+		flog("%s:%d: No heuristics", FL);
 		search_heuristics = 0;
 	}
 
 	if (strstr(ddi_data, "!heuristics:")) {
 		search_heuristics = 1;
-		if (debug) fprintf(stderr,"%s:%d: Heuristics", FL);
+		flog("%s:%d: Heuristics", FL);
 	}
 
 	if ((cmd = strstr(ddi_data, "!strictmatch:"))) {
-		if (debug) fprintf(stderr,"%s:%d: Strict match\r\n", FL);
+		flog("%s:%d: Strict match\r\n", FL);
 		ctx->flags |= FZ_CTX_FLAGS_STRICT_MATCH;
 	}
 
 	if ((cmd = strstr(ddi_data, "!stdmatch:"))) {
-		if (debug) fprintf(stderr,"%s:%d: Standard match (default)\r\n", FL);
+		flog("%s:%d: Standard match (default)\r\n", FL);
 		ctx->flags &= ~FZ_CTX_FLAGS_STRICT_MATCH;
 	}
 
@@ -1671,7 +1701,7 @@ int ddi_process( char *ddi_data ) {
 				snprintf(this_search.c,sizeof(this_search.c),"%s", p+1);
 			}
 		}
-		if (debug) fprintf(stderr,"%s:%d: elements to comp-search: %s %s %s\r\n", FL, this_search.a, this_search.b, this_search.c );
+		flog("%s:%d: elements to comp-search: %s %s %s\r\n", FL, this_search.a, this_search.b, this_search.c );
 	} // compsearch
 
 	return 0;
@@ -1686,10 +1716,10 @@ int ddi_get(char *buf, size_t size) {
 	if (DDI_pickup( &ddi, buf, size ) == 0) {
 		char *p;
 
-		if (debug) fprintf(stderr,"%s:%d: Received '%s'\r\n", FL, buf);
+		flog("%s:%d: Received '%s'\r\n", FL, buf);
 		p = buf;
 		//		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-		if (debug) fprintf(stderr,"%s:%d: After filtering '%s'\r\n", FL, buf);
+		flog("%s:%d: After filtering '%s'\r\n", FL, buf);
 		result = 1;
 	}  // if file opened
 
@@ -1732,10 +1762,10 @@ static void run_main_loop(void) {
 					 */
 					if (this_search.mode != SEARCH_MODE_COMPOUND ) {
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
+						flog("%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
 						if ((this_search.hit_count_a == 0)&&(strlen(this_search.alt))) {
 							this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-							if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.alt, this_search.hit_count_a, this_search.page +1);
+							flog("%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.alt, this_search.hit_count_a, this_search.page +1);
 						} 
 					}
 
@@ -1746,7 +1776,7 @@ static void run_main_loop(void) {
 					if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
+						flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
 
 
 						if (this_search.hit_count_a)  {
@@ -1755,12 +1785,12 @@ static void run_main_loop(void) {
 
 							if (strlen(this_search.b)) {
 								this_search.hit_count_b = fz_search_page_number(ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
-								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
+								flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
 							}
 
 							if (strlen(this_search.c)) {
 								this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
-								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
+								flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
 							}
 
 							/*
@@ -1830,7 +1860,7 @@ static void run_main_loop(void) {
 
 
 //			this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-//			if (debug) fprintf(stderr,"%s:%d: Main loop search: %d hits on '%s' at page %d\r\n", FL, this_search.hit_count_a, this_search.a, this_search.page);
+//			flog("%s:%d: Main loop search: %d hits on '%s' at page %d\r\n", FL, this_search.hit_count_a, this_search.a, this_search.page);
 
 
 			if (this_search.hit_count_a > 0) {
@@ -1847,11 +1877,11 @@ static void run_main_loop(void) {
 				break;
 
 			} else {
-				if (debug) fprintf(stderr,"%s:%d: No hits on page %d, trying next...\r\n", FL, this_search.page);
+				flog("%s:%d: No hits on page %d, trying next...\r\n", FL, this_search.page);
 				this_search.page += this_search.direction;
 				if (this_search.page < 0 || this_search.page == fz_count_pages(ctx, doc))
 				{
-					if (debug) fprintf(stderr,"%s:%d: end of the road for '%s'\r\n", FL, this_search.a);
+					flog("%s:%d: end of the road for '%s'\r\n", FL, this_search.a);
 
 //					if (needle_has_hits) {
 //						this_search.page = 0;
@@ -1905,7 +1935,7 @@ static void run_main_loop(void) {
 				snprintf(this_search.a,sizeof(this_search.a),"%s", search_input.text);
 				search_active = 1;
 //				this_search.page = currently_viewed_page;
-//				if (debug) fprintf(stderr,"%s:%d: Loading prior search / needle with '%s', this_search.page = %d\n", FL, search_needle, this_search.page);
+//				flog("%s:%d: Loading prior search / needle with '%s', this_search.page = %d\n", FL, search_needle, this_search.page);
 			}
 		}
 	}
@@ -2059,7 +2089,7 @@ static void on_mouse(int button, int action, int x, int y, int clicks)
 	ui.x = x;
 	ui.y = y;
 
-	if (debug) fprintf(stderr,"%s:%d: button: %d %d\r\n", FL, button, action);
+	flog("%s:%d: button: %d %d\r\n", FL, button, action);
 	switch (button)
 	{
 		case SDL_BUTTON_LEFT:
@@ -2143,9 +2173,9 @@ static int ddi_check_headless( char *sn_a ) {
 			 */
 			if (this_search.hit_count_a > 0) {
 
-								if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
+								flog("%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
 
-								if (debug) fprintf(stderr,"%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, this_search.page+1, this_search.b, this_search.c);
+								flog("%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n", FL, this_search.page+1, this_search.b, this_search.c);
 
 				/*
 				 * short circuit the search process here, if we've been sent only a single parameter
@@ -2198,7 +2228,7 @@ static int ddi_check_headless( char *sn_a ) {
 								} else dist_c = 0;
 
 							if ((dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
-								if (debug) fprintf(stderr,"%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
+								flog("%s:%d: triple hit ( %f %f )\r\n",FL, dist_b, dist_c );
 								new_hit_count++;
 							} // test to see if we have a triple hit in the same vacinity
 							else 
@@ -2215,7 +2245,7 @@ static int ddi_check_headless( char *sn_a ) {
 		} // while search is active
 
 
-	if (debug) fprintf(stderr,"%s:%d: %d matches for %s, %s, %s in %s\r\n", FL, new_hit_count, this_search.a, this_search.b, this_search.c, filename);
+	flog("%s:%d: %d matches for %s, %s, %s in %s\r\n", FL, new_hit_count, this_search.a, this_search.b, this_search.c, filename);
 	return new_hit_count;
 }
 
@@ -2256,9 +2286,9 @@ static void ddi_check( void ) {
 			ddi_simulate_option = DDI_SIMULATE_OPTION_NONE;
 		} else {
 			if (strlen(sn_a) < 2) return;
-			if (debug) fprintf(stderr,"%s:%d: Searching: '%s'\r\n", FL, sn_a);
+			flog("%s:%d: Searching: '%s'\r\n", FL, sn_a);
 			ddi_process(sn_a);
-			if (debug) fprintf(stderr,"%s:%d: After DDI Processing Searching: '%s'\r\n", FL, this_search.a);
+			flog("%s:%d: After DDI Processing Searching: '%s'\r\n", FL, this_search.a);
 
 		}
 
@@ -2275,7 +2305,7 @@ static void ddi_check( void ) {
 			 *
 			 */
 
-			if (debug) fprintf(stderr,"%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.search_raw);
+			flog("%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.search_raw);
 
 			this_search.alt[0] = '\0';
 			if (search_heuristics == 1) {
@@ -2289,7 +2319,7 @@ static void ddi_check( void ) {
 					if(debug)fprintf(stderr,"%s:%d: Alternative search: '%s'\r\n", FL, this_search.alt);
 				}
 			} else {
-				if (debug) fprintf(stderr,"%s:%d: Search heuristics disabled\r\n", FL);
+				flog("%s:%d: Search heuristics disabled\r\n", FL);
 			}
 
 			if (this_search.page == -1) this_search.page = 0;
@@ -2314,7 +2344,7 @@ static void ddi_check( void ) {
 				this_search.page = 1;
 				this_search.inpage_index = -1;
 				memcpy(&prior_search, &this_search, sizeof(struct search_s));
-				if (debug) fprintf(stderr,"%s:%d: Setting prior search to '%s'\r\n", FL, prior_search.search_raw);
+				flog("%s:%d: Setting prior search to '%s'\r\n", FL, prior_search.search_raw);
 			}
 
 
@@ -2363,10 +2393,10 @@ static void ddi_check( void ) {
 					 */
 					if (this_search.mode != SEARCH_MODE_COMPOUND ) {
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
+						flog("%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.a, this_search.hit_count_a, this_search.page +1);
 						if ((this_search.hit_count_a == 0)&&(strlen(this_search.alt))) {
 							this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-							if (debug) fprintf(stderr,"%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.alt, this_search.hit_count_a, this_search.page +1);
+							flog("%s:%d: Searching for '%s', %d hits on page %d\n", FL, this_search.alt, this_search.hit_count_a, this_search.page +1);
 						} 
 					}
 
@@ -2377,7 +2407,7 @@ static void ddi_check( void ) {
 					if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 						this_search.hit_count_a = fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
+						flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
 
 
 						if (this_search.hit_count_a)  {
@@ -2386,12 +2416,12 @@ static void ddi_check( void ) {
 
 							if (strlen(this_search.b)) {
 								this_search.hit_count_b = fz_search_page_number(ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
-								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
+								flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
 							}
 
 							if (strlen(this_search.c)) {
 								this_search.hit_count_c = fz_search_page_number(ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
-								if (debug) fprintf(stderr,"%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
+								flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
 							}
 
 							/*
@@ -2465,7 +2495,7 @@ static void ddi_check( void ) {
 					 *
 					 */
 					if (this_search.mode != SEARCH_MODE_INPAGE) {
-						if (debug) fprintf(stderr,"%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d\r\n", FL, this_search.hit_count_a, this_search.inpage_index, this_search.page);
+						flog("%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d\r\n", FL, this_search.hit_count_a, this_search.inpage_index, this_search.page);
 						if ((this_search.hit_count_a == 0)||(this_search.inpage_index > this_search.hit_count_a -2)) {
 							this_search.inpage_index = -1;
 							//this_search.page = -1;
@@ -2482,13 +2512,13 @@ static void ddi_check( void ) {
 								 *
 								 */
 								if (document_has_hits) {
-									if (debug) fprintf(stderr,"%s:%d: End of document reached, but resetting back to start\r\n", FL);
+									flog("%s:%d: End of document reached, but resetting back to start\r\n", FL);
 									this_search.page = 0;
 									document_has_hits = 0;
 									search_active = 1;
 									//									continue;
 								} else {
-									if (debug) fprintf(stderr,"%s:%d: End of document reached, no hits found at all\r\n", FL);
+									flog("%s:%d: End of document reached, no hits found at all\r\n", FL);
 									memcpy(&prior_search, &this_search, sizeof(prior_search));
 //									snprintf(last_search_string, sizeof(last_search_string),"%s", sn_a);
 
@@ -2597,7 +2627,8 @@ int main(int argc, char **argv)
 	int wait_for_ddi = 10;
 	char s[10240];
 
-	if (debug) fprintf(stderr,"start.\r\n");
+	flog_init();
+	flog("start.\r\n");
 
 
 	window_w = 1280;
@@ -2610,7 +2641,7 @@ int main(int argc, char **argv)
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
-	if (debug) fprintf(stderr,"Parsing parameters\r\n");
+	flog("Parsing parameters\r\n");
 	while ((c = fz_getopt(argc, argv, "p:r:i:s:IsW:H:S:U:X:D:")) != -1)
 	{
 		switch (c)
@@ -2635,7 +2666,7 @@ int main(int argc, char **argv)
 		anchor = argv[fz_optind++];
 
 		/* ddi setup */
-		if (debug) fprintf(stderr,"DDI setup '%s'\r\n", ddiprefix);
+		flog("DDI setup '%s'\r\n", ddiprefix);
 		DDI_init(&ddi);
 		DDI_set_prefix(&ddi, ddiprefix);
 		DDI_set_mode(&ddi, DDI_MODE_SLAVE);
@@ -2646,7 +2677,7 @@ int main(int argc, char **argv)
 			 * and may contain multiple commands for us to process.
 			 *
 			 */
-			if (debug) fprintf(stderr,"%s:%d: DDI PICKUP\r\n",FL);
+			flog("%s:%d: DDI PICKUP\r\n",FL);
 			if (ddiloadstr) ddi_process(ddiloadstr);
 			else {
 				DDI_pickup(&ddi, s, sizeof(s));
@@ -2663,15 +2694,17 @@ int main(int argc, char **argv)
 		}
 
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+//		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+//		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+//		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+//		SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+//		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 		SDL_DisplayMode current;
 		SDL_GetCurrentDisplayMode(0, &current);
 //		if (runmode == RUNMODE_HEADLESS) sdlWindow = SDL_CreateWindow("FlexBV PDF", 0,0,0,0, SDL_WINDOW_HIDDEN|SDL_WINDOW_OPENGL);
 //		else sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
-		sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
+		//sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
+		sdlWindow = SDL_CreateWindow("FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
 		SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
 		SDL_EnableScreenSaver();
 	}
@@ -2718,7 +2751,7 @@ int main(int argc, char **argv)
 	else
 		title = filename;
 
-	if (debug) fprintf(stderr,"Initialising FlexBV-PDF\r\n");
+	flog("Initialising FlexBV-PDF. Filename = '%s'\r\n", filename);
 	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
@@ -2735,12 +2768,12 @@ int main(int argc, char **argv)
 
 	fz_set_use_document_css(ctx, layout_use_doc_css);
 
-	if (debug) fprintf(stderr,"%s:%d: Loading document\r\n", FL);
+	flog("%s:%d: Loading document\r\n", FL);
 	load_document();
 
-	if (debug) fprintf(stderr,"%s:%d: Loading page\r\n", FL);
+	flog("%s:%d: Loading page\r\n", FL);
 	load_page();
-	if (debug) fprintf(stderr,"%s:%d: Setting memory and search\r\n", FL);
+	flog("%s:%d: Setting memory and search\r\n", FL);
 
 	/* Init IMGUI */
 
@@ -2750,7 +2783,7 @@ int main(int argc, char **argv)
 	search_input.q = search_input.p;
 	search_input.end = search_input.p;
 
-	if (debug) fprintf(stderr,"%s:%d: ARB non-power-of-two test\r\n", FL);
+	flog("%s:%d: ARB non-power-of-two test\r\n", FL);
 	has_ARB_texture_non_power_of_two = 0;
 
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
@@ -2759,7 +2792,7 @@ int main(int argc, char **argv)
 	ui.baseline = DEFAULT_UI_BASELINE;
 	ui.lineheight = DEFAULT_UI_LINEHEIGHT;
 
-	if (debug) fprintf(stderr,"%s:%d: ui init fonts\r\n", FL);
+	flog("%s:%d: ui init fonts\r\n", FL);
 	ui_init_fonts(ctx, ui.fontsize);
 
 
@@ -2768,13 +2801,13 @@ int main(int argc, char **argv)
 
 
 	if (runmode == RUNMODE_NORMAL) {
-		if (debug) fprintf(stderr,"%s:%d: render page\r\n", FL);
+		flog("%s:%d: render page\r\n", FL);
 		render_page();
 
-		if (debug) fprintf(stderr,"%s:%d: update title\r\n", FL);
+		flog("%s:%d: update title\r\n", FL);
 		update_title();
 
-		if (debug) fprintf(stderr,"%s:%d: SDL loop starting\r\n\r\n", FL);
+		flog("%s:%d: SDL loop starting\r\n\r\n", FL);
 		while (!doquit) {
 
 
@@ -2906,7 +2939,7 @@ int main(int argc, char **argv)
 
 			} // while
 
-			if (debug) fprintf(stderr,"%s:%d: SDL loop ended\r\n", FL);
+			flog("%s:%d: SDL loop ended\r\n", FL);
 
 			SDL_DestroyTexture(sdlTexture);
 			SDL_DestroyRenderer(sdlRenderer);
