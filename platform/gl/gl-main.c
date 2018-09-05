@@ -284,6 +284,7 @@ static int annot_count = 0;
 
 //static int window_w = 1, window_h = 1;
 static double compsearch_radius = 500.0f;
+static int compsearch_highlight = 8; // 0b0111 (highlight all 3 elements)
 static char *headless_data;
 static int window_w = 1, window_h = 1;
 static int origin_x, origin_y;
@@ -1519,6 +1520,9 @@ static void do_canvas(void)
 int ddi_process( char *ddi_data ) {
 	char *cmd, *p, *q;
 
+	compsearch_radius = 500.0f;
+	compsearch_highlight = 8; // 0b0111
+
 	if (strstr(ddi_data, "!debug:")) {
 		fprintf(stderr,"%s:%d: DEBUG mode ACTIVE\r\n", FL);
 		fprintf(stderr,"%s:%d: DDI Data---------\r\n%s\r\n-------------\r\n",FL,ddi_data);
@@ -1531,8 +1535,15 @@ int ddi_process( char *ddi_data ) {
 	}
 
 	if ((cmd = strstr(ddi_data,"!csradius:"))) {
-		int t = atof( cmd +strlen("!csradius:") );
-		if ((t >= 1.0)||(t <= 5000.0)) compsearch_radius = t; // default fall back
+		double t = atof( cmd +strlen("!csradius:") );
+		if ((t >= 1.0)||(t <= 50000.0)) compsearch_radius = t; // default fall back
+		flog("%s:%d: compsearch radius set to %f\r\n", FL, t);
+	}
+
+	if ((cmd = strstr(ddi_data,"!cshighlight:"))) {
+		int t = atoi( cmd +strlen("!cshighlight:") );
+		if (t > 0) compsearch_highlight = t; // default fall back
+		flog("%s:%d: compsearch highlight set to %d\r\n", FL, compsearch_highlight);
 	}
 
 
@@ -1830,23 +1841,34 @@ static void run_main_loop(void) {
 								if (this_search.hit_count_a) {
 									if ((dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
 										static fz_rect a,b,c;
-										a = this_search.hit_bbox_a[i];
 
-										if (this_search.hit_count_b) {
-											b = this_search.hit_bbox_b[closest_b];
-											if (b.x1 > a.x1) a.x1 = b.x1;
-											if (b.y1 > a.y1) a.y1 = b.y1;
-											if (b.x0 < a.x0) a.x0 = b.x0;
-											if (b.y0 < a.y0) a.y0 = b.y0;
+										if (compsearch_highlight == 8) {
+											a = this_search.hit_bbox_a[i];
+
+											if (this_search.hit_count_b) {
+												b = this_search.hit_bbox_b[closest_b];
+												if (b.x1 > a.x1) a.x1 = b.x1;
+												if (b.y1 > a.y1) a.y1 = b.y1;
+												if (b.x0 < a.x0) a.x0 = b.x0;
+												if (b.y0 < a.y0) a.y0 = b.y0;
+											}
+
+											if (this_search.hit_count_c) {
+												c = this_search.hit_bbox_c[closest_c];
+												if (c.x1 > a.x1) a.x1 = c.x1;
+												if (c.y1 > a.y1) a.y1 = c.y1;
+												if (c.x0 < a.x0) a.x0 = c.x0;
+												if (c.y0 < a.y0) a.y0 = c.y0;
+											}
+										} else if (compsearch_highlight == 4) {
+											a = this_search.hit_bbox_a[i];
+										} else if (compsearch_highlight == 2) {
+											if (this_search.hit_count_b) a = this_search.hit_bbox_b[closest_b];
+										} else if (compsearch_highlight == 1) {
+											if (this_search.hit_count_c) a = this_search.hit_bbox_c[closest_c];
 										}
 
-										if (this_search.hit_count_c) {
-											c = this_search.hit_bbox_c[closest_c];
-											if (c.x1 > a.x1) a.x1 = c.x1;
-											if (c.y1 > a.y1) a.y1 = c.y1;
-											if (c.x0 < a.x0) a.x0 = c.x0;
-											if (c.y0 < a.y0) a.y0 = c.y0;
-										}
+
 
 										this_search.hit_bbox_a[new_hit_count] = a;
 										new_hit_count++;
@@ -2458,31 +2480,61 @@ static void ddi_check( void ) {
 								if (strlen(this_search.b) && (this_search.hit_count_b == 0)) this_search.hit_count_a = 0;
 								if (strlen(this_search.c) && (this_search.hit_count_c == 0)) this_search.hit_count_a = 0;
 
-								if (this_search.hit_count_a) {
-									if ((dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
-										static fz_rect a,b,c;
-										a = this_search.hit_bbox_a[i];
 
-										if (this_search.hit_count_b) {
-											b = this_search.hit_bbox_b[closest_b];
-											if (b.x1 > a.x1) a.x1 = b.x1;
-											if (b.y1 > a.y1) a.y1 = b.y1;
-											if (b.x0 < a.x0) a.x0 = b.x0;
-											if (b.y0 < a.y0) a.y0 = b.y0;
+								if ((this_search.hit_count_a) && (dist_b < compsearch_radius) && (dist_c < compsearch_radius)) {
+									static fz_rect a,b,c;
+									a = this_search.hit_bbox_a[i];
+
+									flog("%s:%d: limit = %f highlight mode = %d  distb = %f distc = %f", FL, compsearch_radius, compsearch_highlight, dist_b, dist_c);
+
+									
+										if (compsearch_highlight == 8) {
+											a = this_search.hit_bbox_a[i];
+
+											if (this_search.hit_count_b) {
+												b = this_search.hit_bbox_b[closest_b];
+												if (b.x1 > a.x1) a.x1 = b.x1;
+												if (b.y1 > a.y1) a.y1 = b.y1;
+												if (b.x0 < a.x0) a.x0 = b.x0;
+												if (b.y0 < a.y0) a.y0 = b.y0;
+											}
+
+											if (this_search.hit_count_c) {
+												c = this_search.hit_bbox_c[closest_c];
+												if (c.x1 > a.x1) a.x1 = c.x1;
+												if (c.y1 > a.y1) a.y1 = c.y1;
+												if (c.x0 < a.x0) a.x0 = c.x0;
+												if (c.y0 < a.y0) a.y0 = c.y0;
+											}
+										} else if (compsearch_highlight == 4) {
+											a = this_search.hit_bbox_a[i];
+										} else if (compsearch_highlight == 2) {
+											if (this_search.hit_count_b) a = this_search.hit_bbox_b[closest_b];
+										} else if (compsearch_highlight == 1) {
+											if (this_search.hit_count_c) a = this_search.hit_bbox_c[closest_c];
 										}
+										/*
+									if (this_search.hit_count_b) {
+										b = this_search.hit_bbox_b[closest_b];
+										if (b.x1 > a.x1) a.x1 = b.x1;
+										if (b.y1 > a.y1) a.y1 = b.y1;
+										if (b.x0 < a.x0) a.x0 = b.x0;
+										if (b.y0 < a.y0) a.y0 = b.y0;
+									}
 
-										if (this_search.hit_count_c) {
-											c = this_search.hit_bbox_c[closest_c];
-											if (c.x1 > a.x1) a.x1 = c.x1;
-											if (c.y1 > a.y1) a.y1 = c.y1;
-											if (c.x0 < a.x0) a.x0 = c.x0;
-											if (c.y0 < a.y0) a.y0 = c.y0;
-										}
+									if (this_search.hit_count_c) {
+										c = this_search.hit_bbox_c[closest_c];
+										if (c.x1 > a.x1) a.x1 = c.x1;
+										if (c.y1 > a.y1) a.y1 = c.y1;
+										if (c.x0 < a.x0) a.x0 = c.x0;
+										if (c.y0 < a.y0) a.y0 = c.y0;
+									}
+									*/
 
-										this_search.hit_bbox_a[new_hit_count] = a;
-										new_hit_count++;
-									} // if distances are within 500
-								}
+									this_search.hit_bbox_a[new_hit_count] = a;
+									new_hit_count++;
+								} // if distances are within 500
+								
 							} // for each main search hit
 							this_search.hit_count_a = new_hit_count;
 						} // if search hit count
@@ -2495,7 +2547,7 @@ static void ddi_check( void ) {
 					 *
 					 */
 					if (this_search.mode != SEARCH_MODE_INPAGE) {
-						flog("%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d\r\n", FL, this_search.hit_count_a, this_search.inpage_index, this_search.page);
+						//flog("%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d\r\n", FL, this_search.hit_count_a, this_search.inpage_index, this_search.page);
 						if ((this_search.hit_count_a == 0)||(this_search.inpage_index > this_search.hit_count_a -2)) {
 							this_search.inpage_index = -1;
 							//this_search.page = -1;

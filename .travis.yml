@@ -71,4 +71,5 @@ deploy:
     - "${DEPLOY_PKG}"
   skip_cleanup: true
   on:
+    all_branches: true
     repo: inflex/fbvpdf
