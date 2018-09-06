@@ -4,7 +4,7 @@ echo Making macOS bundle
 set -x
 
 export FBVPDF_BUILD=`git rev-list HEAD --count`
-export PP="fbvpdf-R${FBVPDF_BUILD}"
+export PP="fbvpdf-R${FBVPDF_BUILD}-macos.zip"
 
 mkdir tmp
 
@@ -32,4 +32,5 @@ cp -v icon-128.png $D/Contents/Resources/fbvpdf.icns
 hdiutil create tmp/tmp.dmg -ov -volname "FlexBV PDF Viewer" -fs HFS+ -srcfolder fbvpdf.app
 hdiutil convert tmp/tmp.dmg -format UDZO -o fbvpdf.dmg
 
-zip -r ${PP}-macos.zip $D
+zip -r ${PP} $D
+ls -la ${PP}
