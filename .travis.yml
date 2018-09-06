@@ -51,16 +51,16 @@ script: |-
 before_deploy: |-
   if [ "$VERS" == "macos" ]
   then
-    export DEPLOY_BIN=fbvpdf*macos.zip
+    export DEPLOY_BIN=$(ls fbvpdf*macos.zip)
     export DEPLOY_PKG=fbvpdf.dmg
   elif [ "$VERS" == "win" ]
   then
     export DEPLOY_BIN=build/release/mupdf-win.exe
-    export DEPLOY_PKG=fbvpdf*win.zip
+    export DEPLOY_PKG=$(ls fbvpdf*win.zip)
   elif [ "$VERS" == "linux" ]
   then
     export DEPLOY_BIN=build/release/mupdf-linux
-    export DEPLOY_PKG=fbvpdf*tar.gz
+    export DEPLOY_PKG=$(ls fbvpdf*tar.gz)
   fi
 deploy:
   provider: releases
