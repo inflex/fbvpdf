@@ -3,6 +3,7 @@ set -x
 
 export G=`git rev-list HEAD --count`
 echo $G
+ZPR="fbvpdf-R${G}-win.zip"
 
 # Build the needed tools for the cross compile
 echo "Making 'GENERATE' tools for linux."
@@ -16,8 +17,11 @@ make -f Makefile.mingw OS=w64_x86-cross-mingw32 GIT_BUILD='${G}'  $1
 MR=$?
 if [ $MR -eq 0 ]; then
 	mv build/release/mupdf-gl build/release/mupdf-win.exe
+	if [ -d fbvpdf ]; then
+		rm -rf fbvpdf
+	fi
 	mkdir fbvpdf
 	cp build/release/mupdf-win.exe fbvpdf/fbvpdf.exe
-	zip -r fbvpdf.zip fbvpdf
+	zip -r ${ZPR} fbvpdf
 fi
 exit $MR
