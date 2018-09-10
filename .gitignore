@@ -10,7 +10,7 @@ source/pdf/pdf-name-table.h
 tags
 cscope.*
 
-# Editor and file browser turds:
+# Editor and file browser temporaries:
 *~
 .*.swp
 .DS_Store

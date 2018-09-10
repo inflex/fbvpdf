@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# 
+# builds windows version on linux system
+
+
 set -x
 
 export G=`git rev-list HEAD --count`

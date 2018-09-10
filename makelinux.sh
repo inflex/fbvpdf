@@ -1,4 +1,6 @@
 #!/bin/bash
+#
+# Build linux binary on linux
 set -x
 
 export G=`git rev-list HEAD --count`
