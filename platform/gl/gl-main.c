@@ -2726,32 +2726,24 @@ int init( void )
 
 		//Create window
 		sdlWindow = SDL_CreateWindow( "FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
-		if( sdlWindow == NULL )
-		{
+		if( sdlWindow == NULL ) {
 			printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
 			success = 0;
-		}
-		else
-		{
+		} else {
 			//Create context
 			SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
 			// gContext = SDL_GL_CreateContext( sdlWindow );
-			if( glcontext == NULL )
-			{
+			if( glcontext == NULL ) {
 				printf( "OpenGL context could not be created! SDL Error: %s\n", SDL_GetError() );
 				success = 0;
-			}
-			else
-			{
-				//Use Vsync
-				if( SDL_GL_SetSwapInterval( 1 ) < 0 )
-				{
-					printf( "Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError() );
-				}
+			} else {
+				//Use Vsync VSYNC
+//				if( SDL_GL_SetSwapInterval( 1 ) < 0 ) {
+//					printf( "Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError() );
+//				}
 
 				//Initialize OpenGL
-				if( !initGL() )
-				{
+				if( !initGL() ) {
 					printf( "Unable to initialize OpenGL!\n" );
 					success = 0;
 				}
