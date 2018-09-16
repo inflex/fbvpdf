@@ -444,6 +444,7 @@ void load_page(void)
 	page = NULL;
 
 	//page = fz_load_page(ctx, doc, this_search.page);
+	currently_viewed_page = fz_clampi(currently_viewed_page, 0, fz_count_pages(ctx, doc) - 1);
 	page = fz_load_page(ctx, doc, currently_viewed_page);
 	links = fz_load_links(ctx, page);
 	text = fz_new_stext_page_from_page(ctx, page, NULL);
@@ -1901,9 +1902,10 @@ static void run_main_loop(void) {
 			} else {
 				flog("%s:%d: No hits on page %d, trying next...\r\n", FL, this_search.page);
 				this_search.page += this_search.direction;
-				if (this_search.page < 0 || this_search.page == fz_count_pages(ctx, doc))
+				if (this_search.page < 0 || this_search.page >= fz_count_pages(ctx, doc) -1)
 				{
 					flog("%s:%d: end of the road for '%s'\r\n", FL, this_search.a);
+					this_search.page = fz_count_pages(ctx,doc) -1;
 
 					//					if (needle_has_hits) {
 					//						this_search.page = 0;
@@ -2713,6 +2715,7 @@ int init( void )
 	int success = 1;
 
 	//Initialize SDL
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
 	{
 		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
@@ -2720,6 +2723,7 @@ int init( void )
 	}
 	else
 	{
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 		//Use OpenGL 2.1
 		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 1 );
 		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 0 );
@@ -2732,7 +2736,6 @@ int init( void )
 		} else {
 			//Create context
 			SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
-			// gContext = SDL_GL_CreateContext( sdlWindow );
 			if( glcontext == NULL ) {
 				printf( "OpenGL context could not be created! SDL Error: %s\n", SDL_GetError() );
 				success = 0;
