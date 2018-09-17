@@ -9,6 +9,7 @@ include/mupdf/pdf/name-table.h
 source/pdf/pdf-name-table.h
 tags
 cscope.*
+*.tar.gz
 
 # Editor and file browser temporaries:
 *~
