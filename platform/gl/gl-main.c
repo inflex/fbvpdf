@@ -2372,6 +2372,7 @@ static void ddi_check( void ) {
 			}
 
 
+			/*
 			glViewport(0, 0, window_w, window_h);
 			glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
@@ -2382,6 +2383,7 @@ static void ddi_check( void ) {
 
 			glMatrixMode(GL_MODELVIEW);
 			glLoadIdentity();
+			*/
 
 			ui_begin();
 
@@ -2715,7 +2717,7 @@ int init( void )
 	int success = 1;
 
 	//Initialize SDL
-	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+//	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
 	{
 		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
@@ -2723,10 +2725,16 @@ int init( void )
 	}
 	else
 	{
-		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 		//Use OpenGL 2.1
+//		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 1 );
-		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 0 );
+//		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
+//		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+//		    SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+//  SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
 		//Create window
 		sdlWindow = SDL_CreateWindow( "FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
@@ -2956,11 +2964,12 @@ int main(int argc, char **argv)
 
 
 			glViewport(0,0,window_w, window_h);
+//			glViewport(0,0,canvas_w, canvas_h);
 			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glMatrixMode(GL_PROJECTION);
 			glLoadIdentity();
-			glOrtho(0, window_w, window_h, 0, -1, 1);
+			glOrtho(0, window_w, window_h, 0, 0.0f, 1.0f);
 			glMatrixMode(GL_MODELVIEW);
 			glLoadIdentity();
 
