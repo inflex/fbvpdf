@@ -2774,6 +2774,7 @@ int main(int argc, char **argv)
 	int c;
 	int check_again = 0;
 	int wait_for_ddi = 10;
+	int sleepout = 100;
 	char s[10240];
 
 	flog_init();
@@ -2974,6 +2975,7 @@ int main(int argc, char **argv)
 			glLoadIdentity();
 
 			while (SDL_PollEvent(&sdlEvent) ) {
+				sleepout = 30;
 				switch (sdlEvent.type) {
 					case SDL_WINDOWEVENT:
 						switch (sdlEvent.window.event) {
@@ -3057,9 +3059,19 @@ int main(int argc, char **argv)
 
 			run_main_loop();
 			ui.key = ui.mod = ui.plain = 0;
-
 			//		do_canvas();
 			SDL_GL_SwapWindow(sdlWindow);
+
+					if (!(sleepout--)) {
+#ifdef _WIN32
+			Sleep(50);
+#else
+			usleep(50000);
+#endif
+			sleepout = 0;
+			continue;
+		} // puts OBV to sleep if nothing is happening.
+
 
 		} // while !doquit
 
