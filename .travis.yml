@@ -8,6 +8,7 @@ compiler:
 matrix:
   include:
   - os: osx
+    osx_image: xcode8.3
     compiler: clang
     env: VERS=macos DEPLOY=yes
   - os: linux
