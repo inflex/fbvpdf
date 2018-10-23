@@ -2373,17 +2373,17 @@ static void ddi_check( void ) {
 
 
 			/*
-			glViewport(0, 0, window_w, window_h);
-			glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
+				glViewport(0, 0, window_w, window_h);
+				glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+				glClear(GL_COLOR_BUFFER_BIT);
 
-			glMatrixMode(GL_PROJECTION);
-			glLoadIdentity();
-			glOrtho(0, window_w, window_h, 0, -1, 1);
+				glMatrixMode(GL_PROJECTION);
+				glLoadIdentity();
+				glOrtho(0, window_w, window_h, 0, -1, 1);
 
-			glMatrixMode(GL_MODELVIEW);
-			glLoadIdentity();
-			*/
+				glMatrixMode(GL_MODELVIEW);
+				glLoadIdentity();
+				*/
 
 			ui_begin();
 
@@ -2698,12 +2698,11 @@ int initGL( void )
 	}
 
 	//Initialize clear color
-	glClearColor( 0.f, 0.f, 0.f, 1.f );
+	glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
 
 	//Check for error
 	error = glGetError();
-	if( error != GL_NO_ERROR )
-	{
+	if( error != GL_NO_ERROR ) {
 		success = 1;
 	}
 
@@ -2717,7 +2716,7 @@ int init( void )
 	int success = 1;
 
 	//Initialize SDL
-//	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+	//	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
 	{
 		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
@@ -2726,15 +2725,16 @@ int init( void )
 	else
 	{
 		//Use OpenGL 2.1
-//		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+		//		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 1 );
-//		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
-//		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-//		    SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-//  SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 0 );
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+		//	    SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+		//		SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
 		//Create window
 		sdlWindow = SDL_CreateWindow( "FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
@@ -2748,10 +2748,6 @@ int init( void )
 				printf( "OpenGL context could not be created! SDL Error: %s\n", SDL_GetError() );
 				success = 0;
 			} else {
-				//Use Vsync VSYNC
-//				if( SDL_GL_SetSwapInterval( 1 ) < 0 ) {
-//					printf( "Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError() );
-//				}
 
 				//Initialize OpenGL
 				if( !initGL() ) {
@@ -2851,6 +2847,7 @@ int main(int argc, char **argv)
 			SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 		//		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		//		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+		//		GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_AR
 		SDL_DisplayMode current;
 		SDL_GetCurrentDisplayMode(0, &current);
 		//		if (runmode == RUNMODE_HEADLESS) sdlWindow = SDL_CreateWindow("FlexBV PDF", 0,0,0,0, SDL_WINDOW_HIDDEN|SDL_WINDOW_OPENGL);
@@ -2965,7 +2962,7 @@ int main(int argc, char **argv)
 
 
 			glViewport(0,0,window_w, window_h);
-//			glViewport(0,0,canvas_w, canvas_h);
+			//			glViewport(0,0,canvas_w, canvas_h);
 			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glMatrixMode(GL_PROJECTION);
@@ -3062,15 +3059,15 @@ int main(int argc, char **argv)
 			//		do_canvas();
 			SDL_GL_SwapWindow(sdlWindow);
 
-					if (!(sleepout--)) {
+			if (!(sleepout--)) {
 #ifdef _WIN32
-			Sleep(50);
+				Sleep(50);
 #else
-			usleep(50000);
+				usleep(50000);
 #endif
-			sleepout = 0;
-			continue;
-		} // puts OBV to sleep if nothing is happening.
+				sleepout = 0;
+				continue;
+			} // puts OBV to sleep if nothing is happening.
 
 
 		} // while !doquit
