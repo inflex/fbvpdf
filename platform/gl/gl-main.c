@@ -1180,8 +1180,22 @@ static void do_keypress(void)
 
 			case 'I': currentinvert = !currentinvert; break;
 			case 'f':
-						 fprintf(stderr,"%s:%d: Full screen\r\n",FL);
-						 toggle_fullscreen(); break;
+						 if (ui.lctrl||ui.rctrl) {
+							 						 clear_search();
+						 this_search.direction = 1;
+						 showsearch = 1;
+						 search_not_found = 0;
+						 update_title();
+						 search_input.text[0] = 0;
+						 search_input.end = search_input.text;
+						 search_input.p = search_input.text;
+						 search_input.q = search_input.end;
+
+						 } else {
+							 fprintf(stderr,"%s:%d: Full screen\r\n",FL);
+							 toggle_fullscreen(); 
+						 }
+						 break;
 			case 'W': 
 						 fprintf(stderr,"%s:%d: Shrinkwrapping\r\n",FL);
 						 shrinkwrap(); break;
@@ -2009,6 +2023,7 @@ static void on_keyboard(unsigned char key, int x, int y)
 #endif
 	ui.key = key;
 	//FIXME	ui.mod = glutGetModifiers();
+	ui.lctrl = ui.rctrl = 0;
 	ui.plain = !(ui.mod & ~GLUT_ACTIVE_SHIFT);
 	ui.key = ui.mod = ui.plain = 0;
 }
@@ -2991,6 +3006,7 @@ int main(int argc, char **argv)
 						break;
 
 					case SDL_TEXTINPUT:
+                fprintf(stderr,"%s:%d: %s, ctrl %s\n", FL, sdlEvent.text.text, (ui.lctrl||ui.rctrl) ? "pressed" : "released");
 						if (showsearch) {
 							if ((search_input.text == search_input.end)&&(sdlEvent.text.text[0] == '/')) {
 								// do nothing
@@ -3005,11 +3021,20 @@ int main(int argc, char **argv)
 						break;
 
 					case SDL_KEYDOWN:
+                if(sdlEvent.key.keysym.sym == SDLK_RCTRL) { ui.rctrl = 1; }
+                else if(sdlEvent.key.keysym.sym == SDLK_LCTRL) { ui.lctrl = 1; }
 						{
 							ui.key = sdlEvent.key.keysym.sym;
 							do_keypress();
 						}
+						fprintf(stderr,"%s:%d: %d %d\r\n", FL, ui.rctrl, ui.lctrl );
 						break;
+
+            case SDL_KEYUP:
+                if(sdlEvent.key.keysym.sym == SDLK_RCTRL) { ui.rctrl = 0; }
+                else if(sdlEvent.key.keysym.sym == SDLK_LCTRL) { ui.lctrl = 0; }
+                break;
+
 
 					case SDL_MOUSEMOTION:
 						{
