@@ -1294,7 +1294,7 @@ static void do_keypress(void)
 
 			case 'p':
 						 this_search.direction = -1;
-						 this_search.inpage_index++;
+						 this_search.inpage_index--;
 						 search_active = 1;
 						 break;
 
@@ -1788,16 +1788,21 @@ static void run_main_loop(void) {
 				this_search.page = 1;
 				this_search.inpage_index = -1;
 			}
-		} else {
+
+		} else if (this_search.direction < 0) {
+//			flog("%s:%d: dir=%d pg=%d ipi=%d\r\n", FL, this_search.direction, this_search.page, this_search.inpage_index);
+//			fprintf(stderr,"%s:%d: dir=%d pg=%d ipi=%d\r\n", FL, this_search.direction, this_search.page, this_search.inpage_index);
 			if (this_search.inpage_index < 0) {
 				this_search.page--;
 				this_search.inpage_index = -1;
 			}
 
-			if (this_search.page <= 0) {
-				this_search.page = fz_count_pages(ctx, doc);
+			if (this_search.page < 0) {
+				this_search.page = fz_count_pages(ctx, doc) -1;
 				this_search.inpage_index = -1;
 			}
+//			flog("%s:%d: dir=%d pg=%d ipi=%d\r\n", FL, this_search.direction, this_search.page, this_search.inpage_index);
+//			fprintf(stderr,"%s:%d: dir=%d pg=%d ipi=%d\r\n", FL, this_search.direction, this_search.page, this_search.inpage_index);
 		}
 
 		while (1) {
@@ -1925,7 +1930,8 @@ static void run_main_loop(void) {
 				fz_rect bb;
 				search_active = 0;
 
-				if (this_search.inpage_index == -1) this_search.inpage_index = 0;
+				if ((this_search.direction == 1) && (this_search.inpage_index == -1)) this_search.inpage_index = 0;
+				if ((this_search.direction == -1) && (this_search.inpage_index == -1)) this_search.inpage_index = this_search.hit_count_a -1;
 				p.x = (canvas_w/2) *72 / (currentzoom );
 				p.y = (canvas_h/2) *72 / (currentzoom );
 				bb = this_search.hit_bbox_a[this_search.inpage_index];
@@ -2641,7 +2647,7 @@ static void ddi_check( void ) {
 						 *
 						 */
 						//search_current_page = this_search.page;
-						this_search.inpage_index++;
+						this_search.inpage_index += this_search.direction;
 
 						search_active = 0;
 						//search_hit_page = this_search.page;
@@ -3026,7 +3032,6 @@ int main(int argc, char **argv)
 						break;
 
 					case SDL_TEXTINPUT:
-                fprintf(stderr,"%s:%d: %s, ctrl %s\n", FL, sdlEvent.text.text, (ui.lctrl||ui.rctrl) ? "pressed" : "released");
 						if (showsearch) {
 							if ((search_input.text == search_input.end)&&(sdlEvent.text.text[0] == '/')) {
 								// do nothing
@@ -3047,7 +3052,6 @@ int main(int argc, char **argv)
 							ui.key = sdlEvent.key.keysym.sym;
 							do_keypress();
 						}
-						fprintf(stderr,"%s:%d: %d %d\r\n", FL, ui.rctrl, ui.lctrl );
 						break;
 
             case SDL_KEYUP:
