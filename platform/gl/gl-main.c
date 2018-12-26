@@ -162,7 +162,7 @@ void ui_draw_image(struct texture *tex, float x, float y)
 	glDisable(GL_BLEND);
 }
 
-static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 500, 650 };
+static const int zoom_list[] = { 18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 450 };
 
 /*
 	static int zoom_in(int oldres)
@@ -1192,12 +1192,12 @@ static void do_keypress(void)
 						 search_input.q = search_input.end;
 
 						 } else {
-							 fprintf(stderr,"%s:%d: Full screen\r\n",FL);
+							 flog("%s:%d: Full screen\r\n",FL);
 							 toggle_fullscreen(); 
 						 }
 						 break;
 			case 'W': 
-						 fprintf(stderr,"%s:%d: Shrinkwrapping\r\n",FL);
+						 flog("%s:%d: Shrinkwrapping\r\n",FL);
 						 shrinkwrap(); break;
 			case 'w': auto_zoom_w(); break;
 			case 'h': auto_zoom_h(); break;
@@ -1291,6 +1291,13 @@ static void do_keypress(void)
 						 //search_again = 1;
 						 search_active = 1;
 						 break;
+
+			case 'p':
+						 this_search.direction = -1;
+						 this_search.inpage_index++;
+						 search_active = 1;
+						 break;
+
 		}
 
 		if (ui.key >= '0' && ui.key <= '9')
@@ -1385,7 +1392,7 @@ static int do_status_footer( void ) {
 	s[0] = 0;
 
 	if ((this_search.hit_count_a)) { //&& (last_search_string[0])) 
-		snprintf(ss,sizeof(ss),"Searching '%s'. %d hits on current page [ N = Next item, ESC = Clear ]", this_search.a, this_search.hit_count_a );
+		snprintf(ss,sizeof(ss),"Searching '%s'. %d hits on current page [ n = Next item, p = Prev item, ESC = Clear ]", this_search.a, this_search.hit_count_a );
 	}  else if (search_not_found ) {
 		snprintf(ss,sizeof(ss),"Search not found '%s' [ Press ESC to clear ]", this_search.a);
 	} else {
@@ -1500,8 +1507,9 @@ static void do_help(void)
 	y = do_help_line(x, y, "N m", "save location in bookmark N");
 	y = do_help_line(x, y, "N t", "go to bookmark N");
 	y += ui.lineheight;
-	y = do_help_line(x, y, "/ or ?", "search for text");
-	y = do_help_line(x, y, "n or N", "repeat search");
+	y = do_help_line(x, y, "ctrl-f or /", "search for text");
+	y = do_help_line(x, y, "n", "repeat search (forwards)");
+	y = do_help_line(x, y, "p", "repeat search (backwards)");
 }
 
 static void do_canvas(void)
@@ -1770,14 +1778,26 @@ static void run_main_loop(void) {
 		ui.key = ui.mod = ui.plain = 0;
 		ui.down = ui.middle = ui.right = 0;
 
-		if (this_search.inpage_index >= this_search.hit_count_a) {
-			this_search.page++;
-			this_search.inpage_index = -1;
-		}
+		if (this_search.direction > 0) {
+			if (this_search.inpage_index >= this_search.hit_count_a) {
+				this_search.page++;
+				this_search.inpage_index = -1;
+			}
 
-		if (this_search.page >= fz_count_pages(ctx, doc)) {
-			this_search.page = 1;
-			this_search.inpage_index = -1;
+			if (this_search.page >= fz_count_pages(ctx, doc)) {
+				this_search.page = 1;
+				this_search.inpage_index = -1;
+			}
+		} else {
+			if (this_search.inpage_index < 0) {
+				this_search.page--;
+				this_search.inpage_index = -1;
+			}
+
+			if (this_search.page <= 0) {
+				this_search.page = fz_count_pages(ctx, doc);
+				this_search.inpage_index = -1;
+			}
 		}
 
 		while (1) {
