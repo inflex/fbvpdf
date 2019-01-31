@@ -557,6 +557,7 @@ static void jump_to_page(int newpage)
 
 static void jump_to_page_xy(int newpage, float x, float y)
 {
+	flog("%s:%d: Jumping to %d[%f %f]\r\n",FL, newpage, x, y);
 	fz_point p = { x, y };
 	newpage = fz_clampi(newpage, 0, fz_count_pages(ctx, doc) - 1);
 	fz_transform_point(&p, &page_ctm);
@@ -1927,15 +1928,18 @@ static void run_main_loop(void) {
 
 			if (this_search.hit_count_a > 0) {
 				fz_point p;
-				fz_rect bb;
+				fz_rect *bb;
 				search_active = 0;
 
 				if ((this_search.direction == 1) && (this_search.inpage_index == -1)) this_search.inpage_index = 0;
 				if ((this_search.direction == -1) && (this_search.inpage_index == -1)) this_search.inpage_index = this_search.hit_count_a -1;
 				p.x = (canvas_w/2) *72 / (currentzoom );
 				p.y = (canvas_h/2) *72 / (currentzoom );
-				bb = this_search.hit_bbox_a[this_search.inpage_index];
-				jump_to_page_xy(this_search.page, bb.x0 -p.x, bb.y0 -p.y );
+				bb = &this_search.hit_bbox_a[this_search.inpage_index];
+				//jump_to_page_xy(this_search.page, bb.x0 -p.x, bb.y0 -p.y );
+				flog("%s:%d: Jumping to %d[%f %f]\r\n", FL, this_search.page, bb->x0, bb->y0);
+				jump_to_page_xy(this_search.page, bb->x0 -p.x, bb->y0  -p.y);
+				//jump_to_page_xy(this_search.page, bb->x0, bb->y0 );
 
 				break;
 
@@ -2222,6 +2226,7 @@ static int ddi_check_headless( char *sn_a ) {
 	if (this_search.mode != SEARCH_MODE_COMPOUND) return 0;
 
 	this_search.page = 1;
+	this_search.direction = 1;
 
 	while (this_search.page < pages ) {
 
@@ -2638,7 +2643,7 @@ static void ddi_check( void ) {
 					 */ 
 					if ((this_search.hit_count_a)&&(this_search.mode != SEARCH_MODE_INPAGE)) {
 						fz_point p;
-						fz_rect bb;
+						fz_rect *bb;
 						document_has_hits = 1;
 
 						/*
@@ -2648,14 +2653,18 @@ static void ddi_check( void ) {
 						 */
 						//search_current_page = this_search.page;
 						this_search.inpage_index += this_search.direction;
+						if (this_search.inpage_index < 0) this_search.inpage_index = 0;
 
 						search_active = 0;
 						//search_hit_page = this_search.page;
 
 						p.x = (canvas_w/2) *72 / (currentzoom );
 						p.y = (canvas_h/2) *72 / (currentzoom );
-						bb = this_search.hit_bbox_a[this_search.inpage_index];
-						jump_to_page_xy(this_search.page, bb.x0 -p.x, bb.y0 -p.y );
+						bb = &this_search.hit_bbox_a[this_search.inpage_index];
+						flog("%s:%d: Jumping to %d[%d][%f %f]\r\n", FL, this_search.page, this_search.inpage_index, bb->x0, bb->y0);
+						jump_to_page_xy(this_search.page, bb->x0 -p.x, bb->y0  -p.y);
+				//jump_to_page_xy(this_search.page, bb.x0, bb.y0 );
+				//		jump_to_page_xy(this_search.page, bb.x0 -p.x, bb.y0 -p.y );
 					} // if search hit count > 0
 
 					if (this_search.mode == SEARCH_MODE_INPAGE) {
