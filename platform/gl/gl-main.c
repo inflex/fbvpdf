@@ -351,7 +351,7 @@ static unsigned int next_power_of_two(unsigned int n)
 int flog_init( void ) {
 	if (debug) {
 		FILE *f;
-		f = fopen("fbpdf.log", "w");
+		f = fopen("fbvpdf.log", "w");
 		if (f) {
 			fprintf(f,"%s", ctime(time(NULL)));
 			fclose(f);
@@ -366,7 +366,7 @@ int flog( const char *format, ... ) {
 		va_start(args, format);
 
 		FILE *f;
-		f = fopen("fbpdf.log", "a");
+		f = fopen("fbvpdf.log", "a");
 		if (f) {
 			fprintf(f,"%ld ", time(NULL));
 			vfprintf(f,format,args);
