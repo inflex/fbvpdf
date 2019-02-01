@@ -1,11 +1,10 @@
 ABOUT
 
-MuPDF is a lightweight open source software framework for viewing and converting
-PDF, XPS, and E-book documents.
+fbvpdf is a specifically crafted version of the MuPDF lightweight open source
+PDF framework to work with electronic schematics.
 
-See the documentation in docs/index.html for an overview.
+fbvpdf is not intended to be a general purpose PDF viewer.
 
-Build instructions can be found in docs/building.html.
 
 LICENSE
 
