@@ -224,16 +224,16 @@ static pdf_document *pdf    = NULL;
 static fz_outline *outline  = NULL;
 static fz_link *links       = NULL;
 
-static int number    = 0;
-static int show_help = 0;
+static int number = 0;
+// static int show_help = 0;
 
 static struct texture page_tex = {0};
 static int scroll_x = 0, scroll_y = 0;
 static int canvas_x = 0, canvas_w = 100;
 static int canvas_y = 0, canvas_h = 100;
 
-static struct texture annot_tex[256];
-static int annot_count = 0;
+// static struct texture annot_tex[256];
+// static int annot_count = 0;
 
 static double compsearch_radius = 500.0f;
 static int compsearch_highlight = 8; // 0b0111 (highlight all 3 elements)
@@ -292,7 +292,7 @@ int flog_init(void) {
 		FILE *f;
 		f = fopen(FLOG_FILENAME, "w");
 		if (f) {
-			fprintf(f, "%s", ctime(time(NULL)));
+			fprintf(f, "%s", ctime((time_t *)time(NULL)));
 			fclose(f);
 		}
 	}
@@ -301,10 +301,10 @@ int flog_init(void) {
 
 int flog(const char *format, ...) {
 	if (debug) {
+		FILE *f;
 		va_list args;
 		va_start(args, format);
 
-		FILE *f;
 		f = fopen(FLOG_FILENAME, "a");
 		if (f) {
 			fprintf(f, "%ld ", time(NULL));
@@ -392,7 +392,7 @@ void load_page(void) {
 }
 
 void render_page(void) {
-	fz_annot *annot;
+	// fz_annot *annot;
 	fz_pixmap *pix;
 
 	if (!loaded) load_page();
@@ -467,7 +467,8 @@ static void jump_to_page(int newpage) {
 	newpage = fz_clampi(newpage, 0, fz_count_pages(ctx, doc) - 1);
 	clear_future();
 	push_history();
-	this_search.page = newpage;
+	this_search.page      = newpage;
+	currently_viewed_page = newpage;
 	push_history();
 }
 
@@ -782,41 +783,6 @@ static void do_search_hits(int xofs, int yofs) {
 	glDisable(GL_BLEND);
 }
 
-static void do_forms(float xofs, float yofs) {
-	static int do_forms_tag = 0;
-	pdf_ui_event event;
-	fz_point p;
-	int i;
-
-	for (i = 0; i < annot_count; ++i) ui_draw_image(&annot_tex[i], xofs - page_tex.x, yofs - page_tex.y);
-
-	if (!pdf || search_active) return;
-
-	p.x = xofs - page_tex.x + ui.x;
-	p.y = xofs - page_tex.x + ui.y;
-	fz_transform_point(&p, &page_inv_ctm);
-
-	if (ui.down && !ui.active) {
-		event.etype               = PDF_EVENT_TYPE_POINTER;
-		event.event.pointer.pt    = p;
-		event.event.pointer.ptype = PDF_POINTER_DOWN;
-		if (pdf_pass_event(ctx, pdf, (pdf_page *)page, &event)) {
-			if (pdf->focus) ui.active = &do_forms_tag;
-			pdf_update_page(ctx, (pdf_page *)page);
-			render_page();
-		}
-	} else if (ui.active == &do_forms_tag && !ui.down) {
-		ui.active                 = NULL;
-		event.etype               = PDF_EVENT_TYPE_POINTER;
-		event.event.pointer.pt    = p;
-		event.event.pointer.ptype = PDF_POINTER_UP;
-		if (pdf_pass_event(ctx, pdf, (pdf_page *)page, &event)) {
-			pdf_update_page(ctx, (pdf_page *)page);
-			render_page();
-		}
-	}
-}
-
 static void toggle_fullscreen(void) {
 	static int win_x = 0, win_y = 0;
 	static int win_w = 100, win_h = 100;
@@ -1029,14 +995,15 @@ static void do_keypress(void) {
 				//			case 'l': case KEY_RIGHT: scroll_x += 10; break;
 				// case SDL_SCANCODE_KP_5: auto_zoom_w(); break;
 
-			case 'b':
-				number = fz_maxi(number, 1);
-				while (number--) smart_move_backward();
-				break;
-			case ' ':
-				number = fz_maxi(number, 1);
-				while (number--) smart_move_forward();
-				break;
+				//			case 'b':
+				//				number = fz_maxi(number, 1);
+				//				while (number--) smart_move_backward();
+				//				break;
+				//			case ' ':
+				//				number = fz_maxi(number, 1);
+				//				while (number--) smart_move_forward();
+				//				break;
+
 			case ',':
 			case KEY_PAGE_UP:
 			case SDLK_PAGEUP: currently_viewed_page -= fz_maxi(number, 1); break;
@@ -1045,29 +1012,38 @@ static void do_keypress(void) {
 			case SDLK_PAGEDOWN: currently_viewed_page += fz_maxi(number, 1); break;
 			case '<': currently_viewed_page -= 10 * fz_maxi(number, 1); break;
 			case '>': currently_viewed_page += 10 * fz_maxi(number, 1); break;
-			case 'g': jump_to_page(number - 1); break;
-			case 'G': jump_to_page(fz_count_pages(ctx, doc) - 1); break;
+			case 'g':
+				if (ui.mod & KMOD_SHIFT) {
+					flog("%s:%d: Jump to page '%d'\r\n", FL, fz_count_pages(ctx, doc) - 1);
+					jump_to_page(fz_count_pages(ctx, doc) - 1);
+				} else {
+					flog("%s:%d: Jump to page '%d'\r\n", FL, number - 1);
+					jump_to_page(number - 1);
+				}
+				break;
 
-			case 'm':
-				if (number == 0)
-					push_history();
-				else if (number > 0 && number < nelem(marks))
-					marks[number] = save_mark();
-				break;
-			case 't':
-				if (number == 0) {
-					if (history_count > 0) pop_history();
-				} else if (number > 0 && number < nelem(marks)) {
-					struct mark mark = marks[number];
-					restore_mark(mark);
-					jump_to_page(mark.page);
-				}
-				break;
-			case 'T':
-				if (number == 0) {
-					if (future_count > 0) pop_future();
-				}
-				break;
+				/*
+   case 'm':
+	   if (number == 0)
+		   push_history();
+	   else if (number > 0 && number < nelem(marks))
+		   marks[number] = save_mark();
+	   break;
+   case 't':
+	   if (number == 0) {
+		   if (history_count > 0) pop_history();
+	   } else if (number > 0 && number < nelem(marks)) {
+		   struct mark mark = marks[number];
+		   restore_mark(mark);
+		   jump_to_page(mark.page);
+	   }
+	   break;
+   case 'T':
+	   if (number == 0) {
+		   if (future_count > 0) pop_future();
+	   }
+	   break;
+	   */
 
 			case '/':
 				clear_search();
@@ -1080,6 +1056,7 @@ static void do_keypress(void) {
 				search_input.p       = search_input.text;
 				search_input.q       = search_input.end;
 				break;
+
 			case '?':
 				clear_search();
 				this_search.direction = -1;
@@ -1112,10 +1089,12 @@ static void do_keypress(void) {
 				break;
 		}
 
-		if (ui.key >= '0' && ui.key <= '9')
+		if (ui.key >= '0' && ui.key <= '9') {
 			number = number * 10 + ui.key - '0';
-		else
+			flog("%s:%d: number = %d\r\n", FL, number);
+		} else {
 			number = 0;
+		}
 
 		currently_viewed_page = fz_clampi(currently_viewed_page, 0, fz_count_pages(ctx, doc) - 1);
 		currentzoom           = fz_clamp(currentzoom, MINRES, MAXRES);
@@ -1194,7 +1173,7 @@ static int do_status_footer(void) {
 		         this_search.a,
 		         this_search.hit_count_a);
 	} else if (search_not_found) {
-		snprintf(ss, sizeof(ss), "Search not found '%s' [ Press ESC to clear ]", this_search.a);
+		snprintf(ss, sizeof(ss), "Search not found '%50s' [ Press ESC to clear ]", this_search.a);
 	} else {
 		snprintf(ss, sizeof(ss), "[ / = Search, PgUp = Previous Page, PgDn = Next Page ]");
 	}
@@ -1264,24 +1243,24 @@ static void do_help(void) {
 	y += ui.lineheight + ui.baseline;
 
 	glColor4f(0, 0, 0, 1);
-	y = do_help_line(x, y, "FlexBV-MuPDF", FZ_VERSION);
+	y = do_help_line(x, y, "FlexBV PDF Viewer", "");
 
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
 	y = do_help_line(x, y, "i", "show document information");
-	y = do_help_line(x, y, "o", "show/hide outline");
-	y = do_help_line(x, y, "L", "show/hide links");
+	//	y = do_help_line(x, y, "o", "show/hide outline");
+	//	y = do_help_line(x, y, "L", "show/hide links");
 	y = do_help_line(x, y, "r", "reload file");
 	y = do_help_line(x, y, "q", "quit");
 	y += ui.lineheight;
 	y = do_help_line(x, y, "I", "toggle inverted color mode");
 	y = do_help_line(x, y, "f", "fullscreen window");
-	y = do_help_line(x, y, "W", "shrink wrap window");
+	y = do_help_line(x, y, "W", "fit to window");
 	y = do_help_line(x, y, "w or h", "fit to width or height");
-	y = do_help_line(x, y, "z or num-5", "fit to window");
-	y = do_help_line(x, y, "N z", "set zoom to N");
-	//	y = do_help_line(x, y, "+ or -", "zoom in or out");
-	//	y = do_help_line(x, y, "[ or ]", "rotate left or right");
+	//	y = do_help_line(x, y, "z or num-5", "fit to window");
+	//	y = do_help_line(x, y, "N z", "set zoom to N");
+	y = do_help_line(x, y, "+ or -", "zoom in or out");
+	y = do_help_line(x, y, "[ or ]", "rotate left or right");
 	//	y = do_help_line(x, y, "arrow keys", "pan in small increments");
 	y += ui.lineheight;
 	//	y = do_help_line(x, y, "b", "smart move backward");
@@ -1290,17 +1269,19 @@ static void do_help(void) {
 	y = do_help_line(x, y, ". or PgDn", "go forward");
 	y = do_help_line(x, y, "<", "go backward 10 pages");
 	y = do_help_line(x, y, ">", "go forward 10 pages");
-	y = do_help_line(x, y, "N g", "go to page N");
+	y = do_help_line(x, y, "N g", "go to page N, ie, type '22g' ");
 	y = do_help_line(x, y, "G", "go to last page");
 	y += ui.lineheight;
-	y = do_help_line(x, y, "t", "go backward in history");
-	y = do_help_line(x, y, "T", "go forward in history");
-	y = do_help_line(x, y, "N m", "save location in bookmark N");
-	y = do_help_line(x, y, "N t", "go to bookmark N");
+	//	y = do_help_line(x, y, "t", "go backward in history");
+	//	y = do_help_line(x, y, "T", "go forward in history");
+	//	y = do_help_line(x, y, "N m", "save location in bookmark N");
+	//	y = do_help_line(x, y, "N t", "go to bookmark N");
 	y += ui.lineheight;
 	y = do_help_line(x, y, "ctrl-f or /", "search for text");
-	y = do_help_line(x, y, "n", "repeat search (forwards)");
-	y = do_help_line(x, y, "p", "repeat search (backwards)");
+	y = do_help_line(x, y, "n", "repeat search, show next item/hit");
+	y = do_help_line(x, y, "N", "repeat search, show next PAGE hit");
+	y = do_help_line(x, y, "p", "repeat search, show previous item/hit");
+	y = do_help_line(x, y, "P", "repeat search, show previous PAGE hit");
 }
 
 static void do_canvas(void) {
@@ -1529,12 +1510,11 @@ int ddi_get(char *buf, size_t size) {
 	if (!ddiprefix) return 0;
 
 	if (DDI_pickup(&ddi, buf, size) == 0) {
-		char *p;
-
+		//		char *p;
 		flog("%s:%d: Received '%s'\r\n", FL, buf);
-		p = buf;
+		//		p = buf;
 		//		while (p && *p && (*p != '\n')) { p++; } *p = '\0';
-		flog("%s:%d: After filtering '%s'\r\n", FL, buf);
+		//		flog("%s:%d: After filtering '%s'\r\n", FL, buf);
 		result = 1;
 	} // if file opened
 
@@ -1820,9 +1800,15 @@ static void on_wheel(int direction, int x, int y) {
 	 * function because it's not dependable in X.  Rather instead
 	 * we use on_mouse() to determine all the button states and
 	 * call on_wheel() in a more predictable manner.
+	 *
 	 */
 
 	if (!(SDL_GetModState() & KMOD_CTRL) != (!scroll_wheel_swap)) {
+
+		/*
+		 * ZOOM modfication
+		 *
+		 */
 		double oz;
 		double tx, ty, desx, desy;
 		double pct;
@@ -1865,6 +1851,11 @@ static void on_wheel(int direction, int x, int y) {
 		scroll_y = floor(tsy);
 
 	} else {
+
+		/*
+		 * PAGE jump
+		 *
+		 */
 		int jump = 1;
 		if (direction < 0)
 			currently_viewed_page += jump;
@@ -1874,8 +1865,8 @@ static void on_wheel(int direction, int x, int y) {
 		if (currently_viewed_page >= fz_count_pages(ctx, doc)) {
 			currently_viewed_page = fz_count_pages(ctx, doc) - 1;
 		}
-	}
-}
+	} // page jump & zoom modification
+} // on_wheel()
 
 static void on_mouse(int button, int action, int x, int y, int clicks) {
 	ui.x = x;
@@ -1887,7 +1878,8 @@ static void on_mouse(int button, int action, int x, int y, int clicks) {
 		case SDL_BUTTON_MIDDLE: ui.middle = (action == SDL_MOUSEBUTTONDOWN); break;
 		case SDL_BUTTON_RIGHT: ui.right = (action == SDL_MOUSEBUTTONDOWN); break;
 	}
-}
+
+} // on_mouse()
 
 static void on_motion(int x, int y) {
 	ui.x = x;
@@ -2036,7 +2028,6 @@ static int ddi_check_headless(char *sn_a) {
  */
 static void ddi_check(void) {
 	char sn_a[10240];
-	char *cmd;
 
 	/*
 	 *
@@ -2530,21 +2521,20 @@ int main(int argc, char **argv)
 	DDI_set_prefix(&ddi, ddiprefix);
 	DDI_set_mode(&ddi, DDI_MODE_SLAVE);
 
-	{
-		/*
-		 * DDI setup package, is the first one we receive
-		 * and may contain multiple commands for us to process.
-		 *
-		 */
-		flog("%s:%d: DDI PICKUP\r\n", FL);
-		if (ddiloadstr)
-			ddi_process(ddiloadstr);
-		else {
-			DDI_pickup(&ddi, s, sizeof(s));
-			ddi_process(s);
-		}
-		if (this_search.mode != SEARCH_MODE_NONE) ddi_simulate_option = DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH;
-	} // DDI read block
+	/*
+	 * DDI setup package, is the first one we receive
+	 * and may contain multiple commands for us to process.
+	 *
+	 */
+	flog("%s:%d: DDI PICKUP\r\n", FL);
+	if (ddiloadstr)
+		ddi_process(ddiloadstr);
+	else {
+		DDI_pickup(&ddi, s, sizeof(s));
+		ddi_process(s);
+	}
+
+	if (this_search.mode != SEARCH_MODE_NONE) ddi_simulate_option = DDI_SIMULATE_OPTION_PREPROCESSED_SEARCH;
 
 	if (runmode == RUNMODE_NORMAL) {
 		init();
@@ -2555,6 +2545,12 @@ int main(int argc, char **argv)
 		reload();
 	}
 
+	/*
+	 * If fbvpdf is being invoked in headless mode
+	 * then we only need to do the search string check
+	 * and report back before exiting out
+	 *
+	 */
 	if (runmode == RUNMODE_HEADLESS) {
 		int r;
 		r = ddi_check_headless(headless_data);
@@ -2579,13 +2575,13 @@ int main(int argc, char **argv)
 
 	title = strrchr(filename, '/');
 	if (!title) title = strrchr(filename, '\\');
-	if (title)
+	if (title) {
 		++title;
-	else
+	} else {
 		title = filename;
+	}
 
 	flog("Initialising FlexBV-PDF. Filename = '%s'\r\n", filename);
-	/* Init MuPDF */
 
 	ctx = fz_new_context(NULL, NULL, 0);
 	if (search_heuristics) ctx->flags |= FZ_CTX_FLAGS_SPACE_HEURISTIC;
@@ -2605,12 +2601,15 @@ int main(int argc, char **argv)
 
 	flog("%s:%d: Loading page\r\n", FL);
 	load_page();
+
 	flog("%s:%d: Setting memory and search\r\n", FL);
-
-	/* Init IMGUI */
-
 	memset(&ui, 0, sizeof ui);
 
+	/*
+	 * search_input contains the details about the string
+	 * that is typed in during the ctrl-f / search
+	 *
+	 */
 	search_input.p   = search_input.text;
 	search_input.q   = search_input.p;
 	search_input.end = search_input.p;
@@ -2629,6 +2628,12 @@ int main(int argc, char **argv)
 
 	//	shrinkwrap();
 
+	/*
+	 * NORMAL run mode,  this is when fbvpdf is being
+	 * used as a viewer for the user, as opposed to
+	 * being used as a headless search engine
+	 *
+	 */
 	if (runmode == RUNMODE_NORMAL) {
 		flog("%s:%d: render page\r\n", FL);
 		render_page();
@@ -2640,7 +2645,6 @@ int main(int argc, char **argv)
 		while (!doquit) {
 
 			glViewport(0, 0, window_w, window_h);
-			//			glViewport(0,0,canvas_w, canvas_h);
 			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glMatrixMode(GL_PROJECTION);
@@ -2650,8 +2654,11 @@ int main(int argc, char **argv)
 			glLoadIdentity();
 
 			while (SDL_PollEvent(&sdlEvent)) {
+
 				sleepout = 30;
+
 				switch (sdlEvent.type) {
+
 					case SDL_WINDOWEVENT:
 						switch (sdlEvent.window.event) {
 							case SDL_WINDOWEVENT_RESIZED:
@@ -2674,7 +2681,6 @@ int main(int argc, char **argv)
 								ui.key = sdlEvent.text.text[0];
 							}
 						}
-
 						break;
 
 					case SDL_TEXTEDITING: break;
@@ -2685,10 +2691,8 @@ int main(int argc, char **argv)
 						} else if (sdlEvent.key.keysym.sym == SDLK_LCTRL) {
 							ui.lctrl = 1;
 						}
-						{
-							ui.key = sdlEvent.key.keysym.sym;
-							do_keypress();
-						}
+						ui.key = sdlEvent.key.keysym.sym;
+						do_keypress();
 						break;
 
 					case SDL_KEYUP:
@@ -2722,20 +2726,26 @@ int main(int argc, char **argv)
 						SDL_GetMouseState(&x, &y);
 						on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y, sdlEvent.button.clicks);
 					} break;
-				}
+
+				} // switch sdl event type
 
 			} // while SDL event
 
+			/*
+			 * so that we do not constantly thrash the filesystem
+			 * we only check the ddi after multiple frames
+			 *
+			 */
 			if (check_again) {
 				check_again--;
 			} else {
 				ddi_check();
-				check_again = 10;
+				check_again = 10; // 10?  Bigger means longer wait
 			}
 
 			run_main_loop();
+
 			ui.key = ui.mod = ui.plain = 0;
-			//		do_canvas();
 			SDL_GL_SwapWindow(sdlWindow);
 
 			if (!(sleepout--)) {
@@ -2746,7 +2756,7 @@ int main(int argc, char **argv)
 #endif
 				sleepout = 0;
 				continue;
-			} // puts OBV to sleep if nothing is happening.
+			} // puts fbvpdf to sleep if nothing is happening.
 
 		} // while !doquit
 
