@@ -10,6 +10,9 @@ export G=`git rev-list HEAD --count`
 echo $G
 ZPR="fbvpdf-R${G}-win.zip"
 
+echo "Make clean..."
+make -f Makefile.general clean
+
 # Build the needed tools for the cross compile
 echo "Making 'GENERATE' tools for linux."
 make -f Makefile.general generate

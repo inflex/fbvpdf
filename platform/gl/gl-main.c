@@ -2644,6 +2644,8 @@ int main(int argc, char **argv)
 		flog("%s:%d: SDL loop starting\r\n\r\n", FL);
 		while (!doquit) {
 
+//			if (!(SDL_getWindowFlags() & SDL_WINDOW_SHOWN)) continue;
+
 			glViewport(0, 0, window_w, window_h);
 			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
