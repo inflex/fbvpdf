@@ -951,7 +951,7 @@ int IsKeyPressed ( int index ) {
 		if (ui.mod & KMOD_ALT) modmap |= KEYB_MOD_ALT;
 		if (ui.mod & KMOD_GUI) modmap |= KEYB_MOD_OS;
 
-		fprintf(stderr,"%s:%d: looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
+		flog(stderr,"%s:%d: IsKeyPressed(): looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
 		if (keyboard_map[index].mods == modmap) return 1;
 	}
 	return 0;
@@ -1410,6 +1410,19 @@ int ddi_process(char *ddi_data) {
 		flog("%s:%d: Set window size pos: %d %d @ %d %d\r\n", FL, window_w, window_h, origin_x, origin_y);
 		if (q) *q = '\n';
 	}
+
+	if ((p = strstr(ddi_data, "!getwindowsizepos:"))) {
+		char tmp[1024];
+		int x, y, ox, oy;
+		SDL_GetWindowPosition(sdlWindow, &ox, &oy);
+		SDL_GetWindowSize(sdlWindow, &x, &y);
+		snprintf(tmp, sizeof(tmp), "!pdfwininfo=%d %d %d %d\r\n", ox, oy, x, y);
+		flog("%s:%d: Dispatching '%s'\r\n", FL, tmp);
+		DDI_dispatch(&ddi, tmp);
+
+	}
+
+
 
 	if (strstr(ddi_data, "!gotopg:")) {
 		char *p = strstr(ddi_data, "!gotopg:");
