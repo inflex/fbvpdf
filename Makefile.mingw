@@ -170,6 +170,7 @@ SVG_SRC_HDR := $(wildcard source/svg/*.h)
 HTML_SRC_HDR := $(wildcard source/html/*.h)
 GPRF_SRC_HDR := $(wildcard source/gprf/*.h)
 
+KEYBOARD_OBJ := $(KEYBOARD_SRC:%.c=$(OUT)/%.o)
 DDI_OBJ := $(DDI_SRC:%.c=$(OUT)/%.o)
 FITZ_OBJ := $(FITZ_SRC:%.c=$(OUT)/%.o)
 PDF_OBJ := $(PDF_SRC:%.c=$(OUT)/%.o)
@@ -182,6 +183,7 @@ THREAD_OBJ := $(THREAD_SRC:%.c=$(OUT)/%.o)
 PKCS7_OBJ := $(PKCS7_SRC:%.c=$(OUT)/%.o)
 SIGNATURE_OBJ := $(OUT)/platform/x11/pdfapp.o $(OUT)/source/tools/pdfsign.o
 
+$(KEYBOARD_OBJ) : $(KEYBOARD_HDR) $(KEYBOARD_SRC_HDR)
 $(DDI_OBJ) : $(DDI_HDR) $(DDI_SRC_HDR)
 $(FITZ_OBJ) : $(FITZ_HDR) $(FITZ_SRC_HDR)
 $(PDF_OBJ) : $(FITZ_HDR) $(PDF_HDR) $(PDF_SRC_HDR)
@@ -352,6 +354,7 @@ THREAD_LIB = $(OUT)/libmuthreads.a
 PKCS7_LIB = $(OUT)/libmupkcs7.a
 
 MUPDF_OBJ := \
+	$(KEYBOARD_OBJ) \
 	$(DDI_OBJ) \
 	$(FITZ_OBJ) \
 	$(PDF_OBJ) \

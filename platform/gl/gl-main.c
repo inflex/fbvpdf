@@ -20,6 +20,18 @@
 #include <tlhelp32.h> // for getppid()
 #endif
 
+#define PDFK_SEARCH 1
+#define PDFK_SEARCH_NEXT 2
+#define PDFK_SEARCH_PREV 3
+#define PDFK_PAN_UP 4
+#define PDFK_PAN_DOWN 5
+#define PDFK_PAN_LEFT 6
+#define PDFK_PAN_RIGHT 7
+#define PDFK_PGUP 8
+#define PDFK_PGDN 9
+
+#define PDFK_QUIT 100
+
 SDL_Window *sdlWindow;
 SDL_Renderer *sdlRenderer;
 SDL_Surface *sdlSurface;
@@ -1437,6 +1449,13 @@ int ddi_process(char *ddi_data) {
 		flog("%s:%d: reload done (%s)\r\n", FL, filename);
 	}
 
+	if (strstr(ddi_data, "!keysearch:")) {
+		char *p = strstr(ddi_data, "!keysearch:");
+		if (p) {
+			sscanf(p,"!keysearch: %d %d", keyboard_map[PDFK_SEARCH].key, keyboard_map[PDFK_SEARCH].mods);
+		}
+	}
+
 	if (strstr(ddi_data, "!noheuristics:")) {
 		flog("%s:%d: No heuristics", FL);
 		search_heuristics = 0;
@@ -2491,6 +2510,21 @@ int main(int argc, char **argv)
 	window_h = 720;
 	origin_x = SDL_WINDOWPOS_CENTERED;
 	origin_y = SDL_WINDOWPOS_CENTERED;
+
+	KEYB_init();
+	keyboard_map[PDFK_SEARCH].key = SDL_SCANCODE_F;
+	keyboard_map[PDFK_SEARCH].mods = KEYB_MOD_CTRL;
+	keyboard_map[PDFK_SEARCH_NEXT].key = SDL_SCANCODE_N;
+	keyboard_map[PDFK_SEARCH_PREV].key = SDL_SCANCODE_P;
+	keyboard_map[PDFK_PAN_UP].key = SDL_SCANCODE_UP;
+	keyboard_map[PDFK_PAN_DOWN].key = SDL_SCANCODE_DOWN;
+	keyboard_map[PDFK_PAN_LEFT].key = SDL_SCANCODE_LEFT;
+	keyboard_map[PDFK_PAN_RIGHT].key = SDL_SCANCODE_RIGHT;
+	keyboard_map[PDFK_PGUP].key = SDL_SCANCODE_PAGEUP;
+	keyboard_map[PDFK_PGDN].key = SDL_SCANCODE_PAGEDOWN;
+	keyboard_map[PDFK_QUIT].key = SDL_SCANCODE_Q;
+	keyboard_map[PDFK_QUIT].mods = KEYB_MOD_CTRL;
+
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
 
