@@ -33,6 +33,12 @@
 #define PDFK_ROTATE_CCW 11
 #define PDFK_ZOOMIN 12
 #define PDFK_ZOOMOUT 13
+#define PDFK_FITWIDTH 14
+#define PDFK_FITHEIGHT 15
+#define PDFK_FITWINDOW 16
+#define PDFK_GOPAGE 17
+#define PDFK_GOENDPAGE 18
+
 
 #define PDFK_QUIT 100
 
@@ -989,22 +995,38 @@ static void do_keypress(void) {
 	if (IsKeyPressed(PDFK_PGUP)) { currently_viewed_page -= fz_maxi(number, 1); }
 	if (IsKeyPressed(PDFK_PGDN)) { currently_viewed_page += fz_maxi(number, 1); }
 
+	if (IsKeyPressed(PDFK_FITWIDTH)) { auto_zoom_w(); }
+	if (IsKeyPressed(PDFK_FITWINDOW)) { auto_zoom(); }
+	if (IsKeyPressed(PDFK_FITHEIGHT)) { auto_zoom_h(); }
+
+	if (IsKeyPressed(PDFK_GOENDPAGE)) {
+					flog("%s:%d: Jump to page '%d'\r\n", FL, fz_count_pages(ctx, doc) - 1);
+					jump_to_page(fz_count_pages(ctx, doc) - 1);
+	}
+	if (IsKeyPressed(PDFK_GOPAGE)) {
+					flog("%s:%d: Jump to page '%d'\r\n", FL, number - 1);
+					jump_to_page(number - 1);
+	}
+
+
+	if (IsKeyPressed(PDFK_QUIT)) { quit(); }
+
 	if (!ui.focus && ui.key && ui.plain) {
 		flog("%s:%d: Acting on key '0x%08x' '%c' (mod='%0x')\r\n", FL, ui.key, ui.key, ui.mod);
 		switch (ui.key) {
 			case SDLK_ESCAPE: clear_search(); break;
 			case SDLK_F1: showhelp = !showhelp; break;
-			case 'o': toggle_outline(); break;
-			case 'L': showlinks = !showlinks; break;
-			case 'i':
-				if (ui.mod & KMOD_SHIFT) {
-					currentinvert = !currentinvert;
-				} else {
-					showinfo = !showinfo;
-				}
-				break;
-			case 'r': reload(); break;
-			case 'q': quit(); break;
+//			case 'o': toggle_outline(); break;
+//			case 'L': showlinks = !showlinks; break;
+//			case 'i':
+//				if (ui.mod & KMOD_SHIFT) {
+//					currentinvert = !currentinvert;
+//				} else {
+//					showinfo = !showinfo;
+//				}
+//				break;
+//			case 'r': reload(); break;
+//			case 'q': quit(); break;
 
 			case 'f':
 				if (ui.lctrl || ui.rctrl) {
@@ -1016,16 +1038,9 @@ static void do_keypress(void) {
 				}
 				break;
 
-			case 'w':
-				if (ui.mod & KMOD_SHIFT)
-					auto_zoom();
-				else
-					auto_zoom_w();
-				break;
-			case 'h': auto_zoom_h(); break;
-			case 'z':
-				currentzoom = number > 0 ? number : DEFRES;
-				break;
+//			case 'z':
+//				currentzoom = number > 0 ? number : DEFRES;
+//				break;
 				//		case '+': currentzoom = zoom_in(currentzoom); break;
 				//		case '-': currentzoom = zoom_out(currentzoom); break;
 //			case '=': currentzoom *= 1.25; break;
@@ -1057,6 +1072,8 @@ static void do_keypress(void) {
 //			case SDLK_PAGEDOWN: currently_viewed_page += fz_maxi(number, 1); break;
 			case '<': currently_viewed_page -= 10 * fz_maxi(number, 1); break;
 			case '>': currently_viewed_page += 10 * fz_maxi(number, 1); break;
+
+						 /*
 			case 'g':
 				if (ui.mod & KMOD_SHIFT) {
 					flog("%s:%d: Jump to page '%d'\r\n", FL, fz_count_pages(ctx, doc) - 1);
@@ -1066,6 +1083,7 @@ static void do_keypress(void) {
 					jump_to_page(number - 1);
 				}
 				break;
+				*/
 
 				/*
    case 'm':
@@ -1355,12 +1373,14 @@ static void do_canvas(void) {
 
 int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
 	flog("%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
+	fprintf(stderr,"%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
 	if (strstr(ddi_data, keystr)) {
 		char *p = strstr(ddi_data, keystr);
 		if (p) {
 			p += strlen(keystr);
 			sscanf(p,"%d %x", &keyboard_map[index].key, &keyboard_map[index].mods);
 			flog("%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
+			fprintf(stderr,"%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
 		}
 	}
 	return 0;
@@ -1521,6 +1541,12 @@ int ddi_process(char *ddi_data) {
 	ddi_process_keymap(ddi_data, "!keydown=", PDFK_PAN_DOWN);
 	ddi_process_keymap(ddi_data, "!keyleft=", PDFK_PAN_LEFT);
 	ddi_process_keymap(ddi_data, "!keyright=", PDFK_PAN_RIGHT);
+
+	ddi_process_keymap(ddi_data, "!keyfitwindow=", PDFK_FITWINDOW);
+	ddi_process_keymap(ddi_data, "!keyfitwidth=", PDFK_FITWIDTH);
+	ddi_process_keymap(ddi_data, "!keyfitheight=", PDFK_FITHEIGHT);
+	ddi_process_keymap(ddi_data, "!keygopage=", PDFK_GOPAGE);
+	ddi_process_keymap(ddi_data, "!keygoendpage=", PDFK_GOENDPAGE);
 
 	if (strstr(ddi_data, "!noheuristics:")) {
 		flog("%s:%d: No heuristics", FL);
