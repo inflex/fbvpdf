@@ -1496,18 +1496,18 @@ int ddi_process(char *ddi_data) {
 	}
 
 	ddi_process_keymap(ddi_data, "!keysearch=", PDFK_SEARCH);
+	ddi_process_keymap(ddi_data, "!keynext=", PDFK_SEARCH_NEXT);
+	ddi_process_keymap(ddi_data, "!keyprev=", PDFK_SEARCH_PREV);
 	ddi_process_keymap(ddi_data, "!keypgup=", PDFK_PGUP);
 	ddi_process_keymap(ddi_data, "!keypgdn=", PDFK_PGDN);
 	ddi_process_keymap(ddi_data, "!keyzoomin=", PDFK_ZOOMIN);
 	ddi_process_keymap(ddi_data, "!keyzoomout=", PDFK_ZOOMOUT);
 	ddi_process_keymap(ddi_data, "!keyrotatecw=", PDFK_ROTATE_CW);
 	ddi_process_keymap(ddi_data, "!keyrotateccw=", PDFK_ROTATE_CCW);
-	ddi_process_keymap(ddi_data, "!keysearchnext=", PDFK_SEARCH_NEXT);
-	ddi_process_keymap(ddi_data, "!keysearchprev=", PDFK_SEARCH_PREV);
-	ddi_process_keymap(ddi_data, "!keypanup=", PDFK_PAN_UP);
-	ddi_process_keymap(ddi_data, "!keypandown=", PDFK_PAN_DOWN);
-	ddi_process_keymap(ddi_data, "!keypanleft=", PDFK_PAN_LEFT);
-	ddi_process_keymap(ddi_data, "!keypanright=", PDFK_PAN_RIGHT);
+	ddi_process_keymap(ddi_data, "!keyup=", PDFK_PAN_UP);
+	ddi_process_keymap(ddi_data, "!keydown=", PDFK_PAN_DOWN);
+	ddi_process_keymap(ddi_data, "!keyleft=", PDFK_PAN_LEFT);
+	ddi_process_keymap(ddi_data, "!keyright=", PDFK_PAN_RIGHT);
 
 	if (strstr(ddi_data, "!noheuristics:")) {
 		flog("%s:%d: No heuristics", FL);
