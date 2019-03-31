@@ -65,6 +65,7 @@ struct ui
 	int down, middle, right;
 	int scroll_x, scroll_y;
 	int key, mod, plain, lctrl, rctrl;
+	int scancode;
 
 	void *hot, *active, *focus;
 

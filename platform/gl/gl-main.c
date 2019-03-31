@@ -29,6 +29,10 @@
 #define PDFK_PAN_RIGHT 7
 #define PDFK_PGUP 8
 #define PDFK_PGDN 9
+#define PDFK_ROTATE_CW 10
+#define PDFK_ROTATE_CCW 11
+#define PDFK_ZOOMIN 12
+#define PDFK_ZOOMOUT 13
 
 #define PDFK_QUIT 100
 
@@ -937,6 +941,22 @@ static void clear_search(void) {
 	this_search.mode = SEARCH_MODE_NONE;
 }
 
+int IsKeyPressed ( int index ) {
+
+	if (ui.scancode == keyboard_map[index].key ) {
+		uint8_t modmap = 0;
+
+		if (ui.mod & KMOD_SHIFT) modmap |= KEYB_MOD_SHIFT;
+		if (ui.mod & KMOD_CTRL) modmap |= KEYB_MOD_CTRL;
+		if (ui.mod & KMOD_ALT) modmap |= KEYB_MOD_ALT;
+		if (ui.mod & KMOD_GUI) modmap |= KEYB_MOD_OS;
+
+		fprintf(stderr,"%s:%d: looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
+		if (keyboard_map[index].mods == modmap) return 1;
+	}
+	return 0;
+}
+
 static void do_keypress(void) {
 
 	ui.plain = 1;
@@ -947,6 +967,27 @@ static void do_keypress(void) {
 	 *
 	 */
 	if (ui.down || ui.middle || ui.right || ui.key) showinfo = showhelp = 0;
+
+	if (IsKeyPressed(PDFK_SEARCH)) {
+					clear_search();
+					this_search.direction = 1;
+					showsearch            = 1;
+					search_not_found      = 0;
+					update_title();
+					search_input.text[0] = 0;
+					search_input.end     = search_input.text;
+					search_input.p       = search_input.text;
+					search_input.q       = search_input.end;
+	}
+
+	if (IsKeyPressed(PDFK_ZOOMIN)) { currentzoom *= 1.25; }
+	if (IsKeyPressed(PDFK_ZOOMOUT)) { currentzoom /= 1.25; }
+
+	if (IsKeyPressed(PDFK_ROTATE_CW)) { currentrotate += 90; }
+	if (IsKeyPressed(PDFK_ROTATE_CCW)) { currentrotate -= 90; }
+
+	if (IsKeyPressed(PDFK_PGUP)) { currently_viewed_page -= fz_maxi(number, 1); }
+	if (IsKeyPressed(PDFK_PGDN)) { currently_viewed_page += fz_maxi(number, 1); }
 
 	if (!ui.focus && ui.key && ui.plain) {
 		flog("%s:%d: Acting on key '0x%08x' '%c' (mod='%0x')\r\n", FL, ui.key, ui.key, ui.mod);
@@ -967,15 +1008,7 @@ static void do_keypress(void) {
 
 			case 'f':
 				if (ui.lctrl || ui.rctrl) {
-					clear_search();
-					this_search.direction = 1;
-					showsearch            = 1;
-					search_not_found      = 0;
-					update_title();
-					search_input.text[0] = 0;
-					search_input.end     = search_input.text;
-					search_input.p       = search_input.text;
-					search_input.q       = search_input.end;
+			//		fprintf(stderr,"%s:%d: search triggered, not used any more\n",FL);
 
 				} else {
 					flog("%s:%d: Full screen\r\n", FL);
@@ -995,12 +1028,12 @@ static void do_keypress(void) {
 				break;
 				//		case '+': currentzoom = zoom_in(currentzoom); break;
 				//		case '-': currentzoom = zoom_out(currentzoom); break;
-			case '=': currentzoom *= 1.25; break;
-			case '-': currentzoom /= 1.25; break;
-			case '[': currentrotate += 90; break;
-			case ']':
-				currentrotate -= 90;
-				break;
+//			case '=': currentzoom *= 1.25; break;
+//			case '-': currentzoom /= 1.25; break;
+//			case '[': currentrotate += 90; break;
+//			case ']':
+//				currentrotate -= 90;
+//				break;
 				//			case 'k': case KEY_UP: scroll_y -= 10; break;
 				//			case 'j': case KEY_DOWN: scroll_y += 10; break;
 				//			case 'h': case KEY_LEFT: scroll_x -= 10; break;
@@ -1016,12 +1049,12 @@ static void do_keypress(void) {
 				//				while (number--) smart_move_forward();
 				//				break;
 
-			case ',':
-			case KEY_PAGE_UP:
-			case SDLK_PAGEUP: currently_viewed_page -= fz_maxi(number, 1); break;
-			case '.':
-			case KEY_PAGE_DOWN:
-			case SDLK_PAGEDOWN: currently_viewed_page += fz_maxi(number, 1); break;
+//			case ',':
+//			case KEY_PAGE_UP:
+//			case SDLK_PAGEUP: currently_viewed_page -= fz_maxi(number, 1); break;
+//			case '.':
+//			case KEY_PAGE_DOWN:
+//			case SDLK_PAGEDOWN: currently_viewed_page += fz_maxi(number, 1); break;
 			case '<': currently_viewed_page -= 10 * fz_maxi(number, 1); break;
 			case '>': currently_viewed_page += 10 * fz_maxi(number, 1); break;
 			case 'g':
@@ -1320,6 +1353,19 @@ static void do_canvas(void) {
 	}
 }
 
+int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
+	fprintf(stderr,"%s:%d: processind keymap, %s [ %d ]\n", FL, keystr, index);
+	if (strstr(ddi_data, keystr)) {
+		char *p = strstr(ddi_data, keystr);
+		if (p) {
+			p += strlen(keystr);
+			sscanf(p,"%d %x", &keyboard_map[index].key, &keyboard_map[index].mods);
+			fprintf(stderr,"%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
+		}
+	}
+	return 0;
+}
+
 int ddi_process(char *ddi_data) {
 	char *cmd, *p, *q;
 
@@ -1449,12 +1495,19 @@ int ddi_process(char *ddi_data) {
 		flog("%s:%d: reload done (%s)\r\n", FL, filename);
 	}
 
-	if (strstr(ddi_data, "!keysearch:")) {
-		char *p = strstr(ddi_data, "!keysearch:");
-		if (p) {
-			sscanf(p,"!keysearch: %d %d", keyboard_map[PDFK_SEARCH].key, keyboard_map[PDFK_SEARCH].mods);
-		}
-	}
+	ddi_process_keymap(ddi_data, "!keysearch=", PDFK_SEARCH);
+	ddi_process_keymap(ddi_data, "!keypgup=", PDFK_PGUP);
+	ddi_process_keymap(ddi_data, "!keypgdn=", PDFK_PGDN);
+	ddi_process_keymap(ddi_data, "!keyzoomin=", PDFK_ZOOMIN);
+	ddi_process_keymap(ddi_data, "!keyzoomout=", PDFK_ZOOMOUT);
+	ddi_process_keymap(ddi_data, "!keyrotatecw=", PDFK_ROTATE_CW);
+	ddi_process_keymap(ddi_data, "!keyrotateccw=", PDFK_ROTATE_CCW);
+	ddi_process_keymap(ddi_data, "!keysearchnext=", PDFK_SEARCH_NEXT);
+	ddi_process_keymap(ddi_data, "!keysearchprev=", PDFK_SEARCH_PREV);
+	ddi_process_keymap(ddi_data, "!keypanup=", PDFK_PAN_UP);
+	ddi_process_keymap(ddi_data, "!keypandown=", PDFK_PAN_DOWN);
+	ddi_process_keymap(ddi_data, "!keypanleft=", PDFK_PAN_LEFT);
+	ddi_process_keymap(ddi_data, "!keypanright=", PDFK_PAN_RIGHT);
 
 	if (strstr(ddi_data, "!noheuristics:")) {
 		flog("%s:%d: No heuristics", FL);
@@ -2728,6 +2781,7 @@ int main(int argc, char **argv)
 							ui.lctrl = 1;
 						}
 						ui.key = sdlEvent.key.keysym.sym;
+						ui.scancode = sdlEvent.key.keysym.scancode;
 						do_keypress();
 						break;
 
