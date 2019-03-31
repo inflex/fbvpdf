@@ -1354,13 +1354,13 @@ static void do_canvas(void) {
 }
 
 int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
-	fprintf(stderr,"%s:%d: processind keymap, %s [ %d ]\n", FL, keystr, index);
+	flog("%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
 	if (strstr(ddi_data, keystr)) {
 		char *p = strstr(ddi_data, keystr);
 		if (p) {
 			p += strlen(keystr);
 			sscanf(p,"%d %x", &keyboard_map[index].key, &keyboard_map[index].mods);
-			fprintf(stderr,"%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
+			flog("%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
 		}
 	}
 	return 0;
@@ -2567,14 +2567,24 @@ int main(int argc, char **argv)
 	KEYB_init();
 	keyboard_map[PDFK_SEARCH].key = SDL_SCANCODE_F;
 	keyboard_map[PDFK_SEARCH].mods = KEYB_MOD_CTRL;
+
 	keyboard_map[PDFK_SEARCH_NEXT].key = SDL_SCANCODE_N;
 	keyboard_map[PDFK_SEARCH_PREV].key = SDL_SCANCODE_P;
+
 	keyboard_map[PDFK_PAN_UP].key = SDL_SCANCODE_UP;
 	keyboard_map[PDFK_PAN_DOWN].key = SDL_SCANCODE_DOWN;
 	keyboard_map[PDFK_PAN_LEFT].key = SDL_SCANCODE_LEFT;
 	keyboard_map[PDFK_PAN_RIGHT].key = SDL_SCANCODE_RIGHT;
+
 	keyboard_map[PDFK_PGUP].key = SDL_SCANCODE_PAGEUP;
 	keyboard_map[PDFK_PGDN].key = SDL_SCANCODE_PAGEDOWN;
+
+	keyboard_map[PDFK_ZOOMIN].key = SDL_SCANCODE_EQUALS;
+	keyboard_map[PDFK_ZOOMOUT].key = SDL_SCANCODE_MINUS;
+
+	keyboard_map[PDFK_ROTATE_CW].key = SDL_SCANCODE_PERIOD;
+	keyboard_map[PDFK_ROTATE_CCW].key = SDL_SCANCODE_COMMA;
+
 	keyboard_map[PDFK_QUIT].key = SDL_SCANCODE_Q;
 	keyboard_map[PDFK_QUIT].mods = KEYB_MOD_CTRL;
 
