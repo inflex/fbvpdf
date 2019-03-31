@@ -1373,14 +1373,12 @@ static void do_canvas(void) {
 
 int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
 	flog("%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
-	fprintf(stderr,"%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
 	if (strstr(ddi_data, keystr)) {
 		char *p = strstr(ddi_data, keystr);
 		if (p) {
 			p += strlen(keystr);
 			sscanf(p,"%d %x", &keyboard_map[index].key, &keyboard_map[index].mods);
 			flog("%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
-			fprintf(stderr,"%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
 		}
 	}
 	return 0;
