@@ -2,7 +2,7 @@
 
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
-
+#include "mupdf/keyboard.h"
 #include "mupdf/ddi.h"
 #include "mupdf/pdf.h" /* for pdf specifics and forms */
 

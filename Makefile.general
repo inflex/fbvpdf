@@ -47,6 +47,7 @@ CFLAGS += $(ZLIB_CFLAGS)
 
 ALL_DIR := $(OUT)/generated
 ALL_DIR += $(OUT)/scripts
+ALL_DIR += $(OUT)/source/keyboard
 ALL_DIR += $(OUT)/source/ddi
 ALL_DIR += $(OUT)/source/fitz
 ALL_DIR += $(OUT)/source/pdf

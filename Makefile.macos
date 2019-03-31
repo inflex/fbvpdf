@@ -48,6 +48,7 @@ CFLAGS += $(ZLIB_CFLAGS)
 
 ALL_DIR := $(OUT)/generated
 ALL_DIR += $(OUT)/scripts
+ALL_DIR += $(OUT)/source/keyboard
 ALL_DIR += $(OUT)/source/ddi
 ALL_DIR += $(OUT)/source/fitz
 ALL_DIR += $(OUT)/source/pdf
@@ -137,12 +138,14 @@ $(OUT)/%.o : %.cpp | $(ALL_DIR)
 
 # --- File lists ---
 
+KEYBOARD_HDR := include/mupdf/keyboard.h $(wildcard include/mupdf/keyboard/*.h)
 DDI_HDR := include/mupdf/ddi.h $(wildcard include/mupdf/ddi/*.h)
 FITZ_HDR := include/mupdf/fitz.h $(wildcard include/mupdf/fitz/*.h)
 PDF_HDR := include/mupdf/pdf.h $(wildcard include/mupdf/pdf/*.h)
 THREAD_HDR := include/mupdf/helpers/mu-threads.h
 PKCS7_HDR := $(sort $(wildcard include/mupdf/helpers/pkcs7-*.h))
 
+KEYBOARD_SRC := $(sort $(wildcard source/keyboard/*.c))
 DDI_SRC := $(sort $(wildcard source/ddi/*.c))
 FITZ_SRC := $(sort $(wildcard source/fitz/*.c))
 PDF_SRC := $(sort $(wildcard source/pdf/*.c))
@@ -157,6 +160,7 @@ ifeq "$(HAVE_LIBCRYPTO)" "yes"
 PKCS7_SRC += $(wildcard source/helpers/pkcs7/pkcs7-openssl.c)
 endif
 
+KEYBOARD_SRC_HDR := $(wildcard source/keyboard/*.h)
 DDI_SRC_HDR := $(wildcard source/ddi/*.h)
 FITZ_SRC_HDR := $(wildcard source/fitz/*.h)
 PDF_SRC_HDR := $(wildcard source/pdf/*.h) $(OUT)/generated/pdf-name-table.h
@@ -317,6 +321,7 @@ $(OUT)/scripts/cmapdump.o : \
 	source/fitz/printf.c \
 	source/fitz/time.c \
 	source/ddi/ddi.c \
+	source/keyboard/keyboard.c \
 	source/pdf/pdf-lex.c \
 	source/pdf/pdf-cmap.c \
 	source/pdf/pdf-cmap-parse.c \
