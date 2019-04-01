@@ -3,6 +3,11 @@
 # Build linux binary on linux
 set -x
 
+if [ "$1" = "clean" ]; then
+	make -f Makefile.general clean
+	exit 0
+fi
+
 export G=`git rev-list HEAD --count`
 echo $G
 ZPR="fbvpdf-R${G}-linux.tar.gz"
