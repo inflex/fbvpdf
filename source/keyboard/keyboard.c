@@ -970,3 +970,15 @@ int KEYB_human_decode( struct keyboard_key_s *kitem, const char *human ) {
 
 }
 
+char *KEYB_combo_to_string( char *b, int bmax, struct keyboard_key_s kitem ) {
+	snprintf(b, bmax, "%s%s%s%s%s"
+			, kitem.mods & KEYB_MOD_CTRL ? "CTRL+":""
+			, kitem.mods & KEYB_MOD_ALT ? "ALT+":""
+			, kitem.mods & KEYB_MOD_OS ? "SUPER+":""
+			, kitem.mods & KEYB_MOD_SHIFT ? "SHIFT+":""
+			, KEYB_map[kitem.key]
+			);
+
+	return b;
+}
+

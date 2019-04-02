@@ -20,6 +20,7 @@
 #include <tlhelp32.h> // for getppid()
 #endif
 
+#define PDFK_HELP 0
 #define PDFK_SEARCH 1
 #define PDFK_SEARCH_NEXT 2
 #define PDFK_SEARCH_NEXT_PAGE 102
@@ -65,7 +66,7 @@ enum {
 	/* Default UI sizes */
 	DEFAULT_UI_FONTSIZE   = 18,
 	DEFAULT_UI_BASELINE   = 14,
-	DEFAULT_UI_LINEHEIGHT = 18,
+	DEFAULT_UI_LINEHEIGHT = 22,
 };
 
 struct ui ui;
@@ -987,6 +988,10 @@ static void do_keypress(void) {
 	 */
 	if (ui.down || ui.middle || ui.right || ui.key) showinfo = showhelp = 0;
 
+	if (IsKeyPressed(PDFK_HELP)) {
+		showhelp = 1;
+	}
+
 	if (IsKeyPressed(PDFK_SEARCH)) {
 		clear_search();
 		this_search.direction = 1;
@@ -1164,7 +1169,15 @@ static int do_status_footer(void) {
 	} else if (search_not_found) {
 		snprintf(ss, sizeof(ss), "Search not found '%50s' [ Press ESC to clear ]", this_search.a);
 	} else {
-		snprintf(ss, sizeof(ss), "[ / = Search, PgUp = Previous Page, PgDn = Next Page ]");
+		char a[20],b[20],c[20];
+		char d[20],e[20];
+		snprintf(ss, sizeof(ss), "[ F1 = HELP  |  %s = Search, %s = Next, %s = Prev | %s = Previous Page, %s = Next Page ]"
+				, KEYB_combo_to_string(a, sizeof(a), keyboard_map[PDFK_SEARCH])
+				, KEYB_combo_to_string(d, sizeof(d), keyboard_map[PDFK_SEARCH_NEXT])
+				, KEYB_combo_to_string(e, sizeof(e), keyboard_map[PDFK_SEARCH_PREV])
+				, KEYB_combo_to_string(b, sizeof(b), keyboard_map[PDFK_PGUP])
+				, KEYB_combo_to_string(c, sizeof(c), keyboard_map[PDFK_PGDN])
+				);
 	}
 
 	snprintf(s, sizeof(s), "V.%d | Page %d of %d. %s", GIT_BUILD, currently_viewed_page + 1, fz_count_pages(ctx, doc), ss);
@@ -1205,11 +1218,27 @@ static int do_status_footer(void) {
 
 	return 0;
 }
+char *stolower( char *convertme )
+{
+
+	/*
+	char *c = convertme;
+
+	while ( c && (*c != '\0')) {
+		char t = tolower(*c); 
+		*c = t;  
+		c++;
+	}
+	*/
+
+	return convertme;
+}
 
 static int do_help_line(int x, int y, char *label, char *text) {
+	stolower(label);
 	ui_draw_string(ctx, x, y, label);
 	ui_draw_string(ctx, x + 100, y, text);
-	return y + ui.lineheight;
+	return y + (ui.lineheight *1.1);
 }
 
 static void do_help(void) {
@@ -1217,6 +1246,7 @@ static void do_help(void) {
 	float y = canvas_y + 4 * ui.lineheight;
 	float w = canvas_w - 8 * ui.lineheight;
 	float h = 38 * ui.lineheight;
+	char ks[50];
 
 	glBegin(GL_TRIANGLE_STRIP);
 	{
@@ -1236,41 +1266,64 @@ static void do_help(void) {
 
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
-	y = do_help_line(x, y, "i", "show document information");
-	//	y = do_help_line(x, y, "o", "show/hide outline");
-	//	y = do_help_line(x, y, "L", "show/hide links");
-	y = do_help_line(x, y, "r", "reload file");
-	y = do_help_line(x, y, "q", "quit");
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_QUIT]);
+	y = do_help_line(x, y, ks, "Quit");
 	y += ui.lineheight;
 	y = do_help_line(x, y, "I", "toggle inverted color mode");
 	y = do_help_line(x, y, "f", "fullscreen window");
-	y = do_help_line(x, y, "W", "fit to window");
-	y = do_help_line(x, y, "w or h", "fit to width or height");
-	//	y = do_help_line(x, y, "z or num-5", "fit to window");
-	//	y = do_help_line(x, y, "N z", "set zoom to N");
-	y = do_help_line(x, y, "+ or -", "zoom in or out");
-	y = do_help_line(x, y, "[ or ]", "rotate left or right");
-	//	y = do_help_line(x, y, "arrow keys", "pan in small increments");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_FITWINDOW]);
+	y = do_help_line(x, y, ks, "Fit to window");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_FITHEIGHT]);
+	y = do_help_line(x, y, ks, "Fit to height");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_FITWIDTH]);
+	y = do_help_line(x, y, ks, "Fit to width");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ZOOMIN]);
+	y = do_help_line(x, y, ks, "Zoom IN");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ZOOMOUT]);
+	y = do_help_line(x, y, ks, "Zoom OUT");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ROTATE_CW]);
+	y = do_help_line(x, y, ks, "Rotate Clockwise");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ROTATE_CCW]);
+	y = do_help_line(x, y, ks, "Rotate Counter-Clockwise");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ROTATE_CW]);
+	y = do_help_line(x, y, ks, "Rotate Clockwise");
+
 	y += ui.lineheight;
-	//	y = do_help_line(x, y, "b", "smart move backward");
-	//	y = do_help_line(x, y, "Space", "smart move forward");
-	y = do_help_line(x, y, ", or PgUp", "go backward");
-	y = do_help_line(x, y, ". or PgDn", "go forward");
-	y = do_help_line(x, y, "<", "go backward 10 pages");
-	y = do_help_line(x, y, ">", "go forward 10 pages");
-	y = do_help_line(x, y, "N g", "go to page N, ie, type '22g' ");
-	y = do_help_line(x, y, "G", "go to last page");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_SEARCH]);
+	y = do_help_line(x, y, ks, "Search");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_SEARCH_NEXT]);
+	y = do_help_line(x, y, ks, "Next search hit (in page, or next)");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_SEARCH_NEXT_PAGE]);
+	y = do_help_line(x, y, ks, "Next search hit on subsequent page");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_SEARCH_PREV]);
+	y = do_help_line(x, y, ks, "Previous search hit (in page, or next)");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_SEARCH_PREV_PAGE]);
+	y = do_help_line(x, y, ks, "Previous search hit on earlier page");
+
 	y += ui.lineheight;
-	//	y = do_help_line(x, y, "t", "go backward in history");
-	//	y = do_help_line(x, y, "T", "go forward in history");
-	//	y = do_help_line(x, y, "N m", "save location in bookmark N");
-	//	y = do_help_line(x, y, "N t", "go to bookmark N");
+
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_GOPAGE]);
+	y = do_help_line(x, y, ks, "Go to page 'N', ie, type 22g for page 22.");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_GOENDPAGE]);
+	y = do_help_line(x, y, ks, "Go to end of document");
+
+
 	y += ui.lineheight;
-	y = do_help_line(x, y, "ctrl-f or /", "search for text");
-	y = do_help_line(x, y, "n", "repeat search, show next item/hit");
-	y = do_help_line(x, y, "N", "repeat search, show next PAGE hit");
-	y = do_help_line(x, y, "p", "repeat search, show previous item/hit");
-	y = do_help_line(x, y, "P", "repeat search, show previous PAGE hit");
 }
 
 static void do_canvas(void) {
@@ -2535,6 +2588,9 @@ int main(int argc, char **argv)
 	origin_y = SDL_WINDOWPOS_CENTERED;
 
 	KEYB_init();
+
+	keyboard_map[PDFK_HELP].key = SDL_SCANCODE_F1;
+
 	keyboard_map[PDFK_SEARCH].key = SDL_SCANCODE_F;
 	keyboard_map[PDFK_SEARCH].mods = KEYB_MOD_CTRL;
 

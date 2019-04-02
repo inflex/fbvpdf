@@ -32,6 +32,8 @@ int KEYB_add_map_item( struct keyboard_key_s *kmap, int index, int key, int mods
 int KEYB_get_index_h( struct keyboard_key_s *kmap, char *human );
 int KEYB_get_index( struct keyboard_key_s *kmap, int key, int mods );
 
+char *KEYB_combo_to_string( char *b, int bmax, struct keyboard_key_s kitem );
+
 #ifdef __cplusplus
 }
 #endif
