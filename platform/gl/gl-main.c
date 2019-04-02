@@ -22,7 +22,9 @@
 
 #define PDFK_SEARCH 1
 #define PDFK_SEARCH_NEXT 2
+#define PDFK_SEARCH_NEXT_PAGE 102
 #define PDFK_SEARCH_PREV 3
+#define PDFK_SEARCH_PREV_PAGE 103
 #define PDFK_PAN_UP 4
 #define PDFK_PAN_DOWN 5
 #define PDFK_PAN_LEFT 6
@@ -38,6 +40,7 @@
 #define PDFK_FITWINDOW 16
 #define PDFK_GOPAGE 17
 #define PDFK_GOENDPAGE 18
+#define PDFK_PASTE 19
 
 
 #define PDFK_QUIT 100
@@ -116,17 +119,17 @@ static void open_browser(const char *uri) {
 const char *ogl_error_string(GLenum code) {
 #define CASE(E) \
 	case E: return #E; break
-	switch (code) {
-		/* glGetError */
-		CASE(GL_NO_ERROR);
-		CASE(GL_INVALID_ENUM);
-		CASE(GL_INVALID_VALUE);
-		CASE(GL_INVALID_OPERATION);
-		CASE(GL_OUT_OF_MEMORY);
-		CASE(GL_STACK_UNDERFLOW);
-		CASE(GL_STACK_OVERFLOW);
-		default: return "(unknown)";
-	}
+			  switch (code) {
+				  /* glGetError */
+				  CASE(GL_NO_ERROR);
+				  CASE(GL_INVALID_ENUM);
+				  CASE(GL_INVALID_VALUE);
+				  CASE(GL_INVALID_OPERATION);
+				  CASE(GL_OUT_OF_MEMORY);
+				  CASE(GL_STACK_UNDERFLOW);
+				  CASE(GL_STACK_OVERFLOW);
+				  default: return "(unknown)";
+			  }
 #undef CASE
 }
 
@@ -430,19 +433,19 @@ void render_page(void) {
 	fz_drop_pixmap(ctx, pix);
 
 	/*
-	    annot_count = 0;
-	    for (annot = fz_first_annot(ctx, page); annot; annot = fz_next_annot(ctx, annot))
-	    {
-	    pix = fz_new_pixmap_from_annot(ctx, annot, &page_ctm, fz_device_rgb(ctx), 1);
-	    texture_from_pixmap(&annot_tex[annot_count++], pix);
-	    fz_drop_pixmap(ctx, pix);
-	    if (annot_count >= nelem(annot_tex))
-	    {
-	    fz_warn(ctx, "too many annotations to display!");
-	    break;
-	    }
-	    }
-	    */
+		annot_count = 0;
+		for (annot = fz_first_annot(ctx, page); annot; annot = fz_next_annot(ctx, annot))
+		{
+		pix = fz_new_pixmap_from_annot(ctx, annot, &page_ctm, fz_device_rgb(ctx), 1);
+		texture_from_pixmap(&annot_tex[annot_count++], pix);
+		fz_drop_pixmap(ctx, pix);
+		if (annot_count >= nelem(annot_tex))
+		{
+		fz_warn(ctx, "too many annotations to display!");
+		break;
+		}
+		}
+		*/
 
 	loaded = 0;
 }
@@ -764,8 +767,18 @@ static void do_page_selection(int x0, int y0, int x1, int y1) {
 			s = fz_copy_selection(ctx, text, page_a, page_b, 0);
 #endif
 			ui_set_clipboard(s);
-			flog("%s:%d: Dispatching request '%s'\n", FL, s);
-			if (!detached) DDI_dispatch(&ddi, s);
+
+			if (ui.lctrl||ui.rctrl) {
+				flog("%s:%d: Searching internally for '%s'\r\n", FL, s);
+				snprintf(this_search.a, sizeof(this_search.a), "%s", s);
+				this_search.direction = 1;
+				this_search.page = 1;
+				search_active = 1;
+
+			} else {
+				flog("%s:%d: Dispatching request '%s'\n", FL, s);
+				if (!detached) DDI_dispatch(&ddi, s);
+			}
 			fz_free(ctx, s);
 		}
 	}
@@ -957,7 +970,7 @@ int IsKeyPressed ( int index ) {
 		if (ui.mod & KMOD_ALT) modmap |= KEYB_MOD_ALT;
 		if (ui.mod & KMOD_GUI) modmap |= KEYB_MOD_OS;
 
-		flog(stderr,"%s:%d: IsKeyPressed(): looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
+		flog("%s:%d: IsKeyPressed(): looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
 		if (keyboard_map[index].mods == modmap) return 1;
 	}
 	return 0;
@@ -975,15 +988,50 @@ static void do_keypress(void) {
 	if (ui.down || ui.middle || ui.right || ui.key) showinfo = showhelp = 0;
 
 	if (IsKeyPressed(PDFK_SEARCH)) {
-					clear_search();
-					this_search.direction = 1;
-					showsearch            = 1;
-					search_not_found      = 0;
-					update_title();
-					search_input.text[0] = 0;
-					search_input.end     = search_input.text;
-					search_input.p       = search_input.text;
-					search_input.q       = search_input.end;
+		clear_search();
+		this_search.direction = 1;
+		showsearch            = 1;
+		search_not_found      = 0;
+		update_title();
+		search_input.text[0] = 0;
+		search_input.end     = search_input.text;
+		search_input.p       = search_input.text;
+		search_input.q       = search_input.end;
+	}
+
+	if (IsKeyPressed(PDFK_PASTE)) {
+		if (showsearch) {
+			snprintf(search_input.text, sizeof(search_input.text), "%s", SDL_GetClipboardText());
+			search_input.end = search_input.q = search_input.text +strlen(search_input.text);
+			search_input.p = search_input.q;
+			ui.key = 0;
+		}
+	}
+
+	if (IsKeyPressed(PDFK_SEARCH_NEXT)) {
+		search_active         = 1;
+		this_search.direction = 1;
+		this_search.inpage_index++;
+	}
+
+	if (IsKeyPressed(PDFK_SEARCH_PREV)) {
+		this_search.direction = -1;
+		search_active         = 1;
+		this_search.inpage_index--;
+	}
+
+	if (IsKeyPressed(PDFK_SEARCH_NEXT_PAGE)) {
+		search_active         = 1;
+		this_search.direction = 1;
+		this_search.inpage_index = -1;
+		this_search.page++;
+	}
+
+	if (IsKeyPressed(PDFK_SEARCH_PREV_PAGE)) {
+		this_search.direction = -1;
+		search_active         = 1;
+		this_search.inpage_index = 0;
+		this_search.page--;
 	}
 
 	if (IsKeyPressed(PDFK_ZOOMIN)) { currentzoom *= 1.25; }
@@ -1000,12 +1048,12 @@ static void do_keypress(void) {
 	if (IsKeyPressed(PDFK_FITHEIGHT)) { auto_zoom_h(); }
 
 	if (IsKeyPressed(PDFK_GOENDPAGE)) {
-					flog("%s:%d: Jump to page '%d'\r\n", FL, fz_count_pages(ctx, doc) - 1);
-					jump_to_page(fz_count_pages(ctx, doc) - 1);
+		flog("%s:%d: Jump to page '%d'\r\n", FL, fz_count_pages(ctx, doc) - 1);
+		jump_to_page(fz_count_pages(ctx, doc) - 1);
 	}
 	if (IsKeyPressed(PDFK_GOPAGE)) {
-					flog("%s:%d: Jump to page '%d'\r\n", FL, number - 1);
-					jump_to_page(number - 1);
+		flog("%s:%d: Jump to page '%d'\r\n", FL, number - 1);
+		jump_to_page(number - 1);
 	}
 
 
@@ -1015,141 +1063,19 @@ static void do_keypress(void) {
 		flog("%s:%d: Acting on key '0x%08x' '%c' (mod='%0x')\r\n", FL, ui.key, ui.key, ui.mod);
 		switch (ui.key) {
 			case SDLK_ESCAPE: clear_search(); break;
-			case SDLK_F1: showhelp = !showhelp; break;
-//			case 'o': toggle_outline(); break;
-//			case 'L': showlinks = !showlinks; break;
-//			case 'i':
-//				if (ui.mod & KMOD_SHIFT) {
-//					currentinvert = !currentinvert;
-//				} else {
-//					showinfo = !showinfo;
-//				}
-//				break;
-//			case 'r': reload(); break;
-//			case 'q': quit(); break;
 
 			case 'f':
-				if (ui.lctrl || ui.rctrl) {
-			//		fprintf(stderr,"%s:%d: search triggered, not used any more\n",FL);
+									if (ui.lctrl || ui.rctrl) {
+										//		fprintf(stderr,"%s:%d: search triggered, not used any more\n",FL);
 
-				} else {
-					flog("%s:%d: Full screen\r\n", FL);
-					toggle_fullscreen();
-				}
-				break;
+									} else {
+										flog("%s:%d: Full screen\r\n", FL);
+										toggle_fullscreen();
+									}
+									break;
 
-//			case 'z':
-//				currentzoom = number > 0 ? number : DEFRES;
-//				break;
-				//		case '+': currentzoom = zoom_in(currentzoom); break;
-				//		case '-': currentzoom = zoom_out(currentzoom); break;
-//			case '=': currentzoom *= 1.25; break;
-//			case '-': currentzoom /= 1.25; break;
-//			case '[': currentrotate += 90; break;
-//			case ']':
-//				currentrotate -= 90;
-//				break;
-				//			case 'k': case KEY_UP: scroll_y -= 10; break;
-				//			case 'j': case KEY_DOWN: scroll_y += 10; break;
-				//			case 'h': case KEY_LEFT: scroll_x -= 10; break;
-				//			case 'l': case KEY_RIGHT: scroll_x += 10; break;
-				// case SDL_SCANCODE_KP_5: auto_zoom_w(); break;
-
-				//			case 'b':
-				//				number = fz_maxi(number, 1);
-				//				while (number--) smart_move_backward();
-				//				break;
-				//			case ' ':
-				//				number = fz_maxi(number, 1);
-				//				while (number--) smart_move_forward();
-				//				break;
-
-//			case ',':
-//			case KEY_PAGE_UP:
-//			case SDLK_PAGEUP: currently_viewed_page -= fz_maxi(number, 1); break;
-//			case '.':
-//			case KEY_PAGE_DOWN:
-//			case SDLK_PAGEDOWN: currently_viewed_page += fz_maxi(number, 1); break;
 			case '<': currently_viewed_page -= 10 * fz_maxi(number, 1); break;
 			case '>': currently_viewed_page += 10 * fz_maxi(number, 1); break;
-
-						 /*
-			case 'g':
-				if (ui.mod & KMOD_SHIFT) {
-					flog("%s:%d: Jump to page '%d'\r\n", FL, fz_count_pages(ctx, doc) - 1);
-					jump_to_page(fz_count_pages(ctx, doc) - 1);
-				} else {
-					flog("%s:%d: Jump to page '%d'\r\n", FL, number - 1);
-					jump_to_page(number - 1);
-				}
-				break;
-				*/
-
-				/*
-   case 'm':
-	   if (number == 0)
-		   push_history();
-	   else if (number > 0 && number < nelem(marks))
-		   marks[number] = save_mark();
-	   break;
-   case 't':
-	   if (number == 0) {
-		   if (history_count > 0) pop_history();
-	   } else if (number > 0 && number < nelem(marks)) {
-		   struct mark mark = marks[number];
-		   restore_mark(mark);
-		   jump_to_page(mark.page);
-	   }
-	   break;
-   case 'T':
-	   if (number == 0) {
-		   if (future_count > 0) pop_future();
-	   }
-	   break;
-	   */
-
-			case '/':
-				clear_search();
-				this_search.direction = 1;
-				showsearch            = 1;
-				search_not_found      = 0;
-				update_title();
-				search_input.text[0] = 0;
-				search_input.end     = search_input.text;
-				search_input.p       = search_input.text;
-				search_input.q       = search_input.end;
-				break;
-
-			case '?':
-				clear_search();
-				this_search.direction = -1;
-				showsearch            = 1;
-				search_input.p        = search_input.text;
-				search_input.q        = search_input.end;
-				break;
-
-			case 'n':
-				search_active         = 1;
-				this_search.direction = 1;
-				if (ui.mod & KMOD_SHIFT) {
-					this_search.inpage_index = -1;
-					this_search.page++;
-				} else {
-					this_search.inpage_index++;
-				}
-				break;
-
-			case 'p':
-				this_search.direction = -1;
-				search_active         = 1;
-				if (ui.mod & (KMOD_SHIFT)) {
-					this_search.inpage_index = 0;
-					this_search.page--;
-
-				} else {
-					this_search.inpage_index--;
-				}
-				break;
 		}
 
 		if (ui.key >= '0' && ui.key <= '9') {
@@ -1231,10 +1157,10 @@ static int do_status_footer(void) {
 
 	if ((this_search.hit_count_a)) { //&& (last_search_string[0]))
 		snprintf(ss,
-		         sizeof(ss),
-		         "Searching '%s'. %d hits on current page [ n/N = Next item (page), p/P = Prev item (page), ESC = Clear ]",
-		         this_search.a,
-		         this_search.hit_count_a);
+				sizeof(ss),
+				"Searching '%s'. %d hits on current page [ n/N = Next item (page), p/P = Prev item (page), ESC = Clear ]",
+				this_search.a,
+				this_search.hit_count_a);
 	} else if (search_not_found) {
 		snprintf(ss, sizeof(ss), "Search not found '%50s' [ Press ESC to clear ]", this_search.a);
 	} else {
@@ -1529,6 +1455,13 @@ int ddi_process(char *ddi_data) {
 	ddi_process_keymap(ddi_data, "!keysearch=", PDFK_SEARCH);
 	ddi_process_keymap(ddi_data, "!keynext=", PDFK_SEARCH_NEXT);
 	ddi_process_keymap(ddi_data, "!keyprev=", PDFK_SEARCH_PREV);
+
+	keyboard_map[PDFK_SEARCH_PREV_PAGE].key = keyboard_map[PDFK_SEARCH_PREV].key;
+	keyboard_map[PDFK_SEARCH_PREV_PAGE].mods = keyboard_map[PDFK_SEARCH_PREV].mods | KEYB_MOD_SHIFT;
+
+	keyboard_map[PDFK_SEARCH_NEXT_PAGE].key = keyboard_map[PDFK_SEARCH_NEXT].key;
+	keyboard_map[PDFK_SEARCH_NEXT_PAGE].mods = keyboard_map[PDFK_SEARCH_NEXT].mods | KEYB_MOD_SHIFT;
+
 	ddi_process_keymap(ddi_data, "!keypgup=", PDFK_PGUP);
 	ddi_process_keymap(ddi_data, "!keypgdn=", PDFK_PGDN);
 	ddi_process_keymap(ddi_data, "!keyzoomin=", PDFK_ZOOMIN);
@@ -1677,20 +1610,20 @@ static void run_main_loop(void) {
 			 */
 			if (this_search.mode != SEARCH_MODE_COMPOUND) {
 				this_search.hit_count_a = fz_search_page_number(
-				    ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+						ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 				flog("%s:%d: Searching for '%s', %d hits on page %d\n",
-				     FL,
-				     this_search.a,
-				     this_search.hit_count_a,
-				     this_search.page + 1);
+						FL,
+						this_search.a,
+						this_search.hit_count_a,
+						this_search.page + 1);
 				if ((this_search.hit_count_a == 0) && (strlen(this_search.alt))) {
 					this_search.hit_count_a = fz_search_page_number(
-					    ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+							ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 					flog("%s:%d: Searching for '%s', %d hits on page %d\n",
-					     FL,
-					     this_search.alt,
-					     this_search.hit_count_a,
-					     this_search.page + 1);
+							FL,
+							this_search.alt,
+							this_search.hit_count_a,
+							this_search.page + 1);
 				}
 			}
 
@@ -1701,7 +1634,7 @@ static void run_main_loop(void) {
 			if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 				this_search.hit_count_a = fz_search_page_number(
-				    ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+						ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 				flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
 
 				if (this_search.hit_count_a) {
@@ -1710,13 +1643,13 @@ static void run_main_loop(void) {
 
 					if (strlen(this_search.b)) {
 						this_search.hit_count_b = fz_search_page_number(
-						    ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
+								ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
 						flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
 					}
 
 					if (strlen(this_search.c)) {
 						this_search.hit_count_c = fz_search_page_number(
-						    ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
+								ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
 						flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
 					}
 
@@ -1854,7 +1787,7 @@ static void run_main_loop(void) {
 		 *
 		 */
 		int state =
-		    ui_input(canvas_x + ui.lineheight, ui.lineheight, canvas_x + canvas_w - 10, ui.lineheight * 2 + 2, &search_input);
+			ui_input(canvas_x + ui.lineheight, ui.lineheight, canvas_x + canvas_w - 10, ui.lineheight * 2 + 2, &search_input);
 		if (state == -1) {
 			// User pressed ESCAPE
 			ui.focus   = NULL;
@@ -2032,7 +1965,7 @@ static int ddi_check_headless(char *sn_a) {
 		 *
 		 */
 		this_search.hit_count_a =
-		    fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+			fz_search_page_number(ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 
 		/*
 		 * With compound searching, we're using using the initial part just to locate our page
@@ -2041,16 +1974,16 @@ static int ddi_check_headless(char *sn_a) {
 		if (this_search.hit_count_a > 0) {
 
 			flog("%s:%d: Searching for '%s', %d hits on page %d\n",
-			     FL,
-			     this_search.a,
-			     this_search.hit_count_a,
-			     this_search.page + 1);
+					FL,
+					this_search.a,
+					this_search.hit_count_a,
+					this_search.page + 1);
 
 			flog("%s:%d: page:%d, compound searching, now check for '%s' and '%s'\r\n",
-			     FL,
-			     this_search.page + 1,
-			     this_search.b,
-			     this_search.c);
+					FL,
+					this_search.page + 1,
+					this_search.b,
+					this_search.c);
 
 			/*
 			 * short circuit the search process here, if we've been sent only a single parameter
@@ -2062,14 +1995,14 @@ static int ddi_check_headless(char *sn_a) {
 			}
 
 			this_search.hit_count_b = fz_search_page_number(
-			    ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
+					ctx, doc, this_search.page, this_search.b, this_search.hit_bbox_b, nelem(this_search.hit_bbox_b));
 			if (this_search.hit_count_b == 0) return 0;
 
 			if (this_search.hit_count_b > 0) {
 
 				if (strlen(this_search.c) > 0) {
 					this_search.hit_count_c = fz_search_page_number(
-					    ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
+							ctx, doc, this_search.page, this_search.c, this_search.hit_bbox_c, nelem(this_search.hit_bbox_c));
 					if (this_search.hit_count_c == 0) return 0;
 				} else
 					this_search.hit_count_c = 0;
@@ -2247,20 +2180,20 @@ static void ddi_check(void) {
 					 */
 					if (this_search.mode != SEARCH_MODE_COMPOUND) {
 						this_search.hit_count_a = fz_search_page_number(
-						    ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+								ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 						flog("%s:%d: Searching for '%s', %d hits on page %d\n",
-						     FL,
-						     this_search.a,
-						     this_search.hit_count_a,
-						     this_search.page + 1);
+								FL,
+								this_search.a,
+								this_search.hit_count_a,
+								this_search.page + 1);
 						if ((this_search.hit_count_a == 0) && (strlen(this_search.alt))) {
 							this_search.hit_count_a = fz_search_page_number(
-							    ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+									ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 							flog("%s:%d: Searching for '%s', %d hits on page %d\n",
-							     FL,
-							     this_search.alt,
-							     this_search.hit_count_a,
-							     this_search.page + 1);
+									FL,
+									this_search.alt,
+									this_search.hit_count_a,
+									this_search.page + 1);
 						}
 					}
 
@@ -2271,7 +2204,7 @@ static void ddi_check(void) {
 					if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
 						this_search.hit_count_a = fz_search_page_number(
-						    ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+								ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
 						flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.a, this_search.hit_count_a);
 
 						if (this_search.hit_count_a) {
@@ -2280,21 +2213,21 @@ static void ddi_check(void) {
 
 							if (strlen(this_search.b)) {
 								this_search.hit_count_b = fz_search_page_number(ctx,
-								                                                doc,
-								                                                this_search.page,
-								                                                this_search.b,
-								                                                this_search.hit_bbox_b,
-								                                                nelem(this_search.hit_bbox_b));
+										doc,
+										this_search.page,
+										this_search.b,
+										this_search.hit_bbox_b,
+										nelem(this_search.hit_bbox_b));
 								flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.b, this_search.hit_count_b);
 							}
 
 							if (strlen(this_search.c)) {
 								this_search.hit_count_c = fz_search_page_number(ctx,
-								                                                doc,
-								                                                this_search.page,
-								                                                this_search.c,
-								                                                this_search.hit_bbox_c,
-								                                                nelem(this_search.hit_bbox_c));
+										doc,
+										this_search.page,
+										this_search.c,
+										this_search.hit_bbox_c,
+										nelem(this_search.hit_bbox_c));
 								flog("%s:%d: '%s' matched %d time(s)\r\n", FL, this_search.c, this_search.hit_count_c);
 							}
 
@@ -2344,11 +2277,11 @@ static void ddi_check(void) {
 									a = this_search.hit_bbox_a[i];
 
 									flog("%s:%d: limit = %f highlight mode = %d  distb = %f distc = %f",
-									     FL,
-									     compsearch_radius,
-									     compsearch_highlight,
-									     dist_b,
-									     dist_c);
+											FL,
+											compsearch_radius,
+											compsearch_highlight,
+											dist_b,
+											dist_c);
 
 									if (compsearch_highlight == 8) {
 										a = this_search.hit_bbox_a[i];
@@ -2557,7 +2490,7 @@ int init(void) {
 
 		// Create window
 		sdlWindow = SDL_CreateWindow(
-		    "FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+				"FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 		if (sdlWindow == NULL) {
 			printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
 			success = 0;
@@ -2608,6 +2541,12 @@ int main(int argc, char **argv)
 	keyboard_map[PDFK_SEARCH_NEXT].key = SDL_SCANCODE_N;
 	keyboard_map[PDFK_SEARCH_PREV].key = SDL_SCANCODE_P;
 
+	keyboard_map[PDFK_SEARCH_NEXT_PAGE].key = SDL_SCANCODE_N;
+	keyboard_map[PDFK_SEARCH_NEXT_PAGE].mods = KEYB_MOD_SHIFT;
+
+	keyboard_map[PDFK_SEARCH_PREV_PAGE].key = SDL_SCANCODE_N;
+	keyboard_map[PDFK_SEARCH_PREV_PAGE].mods = KEYB_MOD_SHIFT;
+
 	keyboard_map[PDFK_PAN_UP].key = SDL_SCANCODE_UP;
 	keyboard_map[PDFK_PAN_DOWN].key = SDL_SCANCODE_DOWN;
 	keyboard_map[PDFK_PAN_LEFT].key = SDL_SCANCODE_LEFT;
@@ -2624,6 +2563,14 @@ int main(int argc, char **argv)
 
 	keyboard_map[PDFK_QUIT].key = SDL_SCANCODE_Q;
 	keyboard_map[PDFK_QUIT].mods = KEYB_MOD_CTRL;
+
+	keyboard_map[PDFK_GOPAGE].key = SDL_SCANCODE_G;
+	keyboard_map[PDFK_GOENDPAGE].key = SDL_SCANCODE_G;
+	keyboard_map[PDFK_GOENDPAGE].mods = KEYB_MOD_SHIFT;
+
+	keyboard_map[PDFK_PASTE].key = SDL_SCANCODE_V;
+	keyboard_map[PDFK_PASTE].mods = KEYB_MOD_CTRL;
+
 
 
 	process_start_time = time(NULL); // used to discriminate if we're picking up old !quit: calls.
@@ -2778,7 +2725,7 @@ int main(int argc, char **argv)
 		flog("%s:%d: SDL loop starting\r\n\r\n", FL);
 		while (!doquit) {
 
-//			if (!(SDL_getWindowFlags() & SDL_WINDOW_SHOWN)) continue;
+			//			if (!(SDL_getWindowFlags() & SDL_WINDOW_SHOWN)) continue;
 
 			glViewport(0, 0, window_w, window_h);
 			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
@@ -2810,59 +2757,59 @@ int main(int argc, char **argv)
 					case SDL_QUIT: quit(); break;
 
 					case SDL_TEXTINPUT:
-						if (showsearch) {
-							if ((search_input.text == search_input.end) && (sdlEvent.text.text[0] == '/')) {
-								// do nothing
-							} else {
-								ui.key = sdlEvent.text.text[0];
-							}
-						}
-						break;
+										if (showsearch) {
+											if ((search_input.text == search_input.end) && (sdlEvent.text.text[0] == '/')) {
+												// do nothing
+											} else {
+												ui.key = sdlEvent.text.text[0];
+											}
+										}
+										break;
 
 					case SDL_TEXTEDITING: break;
 
 					case SDL_KEYDOWN:
-						if (sdlEvent.key.keysym.sym == SDLK_RCTRL) {
-							ui.rctrl = 1;
-						} else if (sdlEvent.key.keysym.sym == SDLK_LCTRL) {
-							ui.lctrl = 1;
-						}
-						ui.key = sdlEvent.key.keysym.sym;
-						ui.scancode = sdlEvent.key.keysym.scancode;
-						do_keypress();
-						break;
+												 if (sdlEvent.key.keysym.sym == SDLK_RCTRL) {
+													 ui.rctrl = 1;
+												 } else if (sdlEvent.key.keysym.sym == SDLK_LCTRL) {
+													 ui.lctrl = 1;
+												 }
+												 ui.key = sdlEvent.key.keysym.sym;
+												 ui.scancode = sdlEvent.key.keysym.scancode;
+												 do_keypress();
+												 break;
 
 					case SDL_KEYUP:
-						if (sdlEvent.key.keysym.sym == SDLK_RCTRL) {
-							ui.rctrl = 0;
-						} else if (sdlEvent.key.keysym.sym == SDLK_LCTRL) {
-							ui.lctrl = 0;
-						}
-						break;
+												 if (sdlEvent.key.keysym.sym == SDLK_RCTRL) {
+													 ui.rctrl = 0;
+												 } else if (sdlEvent.key.keysym.sym == SDLK_LCTRL) {
+													 ui.lctrl = 0;
+												 }
+												 break;
 
 					case SDL_MOUSEMOTION: {
-						int x, y;
-						SDL_GetMouseState(&x, &y);
-						on_motion(x, y);
-					} break;
+													 int x, y;
+													 SDL_GetMouseState(&x, &y);
+													 on_motion(x, y);
+												 } break;
 
 					case SDL_MOUSEWHEEL: {
-						int x, y;
-						SDL_GetMouseState(&x, &y);
-						on_wheel(sdlEvent.wheel.y, x, y);
-					} break;
+													int x, y;
+													SDL_GetMouseState(&x, &y);
+													on_wheel(sdlEvent.wheel.y, x, y);
+												} break;
 
 					case SDL_MOUSEBUTTONDOWN: {
-						int x, y;
-						SDL_GetMouseState(&x, &y);
-						on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y, sdlEvent.button.clicks);
-					} break;
+														  int x, y;
+														  SDL_GetMouseState(&x, &y);
+														  on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y, sdlEvent.button.clicks);
+													  } break;
 
 					case SDL_MOUSEBUTTONUP: {
-						int x, y;
-						SDL_GetMouseState(&x, &y);
-						on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y, sdlEvent.button.clicks);
-					} break;
+														int x, y;
+														SDL_GetMouseState(&x, &y);
+														on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y, sdlEvent.button.clicks);
+													} break;
 
 				} // switch sdl event type
 
