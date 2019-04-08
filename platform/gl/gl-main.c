@@ -971,7 +971,7 @@ int IsKeyPressed ( int index ) {
 		if (ui.mod & KMOD_ALT) modmap |= KEYB_MOD_ALT;
 		if (ui.mod & KMOD_GUI) modmap |= KEYB_MOD_OS;
 
-		flog("%s:%d: IsKeyPressed(): looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
+		//flog("%s:%d: IsKeyPressed(): looking for %x, currently %x\n", FL, keyboard_map[index].mods, modmap);
 		if (keyboard_map[index].mods == modmap) return 1;
 	}
 	return 0;
@@ -1017,12 +1017,20 @@ static void do_keypress(void) {
 		search_active         = 1;
 		this_search.direction = 1;
 		this_search.inpage_index++;
+		if (this_search.inpage_index >= this_search.hit_count_a) {
+			this_search.inpage_index = -1;
+			this_search.page++;
+		}
 	}
 
 	if (IsKeyPressed(PDFK_SEARCH_PREV)) {
 		this_search.direction = -1;
 		search_active         = 1;
 		this_search.inpage_index--;
+		if (this_search.inpage_index < 0) {
+			this_search.inpage_index = -1;
+			this_search.page--;
+		}
 	}
 
 	if (IsKeyPressed(PDFK_SEARCH_NEXT_PAGE)) {
@@ -1351,13 +1359,13 @@ static void do_canvas(void) {
 }
 
 int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
-	flog("%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
+//	flog("%s:%d: processing keymap, %s [ %d ]\n", FL, keystr, index);
 	if (strstr(ddi_data, keystr)) {
 		char *p = strstr(ddi_data, keystr);
 		if (p) {
 			p += strlen(keystr);
 			sscanf(p,"%d %x", &keyboard_map[index].key, &keyboard_map[index].mods);
-			flog("%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
+//			flog("%s:%d: imported %d & %x\n", FL, keyboard_map[index].key, keyboard_map[index].mods);
 		}
 	}
 	return 0;
@@ -1575,7 +1583,8 @@ int ddi_process(char *ddi_data) {
 
 		this_search.a[0] = this_search.b[0] = this_search.c[0] = '\0';
 		this_search.mode                                       = SEARCH_MODE_COMPOUND;
-		this_search.page                                       = 1;
+		this_search.page                                       = 0;
+//FIXME - should this be 1 or 0?		this_search.page                                       = 1;
 		snprintf(this_search.search_raw, sizeof(this_search.search_raw), "%s", cmd);
 		snprintf(tmp, sizeof(tmp), "%s", cmd + strlen("!compsearch:"));
 
@@ -1639,7 +1648,8 @@ static void run_main_loop(void) {
 			}
 
 			if (this_search.page >= fz_count_pages(ctx, doc)) {
-				this_search.page         = 1;
+				//FIXME should this be 1 or 0 ? this_search.page         = 1;
+				this_search.page         = 0;
 				this_search.inpage_index = -1;
 			}
 
@@ -2193,7 +2203,8 @@ static void ddi_check(void) {
 				/*
 				 * If we're starting a new search
 				 */
-				this_search.page         = 1;
+				//FIXME this_search.page         = 1; // is 1 or zero right?
+				this_search.page         = 0;
 				this_search.inpage_index = -1;
 				memcpy(&prior_search, &this_search, sizeof(struct search_s));
 				flog("%s:%d: Setting prior search to '%s'\r\n", FL, prior_search.search_raw);
@@ -2217,10 +2228,13 @@ static void ddi_check(void) {
 					 * active
 					 *
 					 */
+					flog("%s:%d: Current search page = %d ( %d page(s) in document )\n", FL, this_search.page, fz_count_pages(ctx,doc));
 
 					if (this_search.page > fz_count_pages(ctx, doc) - 1) {
+						flog("%s:%d: End of pages hit, resetting search data and stopping search\n", FL);
 						memset(&prior_search, 0, sizeof(prior_search));
-						this_search.page         = 0;
+						//this_search.page         = 0;
+						this_search.page         = -1;
 						this_search.inpage_index = -1;
 						search_active            = 0;
 						break;
@@ -2926,6 +2940,7 @@ int main(int argc, char **argv)
 	fz_drop_outline(ctx, outline);
 	fz_drop_document(ctx, doc);
 	fz_drop_context(ctx);
+
 
 	return 0;
 }
