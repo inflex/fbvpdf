@@ -314,14 +314,11 @@ static unsigned int next_power_of_two(unsigned int n) {
 }
 
 int flog_init(void) {
-	if (debug) {
 		FILE *f;
 		f = fopen(FLOG_FILENAME, "w");
 		if (f) {
-			fprintf(f, "%s", ctime((time_t *)time(NULL)));
 			fclose(f);
 		}
-	}
 	return 0;
 }
 
@@ -1814,7 +1811,7 @@ static void run_main_loop(void) {
 				break;
 
 			} else {
-				flog("%s:%d: No hits on page %d, trying next...\r\n", FL, this_search.page);
+//				flog("%s:%d: No hits on page %d, trying next...\r\n", FL, this_search.page);
 				this_search.page += this_search.direction;
 				if (this_search.page < 0 || this_search.page >= fz_count_pages(ctx, doc) - 1) {
 					flog("%s:%d: end of the road for '%s'\r\n", FL, this_search.a);
@@ -1977,7 +1974,7 @@ static void on_mouse(int button, int action, int x, int y, int clicks) {
 	ui.x = x;
 	ui.y = y;
 
-	flog("%s:%d: button: %d %d\r\n", FL, button, action);
+//	flog("%s:%d: button: %d %d\r\n", FL, button, action);
 	switch (button) {
 		case SDL_BUTTON_LEFT: ui.down = (action == SDL_MOUSEBUTTONDOWN); break;
 		case SDL_BUTTON_MIDDLE: ui.middle = (action == SDL_MOUSEBUTTONDOWN); break;
@@ -2593,8 +2590,10 @@ int main(int argc, char **argv)
 	int sleepout     = 100;
 	char s[10240];
 
+	debug = 1;
 	flog_init();
-	flog("start.\r\n");
+	flog("Start.\r\n");
+
 
 	window_w = 1280;
 	window_h = 720;
@@ -2663,6 +2662,7 @@ int main(int argc, char **argv)
 			case 'd': debug = 1; break;
 		}
 	}
+
 
 	if (fz_optind < argc) anchor = argv[fz_optind++];
 
@@ -2940,6 +2940,8 @@ int main(int argc, char **argv)
 	fz_drop_outline(ctx, outline);
 	fz_drop_document(ctx, doc);
 	fz_drop_context(ctx);
+
+	flog("%s:%d: Finished. Good bye.\r\n", FL);
 
 
 	return 0;
