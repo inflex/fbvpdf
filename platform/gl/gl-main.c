@@ -2590,7 +2590,7 @@ int main(int argc, char **argv)
 	int sleepout     = 100;
 	char s[10240];
 
-	debug = 1;
+	//debug = 1;
 	flog_init();
 	flog("Start.\r\n");
 
