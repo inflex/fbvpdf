@@ -682,6 +682,12 @@ static void do_links(fz_link *link, int xofs, int yofs) {
 	glEnable(GL_BLEND);
 
 	while (link) {
+
+		if (fz_is_external_link(ctx, link->uri)) {
+			link = link->next;
+			continue;
+		}
+
 		r = link->rect;
 		fz_transform_rect(&r, &page_ctm);
 
