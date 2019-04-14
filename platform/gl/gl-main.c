@@ -31,7 +31,9 @@
 #define PDFK_PAN_LEFT 6
 #define PDFK_PAN_RIGHT 7
 #define PDFK_PGUP 8
+#define PDFK_PGUP_10 20
 #define PDFK_PGDN 9
+#define PDFK_PGDN_10 21
 #define PDFK_ROTATE_CW 10
 #define PDFK_ROTATE_CCW 11
 #define PDFK_ZOOMIN 12
@@ -1058,6 +1060,8 @@ static void do_keypress(void) {
 
 	if (IsKeyPressed(PDFK_PGUP)) { currently_viewed_page -= fz_maxi(number, 1); }
 	if (IsKeyPressed(PDFK_PGDN)) { currently_viewed_page += fz_maxi(number, 1); }
+	if (IsKeyPressed(PDFK_PGUP_10)) { currently_viewed_page -= fz_maxi(number, 10); }
+	if (IsKeyPressed(PDFK_PGDN_10)) { currently_viewed_page += fz_maxi(number, 10); }
 
 	if (IsKeyPressed(PDFK_FITWIDTH)) { auto_zoom_w(); }
 	if (IsKeyPressed(PDFK_FITWINDOW)) { auto_zoom(); }
@@ -1248,7 +1252,7 @@ char *stolower( char *convertme )
 static int do_help_line(int x, int y, char *label, char *text) {
 	stolower(label);
 	ui_draw_string(ctx, x, y, label);
-	ui_draw_string(ctx, x + 100, y, text);
+	ui_draw_string(ctx, x + 200, y, text);
 	return y + (ui.lineheight *1.1);
 }
 
@@ -1280,8 +1284,6 @@ static void do_help(void) {
 	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_QUIT]);
 	y = do_help_line(x, y, ks, "Quit");
 	y += ui.lineheight;
-	y = do_help_line(x, y, "I", "toggle inverted color mode");
-	y = do_help_line(x, y, "f", "fullscreen window");
 
 	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_FITWINDOW]);
 	y = do_help_line(x, y, ks, "Fit to window");
@@ -1306,6 +1308,14 @@ static void do_help(void) {
 
 	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ROTATE_CW]);
 	y = do_help_line(x, y, ks, "Rotate Clockwise");
+
+	y += ui.lineheight;
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_PGUP]);
+	y = do_help_line(x, y, ks, "Previous Page (+SHIFT = 10 pages)");
+
+	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_PGDN]);
+	y = do_help_line(x, y, ks, "Next Page (+SHIFT = 10 pages)");
 
 	y += ui.lineheight;
 
@@ -1522,12 +1532,17 @@ int ddi_process(char *ddi_data) {
 
 	keyboard_map[PDFK_SEARCH_PREV_PAGE].key = keyboard_map[PDFK_SEARCH_PREV].key;
 	keyboard_map[PDFK_SEARCH_PREV_PAGE].mods = keyboard_map[PDFK_SEARCH_PREV].mods | KEYB_MOD_SHIFT;
-
 	keyboard_map[PDFK_SEARCH_NEXT_PAGE].key = keyboard_map[PDFK_SEARCH_NEXT].key;
 	keyboard_map[PDFK_SEARCH_NEXT_PAGE].mods = keyboard_map[PDFK_SEARCH_NEXT].mods | KEYB_MOD_SHIFT;
 
 	ddi_process_keymap(ddi_data, "!keypgup=", PDFK_PGUP);
 	ddi_process_keymap(ddi_data, "!keypgdn=", PDFK_PGDN);
+
+	keyboard_map[PDFK_PGUP_10].key = keyboard_map[PDFK_PGUP].key;
+	keyboard_map[PDFK_PGUP_10].mods = keyboard_map[PDFK_PGUP].mods | KEYB_MOD_SHIFT;
+	keyboard_map[PDFK_PGDN_10].key = keyboard_map[PDFK_PGDN].key;
+	keyboard_map[PDFK_PGDN_10].mods = keyboard_map[PDFK_PGDN].mods | KEYB_MOD_SHIFT;
+
 	ddi_process_keymap(ddi_data, "!keyzoomin=", PDFK_ZOOMIN);
 	ddi_process_keymap(ddi_data, "!keyzoomout=", PDFK_ZOOMOUT);
 	ddi_process_keymap(ddi_data, "!keyrotatecw=", PDFK_ROTATE_CW);
@@ -2629,6 +2644,11 @@ int main(int argc, char **argv)
 
 	keyboard_map[PDFK_PGUP].key = SDL_SCANCODE_PAGEUP;
 	keyboard_map[PDFK_PGDN].key = SDL_SCANCODE_PAGEDOWN;
+
+	keyboard_map[PDFK_PGUP_10].key = SDL_SCANCODE_PAGEUP;
+	keyboard_map[PDFK_PGUP_10].mods = KEYB_MOD_SHIFT;
+	keyboard_map[PDFK_PGDN_10].key = SDL_SCANCODE_PAGEDOWN;
+	keyboard_map[PDFK_PGDN_10].mods = KEYB_MOD_SHIFT;
 
 	keyboard_map[PDFK_ZOOMIN].key = SDL_SCANCODE_EQUALS;
 	keyboard_map[PDFK_ZOOMOUT].key = SDL_SCANCODE_MINUS;
