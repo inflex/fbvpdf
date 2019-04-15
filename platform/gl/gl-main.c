@@ -1437,6 +1437,7 @@ int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
 
 int ddi_process(char *ddi_data) {
 	char *cmd, *p, *q;
+	int result = 0;
 
 	compsearch_radius    = 500.0f;
 	compsearch_highlight = 8; // 0b0111
@@ -1496,26 +1497,26 @@ int ddi_process(char *ddi_data) {
 		flog("%s:%d: Search NEXT hit, simulate keypress in viewer.\n",FL);
 		ui_set_keypress(PDFK_SEARCH_NEXT);
 		do_keypress();
-		return;
+		return result;
 	}
 
 	if (strstr(ddi_data, "!search_prev:")) {
 		flog("%s:%d: Search PREV hit, simulate keypress in viewer.\n",FL);
 		ui_set_keypress( PDFK_SEARCH_PREV );
 		do_keypress();
-		return;
+		return result;
 	}
 
 	if (strstr(ddi_data, "!search_page_next:")) {
 		ui_set_keypress(PDFK_SEARCH_NEXT_PAGE);
 		do_keypress();
-		return;
+		return result;
 	}
 
 	if (strstr(ddi_data, "!search_page_prev:")) {
 		ui_set_keypress(PDFK_SEARCH_PREV_PAGE);
 		do_keypress();
-		return;
+		return result;
 	}
 
 	if (strstr(ddi_data, "!gotopg:")) {
