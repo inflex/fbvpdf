@@ -2429,7 +2429,7 @@ static void run_processing_loop(void) {
 		char buf[256];
 		int x = canvas_x; // + 1 * ui.lineheight;
 		int y = canvas_y; // + 1 * ui.lineheight;
-		int w = canvas_w - 8 * ui.lineheight;
+		int w = canvas_w;
 		int h = 1.25 * ui.lineheight;
 
 		glBegin(GL_TRIANGLE_STRIP);
