@@ -1040,12 +1040,47 @@ static void do_keypress(void) {
 
 
 		if (IsKeyPressed(PDFK_SEARCH_NEXT)) {
-			this_search.active         = 1;
-			this_search.direction = 1;
-			this_search.inpage_index++;
-			flog("%s:%d: search_next ->  inpage_index=%d, hit count=%d\n", FL, this_search.inpage_index, this_search.hit_count_a);
-			if (this_search.inpage_index >= this_search.hit_count_a) {
-				flog("%s:%d: Resetting to next page\n", FL);
+			if (strlen(this_search.a)) {
+				this_search.active         = 1;
+				this_search.direction = 1;
+				this_search.inpage_index++;
+				flog("%s:%d: search_next ->  inpage_index=%d, hit count=%d\n", FL, this_search.inpage_index, this_search.hit_count_a);
+				if (this_search.inpage_index >= this_search.hit_count_a) {
+					flog("%s:%d: Resetting to next page\n", FL);
+					this_search.inpage_index = -1;
+					this_search.page++;
+					if (this_search.page > fz_count_pages(ctx, doc)) {
+						this_search.page = 0;
+					}
+				}
+			}
+			return;
+		}
+
+		if (IsKeyPressed(PDFK_SEARCH_PREV)) {
+			if (strlen(this_search.a)) {
+				this_search.direction = -1;
+				this_search.active         = 1;
+				flog("%s:%d: search_prev ->  page=%d inpage_index=%d, hit count=%d\n", FL, this_search.page+1, this_search.inpage_index, this_search.hit_count_a);
+				if (this_search.inpage_index < 1) {
+					flog("%s:%d: Resetting to prev page\n", FL);
+					this_search.inpage_index = -1;
+					this_search.page--;
+					flog("%s:%d: New page=%d index=%d\n", FL, this_search.page+1, this_search.inpage_index);
+					if (this_search.page < 0) {
+						this_search.page = fz_count_pages(ctx,doc) -1;
+					}
+				} else {
+					this_search.inpage_index--;
+				}
+			}
+			return;
+		}
+
+		if (IsKeyPressed(PDFK_SEARCH_NEXT_PAGE)) {
+			if (strlen(this_search.a)) {
+				this_search.active         = 1;
+				this_search.direction = 1;
 				this_search.inpage_index = -1;
 				this_search.page++;
 				if (this_search.page > fz_count_pages(ctx, doc)) {
@@ -1055,42 +1090,15 @@ static void do_keypress(void) {
 			return;
 		}
 
-		if (IsKeyPressed(PDFK_SEARCH_PREV)) {
-			this_search.direction = -1;
-			this_search.active         = 1;
-			flog("%s:%d: search_prev ->  page=%d inpage_index=%d, hit count=%d\n", FL, this_search.page+1, this_search.inpage_index, this_search.hit_count_a);
-			if (this_search.inpage_index < 1) {
-				flog("%s:%d: Resetting to prev page\n", FL);
-				this_search.inpage_index = -1;
+		if (IsKeyPressed(PDFK_SEARCH_PREV_PAGE)) {
+			if (strlen(this_search.a)) {
+				this_search.direction = -1;
+				this_search.active         = 1;
+				this_search.inpage_index = 0;
 				this_search.page--;
-				flog("%s:%d: New page=%d index=%d\n", FL, this_search.page+1, this_search.inpage_index);
 				if (this_search.page < 0) {
 					this_search.page = fz_count_pages(ctx,doc) -1;
 				}
-			} else {
-				this_search.inpage_index--;
-			}
-			return;
-		}
-
-		if (IsKeyPressed(PDFK_SEARCH_NEXT_PAGE)) {
-			this_search.active         = 1;
-			this_search.direction = 1;
-			this_search.inpage_index = -1;
-			this_search.page++;
-			if (this_search.page > fz_count_pages(ctx, doc)) {
-				this_search.page = 0;
-			}
-			return;
-		}
-
-		if (IsKeyPressed(PDFK_SEARCH_PREV_PAGE)) {
-			this_search.direction = -1;
-			this_search.active         = 1;
-			this_search.inpage_index = 0;
-			this_search.page--;
-			if (this_search.page < 0) {
-				this_search.page = fz_count_pages(ctx,doc) -1;
 			}
 			return;
 		}
@@ -2121,230 +2129,231 @@ int do_search_compound( void ) {
  */
 int do_search( void ) {
 
+	if (strlen(this_search.a) == 0) return 0;
 	if (!this_search.active) return 0;
 	if (this_search.mode == SEARCH_MODE_NONE) return 0;
 	if (this_search.a[0] == '\0') return 0;
 
-		/*
-		 * searching
-		 *
-		 * Sending the same search string as before
-		 * will result in us moving to the next index.
-		 *
-		 * sn contains the search string.
-		 *
-		 */
+	/*
+	 * searching
+	 *
+	 * Sending the same search string as before
+	 * will result in us moving to the next index.
+	 *
+	 * sn contains the search string.
+	 *
+	 */
 
-		flog("%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.a);
+	flog("%s:%d: SEARCHING mode=%d '%s'\r\n", FL, this_search.mode, this_search.a);
 
-		this_search.alt[0] = '\0';
-		if (search_heuristics == 1) {
-			if (strchr(this_search.a, '_')) {
-				int i, l;
-				snprintf(this_search.alt, sizeof(this_search.alt), "%s", this_search.a);
-				l = strlen(this_search.alt);
-				for (i = 0; i < l - 1; i++) {
-					if (this_search.alt[i] == '_') this_search.alt[i] = ' ';
-				}
-				if (debug) fprintf(stderr, "%s:%d: Alternative search: '%s'\r\n", FL, this_search.alt);
+	this_search.alt[0] = '\0';
+	if (search_heuristics == 1) {
+		if (strchr(this_search.a, '_')) {
+			int i, l;
+			snprintf(this_search.alt, sizeof(this_search.alt), "%s", this_search.a);
+			l = strlen(this_search.alt);
+			for (i = 0; i < l - 1; i++) {
+				if (this_search.alt[i] == '_') this_search.alt[i] = ' ';
 			}
-		} else {
-			flog("%s:%d: Search heuristics disabled\r\n", FL);
+			if (debug) fprintf(stderr, "%s:%d: Alternative search: '%s'\r\n", FL, this_search.alt);
+		}
+	} else {
+		flog("%s:%d: Search heuristics disabled\r\n", FL);
+	}
+
+	/*
+	 * Step 1: check our input
+	 *
+	 */
+	if (this_search.mode == SEARCH_MODE_INPAGE) {
+		this_search.inpage_index = 0;
+	}
+
+	ui_begin();
+
+
+	while (this_search.active == 1) {
+
+		/*
+		 * Keep going around until our search stops being
+		 * active
+		 *
+		 */
+		flog("\n\n%s:%d: Current search page = %d ( %d page(s) in document )\n", FL, this_search.page +1, fz_count_pages(ctx,doc));
+
+		if (this_search.page > fz_count_pages(ctx, doc) - 1) {
+			flog("%s:%d: End of pages hit, resetting search data and stopping search\n", FL);
+			memset(&prior_search, 0, sizeof(prior_search));
+			this_search.page         = -1;
+			this_search.inpage_index = -1;
+			this_search.active            = 0;
+			break;
 		}
 
 		/*
-		 * Step 1: check our input
+		 * Because of the prevelance of space vs underscore strings in PDF schematics
+		 * we try search for both variants
 		 *
 		 */
-		if (this_search.mode == SEARCH_MODE_INPAGE) {
-			this_search.inpage_index = 0;
+		if (this_search.mode != SEARCH_MODE_COMPOUND) {
+			this_search.page = fz_clampi(this_search.page, 0, fz_count_pages(ctx, doc) - 1);
+			this_search.hit_count_a = fz_search_page_number(
+					ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+			flog("%s:%d: Searching for '%s', %d hits on page %d\n",
+					FL,
+					this_search.a,
+					this_search.hit_count_a,
+					this_search.page + 1);
+
+			if ((this_search.hit_count_a == 0) && (strlen(this_search.alt))) {
+				this_search.hit_count_a = fz_search_page_number(
+						ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
+				flog("%s:%d: Searching for alternative - '%s', %d hits on page %d\n",
+						FL,
+						this_search.alt,
+						this_search.hit_count_a,
+						this_search.page + 1);
+			}
 		}
 
-		ui_begin();
+		if (this_search.hit_count_a) this_search.has_hits = 1;
 
+		/*
+		 * With compound searching, we're using using the initial part just to locate our page
+		 *
+		 */
+		if (this_search.mode == SEARCH_MODE_COMPOUND) {
 
-			while (this_search.active == 1) {
+			do_search_compound();
 
-				/*
-				 * Keep going around until our search stops being
-				 * active
-				 *
-				 */
-				flog("\n\n%s:%d: Current search page = %d ( %d page(s) in document )\n", FL, this_search.page +1, fz_count_pages(ctx,doc));
+		}     // if search compound
 
-				if (this_search.page > fz_count_pages(ctx, doc) - 1) {
-					flog("%s:%d: End of pages hit, resetting search data and stopping search\n", FL);
-					memset(&prior_search, 0, sizeof(prior_search));
-					this_search.page         = -1;
+		/*
+		 * If we've used up all our hits in this page
+		 *
+		 * OR if there were no hits on this page
+		 *
+		 */
+		if (this_search.mode != SEARCH_MODE_INPAGE) {
+			flog("%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d, direction=%d\r\n", FL, this_search.hit_count_a, this_search.inpage_index, this_search.page, this_search.direction);
+
+			if (this_search.direction == 1) {
+
+				//if ((this_search.hit_count_a == 0) || (this_search.inpage_index > this_search.hit_count_a - 2)) 
+				if (this_search.hit_count_a == 0)  {
 					this_search.inpage_index = -1;
-					this_search.active            = 0;
-					break;
-				}
-
-				/*
-				 * Because of the prevelance of space vs underscore strings in PDF schematics
-				 * we try search for both variants
-				 *
-				 */
-				if (this_search.mode != SEARCH_MODE_COMPOUND) {
-					this_search.page = fz_clampi(this_search.page, 0, fz_count_pages(ctx, doc) - 1);
-					this_search.hit_count_a = fz_search_page_number(
-							ctx, doc, this_search.page, this_search.a, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-					flog("%s:%d: Searching for '%s', %d hits on page %d\n",
-							FL,
-							this_search.a,
-							this_search.hit_count_a,
-							this_search.page + 1);
-
-					if ((this_search.hit_count_a == 0) && (strlen(this_search.alt))) {
-						this_search.hit_count_a = fz_search_page_number(
-								ctx, doc, this_search.page, this_search.alt, this_search.hit_bbox_a, nelem(this_search.hit_bbox_a));
-						flog("%s:%d: Searching for alternative - '%s', %d hits on page %d\n",
-								FL,
-								this_search.alt,
-								this_search.hit_count_a,
-								this_search.page + 1);
-					}
-				}
-
-				if (this_search.hit_count_a) this_search.has_hits = 1;
-
-				/*
-				 * With compound searching, we're using using the initial part just to locate our page
-				 *
-				 */
-				if (this_search.mode == SEARCH_MODE_COMPOUND) {
-
-					do_search_compound();
-
-				}     // if search compound
-
-				/*
-				 * If we've used up all our hits in this page
-				 *
-				 * OR if there were no hits on this page
-				 *
-				 */
-				if (this_search.mode != SEARCH_MODE_INPAGE) {
-					 flog("%s:%d: Normal page search: %d hits, inpage_index=%d, page=%d, direction=%d\r\n", FL, this_search.hit_count_a, this_search.inpage_index, this_search.page, this_search.direction);
-
-					if (this_search.direction == 1) {
-
-						//if ((this_search.hit_count_a == 0) || (this_search.inpage_index > this_search.hit_count_a - 2)) 
-						if (this_search.hit_count_a == 0)  {
-							this_search.inpage_index = -1;
-							flog("%s:%d: Search direction = %d\n", FL, this_search.direction);
-							this_search.page += this_search.direction; //20190415
-
-							/*
-							 * If we've used up all the pages in the document
-							 *
-							 */
-							if (this_search.page >= fz_count_pages(ctx, doc) - 1) {
-
-								/*
-								 * If the document does have hits
-								 *
-								 */
-								if (this_search.has_hits) {
-									flog("%s:%d: End of document reached, but resetting back to start\r\n", FL);
-									this_search.page  = 0;
-									this_search.active     = 0;
-									//									continue;
-								} else {
-									flog("%s:%d: End of document reached, no hits found at all\r\n", FL);
-									memcpy(&prior_search, &this_search, sizeof(prior_search));
-
-									this_search.not_found = 1;
-									update_title();
-									this_search.active = 0;
-									break; // no hits in document
-								} // if document has hits
-							} // if search page is out of bounds
-
-						} else {
-							if (this_search.inpage_index == -1) this_search.inpage_index = 0;
-
-						} // if search hit count is zero for this page
-
-
-				} else if (this_search.direction == -1) {
-
-						if (this_search.hit_count_a == 0)  {
-							this_search.inpage_index = -1;
-							this_search.page += this_search.direction; //20190415
-							flog("%s:%d: Search direction = %d, page = %d\n", FL, this_search.direction, this_search.page);
-
-							/*
-							 * If we've used up all the pages in the document
-							 *
-							 */
-							if (this_search.page <= 0) {
-
-								/*
-								 * If the document does have hits
-								 *
-								 */
-								if (this_search.has_hits) {
-									flog("%s:%d: End of document reached, but resetting back to start\r\n", FL);
-									this_search.page  = fz_count_pages(ctx,doc) -1;
-									this_search.active     = 0;
-
-								} else {
-									flog("%s:%d: End of document reached, no hits found at all\r\n", FL);
-									memcpy(&prior_search, &this_search, sizeof(prior_search));
-
-									this_search.not_found = 1;
-									update_title();
-									this_search.active = 0;
-									break; // no hits in document
-								} // if document has hits
-							} // if search page is out of bounds
-
-						} else {
-							if (this_search.inpage_index == -1) this_search.inpage_index = this_search.hit_count_a -1;
-
-						}// if search hit count is zero for this page
-
-					} else { // if search direction is positive
-						flog("%s:%d: Direction is zero ---- what's going on?", FL);
-						this_search.active = 0;
-					}
-
-				} // checking results if not an INPAGE search
-
-				/*
-				 * If we have search hits...
-				 *
-				 */
-				if ((this_search.hit_count_a) && (this_search.mode != SEARCH_MODE_INPAGE)) {
-					fz_point p;
-					fz_rect *bb;
-					this_search.has_hits = 1;
+					flog("%s:%d: Search direction = %d\n", FL, this_search.direction);
+					this_search.page += this_search.direction; //20190415
 
 					/*
-					 * If the search_current_page hasn't yet been initialised
-					 * then set it to this page that we've got hits on.
+					 * If we've used up all the pages in the document
 					 *
 					 */
-					if (this_search.inpage_index < 0) this_search.inpage_index = 0;
+					if (this_search.page >= fz_count_pages(ctx, doc) - 1) {
 
-					this_search.active = 0;
+						/*
+						 * If the document does have hits
+						 *
+						 */
+						if (this_search.has_hits) {
+							flog("%s:%d: End of document reached, but resetting back to start\r\n", FL);
+							this_search.page  = 0;
+							this_search.active     = 0;
+							//									continue;
+						} else {
+							flog("%s:%d: End of document reached, no hits found at all\r\n", FL);
+							memcpy(&prior_search, &this_search, sizeof(prior_search));
 
-					p.x = (canvas_w / 2) * 72 / (currentzoom);
-					p.y = (canvas_h / 2) * 72 / (currentzoom);
-					bb  = &this_search.hit_bbox_a[this_search.inpage_index];
-					flog("%s:%d: Jumping to %d[%d][%f %f]\r\n", FL, this_search.page+1, this_search.inpage_index, bb->x0, bb->y0);
-					jump_to_page_xy(this_search.page, bb->x0 - p.x, bb->y0 - p.y);
-					currently_viewed_page = this_search.page;
-					this_search.active = 0;
-				} // if search hit count > 0
+							this_search.not_found = 1;
+							update_title();
+							this_search.active = 0;
+							break; // no hits in document
+						} // if document has hits
+					} // if search page is out of bounds
 
-				if (this_search.mode == SEARCH_MODE_INPAGE) {
-					this_search.active = 0;
-				} // search in page only
+				} else {
+					if (this_search.inpage_index == -1) this_search.inpage_index = 0;
 
-			} // while search is active
+				} // if search hit count is zero for this page
+
+
+			} else if (this_search.direction == -1) {
+
+				if (this_search.hit_count_a == 0)  {
+					this_search.inpage_index = -1;
+					this_search.page += this_search.direction; //20190415
+					flog("%s:%d: Search direction = %d, page = %d\n", FL, this_search.direction, this_search.page);
+
+					/*
+					 * If we've used up all the pages in the document
+					 *
+					 */
+					if (this_search.page <= 0) {
+
+						/*
+						 * If the document does have hits
+						 *
+						 */
+						if (this_search.has_hits) {
+							flog("%s:%d: End of document reached, but resetting back to start\r\n", FL);
+							this_search.page  = fz_count_pages(ctx,doc) -1;
+							this_search.active     = 0;
+
+						} else {
+							flog("%s:%d: End of document reached, no hits found at all\r\n", FL);
+							memcpy(&prior_search, &this_search, sizeof(prior_search));
+
+							this_search.not_found = 1;
+							update_title();
+							this_search.active = 0;
+							break; // no hits in document
+						} // if document has hits
+					} // if search page is out of bounds
+
+				} else {
+					if (this_search.inpage_index == -1) this_search.inpage_index = this_search.hit_count_a -1;
+
+				}// if search hit count is zero for this page
+
+			} else { // if search direction is positive
+				flog("%s:%d: Direction is zero ---- what's going on?", FL);
+				this_search.active = 0;
+			}
+
+		} // checking results if not an INPAGE search
+
+		/*
+		 * If we have search hits...
+		 *
+		 */
+		if ((this_search.hit_count_a) && (this_search.mode != SEARCH_MODE_INPAGE)) {
+			fz_point p;
+			fz_rect *bb;
+			this_search.has_hits = 1;
+
+			/*
+			 * If the search_current_page hasn't yet been initialised
+			 * then set it to this page that we've got hits on.
+			 *
+			 */
+			if (this_search.inpage_index < 0) this_search.inpage_index = 0;
+
+			this_search.active = 0;
+
+			p.x = (canvas_w / 2) * 72 / (currentzoom);
+			p.y = (canvas_h / 2) * 72 / (currentzoom);
+			bb  = &this_search.hit_bbox_a[this_search.inpage_index];
+			flog("%s:%d: Jumping to %d[%d][%f %f]\r\n", FL, this_search.page+1, this_search.inpage_index, bb->x0, bb->y0);
+			jump_to_page_xy(this_search.page, bb->x0 - p.x, bb->y0 - p.y);
+			currently_viewed_page = this_search.page;
+			this_search.active = 0;
+		} // if search hit count > 0
+
+		if (this_search.mode == SEARCH_MODE_INPAGE) {
+			this_search.active = 0;
+		} // search in page only
+
+	} // while search is active
 
 }
 
