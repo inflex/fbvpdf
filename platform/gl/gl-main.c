@@ -1667,7 +1667,7 @@ int ddi_process(char *ddi_data) {
 		this_search.mode = SEARCH_MODE_NORMAL;
 		if (strcmp(this_search.search_raw, cmd)==0) {
 			flog("%s:%d: Same DDI search as before, simulate 'next' keypress.\n",FL);
-			ui_set_keypress(PDFK_SEARCH_NEXT_PAGE);
+			ui_set_keypress(PDFK_SEARCH_NEXT);
 			do_keypress();
 		} else {
 			snprintf(this_search.search_raw, sizeof(this_search.search_raw), "%s", cmd);
@@ -1725,6 +1725,7 @@ int ddi_process(char *ddi_data) {
 
 
 
+#ifdef UNUSED_CODE
 int do_search_2( void ) {
 	if (this_search.active) {
 
@@ -1983,6 +1984,7 @@ int do_search_2( void ) {
 	} // while (1) (break out when hits found or end of document
 
 }
+#endif //UNUSED_CODE
 
 
 
@@ -2154,46 +2156,10 @@ int do_search( void ) {
 		 */
 		if (this_search.mode == SEARCH_MODE_INPAGE) {
 			this_search.inpage_index = 0;
-
-//		} else if (strcmp(this_search.search_raw, prior_search.search_raw) == 0) {
-			/* 
-			 * XXXXX This is for when someone in FBV is just bashing the [PDF] button
-			 *
-			 * We now handle this in the preprocessing/DDI stage.
-			 *
-			 */
-//			ui_set_keypress(PDFK_SEARCH_NEXT);
-//			do_keypress();
-			//				this_search.inpage_index++;
-
-//		} else {
-			/*
-			 * If we're starting a new search
-			 */
-			//FIXME this_search.page         = 1; // is 1 or zero right?
-
-			/*
-			 * We no longer do this in the search itself, instead it's 
-			 * set up by DDI / input post processing before being
-			 * fed in to this search function
-			 *
-			 */
-//			this_search.page         = 0;
-//			this_search.inpage_index = -1;
-//			memcpy(&prior_search, &this_search, sizeof(struct search_s));
-//			flog("%s:%d: Setting prior search to '%s'\r\n", FL, prior_search.search_raw);
 		}
 
 		ui_begin();
 
-		{
-//			currently_viewed_page = this_search.page;
-//			this_search.active         = 1;
-			//				this_search.not_found = 1;
-
-//			if (raise_on_search == 1) {
-//				SDL_RaiseWindow(sdlWindow);
-//			}
 
 			while (this_search.active == 1) {
 
@@ -2293,9 +2259,11 @@ int do_search( void ) {
 									break; // no hits in document
 								} // if document has hits
 							} // if search page is out of bounds
+
 						} else {
-//							break;
-						}// if search hit count is zero for this page
+							if (this_search.inpage_index == -1) this_search.inpage_index = 0;
+
+						} // if search hit count is zero for this page
 
 
 				} else if (this_search.direction == -1) {
@@ -2330,17 +2298,16 @@ int do_search( void ) {
 									break; // no hits in document
 								} // if document has hits
 							} // if search page is out of bounds
+
 						} else {
 							if (this_search.inpage_index == -1) this_search.inpage_index = this_search.hit_count_a -1;
-//							break;
+
 						}// if search hit count is zero for this page
 
 					} else { // if search direction is positive
 						flog("%s:%d: Direction is zero ---- what's going on?", FL);
 						this_search.active = 0;
 					}
-
-				//	continue;
 
 				} // checking results if not an INPAGE search
 
@@ -2358,7 +2325,6 @@ int do_search( void ) {
 					 * then set it to this page that we've got hits on.
 					 *
 					 */
-					//FIXME1						this_search.inpage_index += this_search.direction;
 					if (this_search.inpage_index < 0) this_search.inpage_index = 0;
 
 					this_search.active = 0;
@@ -2378,7 +2344,6 @@ int do_search( void ) {
 
 			} // while search is active
 
-		} // block braces only
 }
 
 
@@ -3178,7 +3143,7 @@ int main(int argc, char **argv)
 				check_again--;
 			} else {
 				ddi_check();
-				check_again = 10; // 10?  Bigger means longer wait
+				check_again = 5; // 10?  Bigger means longer wait
 			}
 
 			run_processing_loop();
