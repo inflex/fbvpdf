@@ -2107,6 +2107,7 @@ int do_search_compound( void ) {
 		this_search.hit_count_a = new_hit_count;
 	} // if search hit count
 
+	return 0;
 }
 
 /*
@@ -2120,9 +2121,9 @@ int do_search_compound( void ) {
  */
 int do_search( void ) {
 
-	if (!this_search.active) return;
-	if (this_search.mode == SEARCH_MODE_NONE) return;
-	if (this_search.a[0] == '\0') return;
+	if (!this_search.active) return 0;
+	if (this_search.mode == SEARCH_MODE_NONE) return 0;
+	if (this_search.a[0] == '\0') return 0;
 
 		/*
 		 * searching

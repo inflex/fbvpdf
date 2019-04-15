@@ -14,7 +14,7 @@ include Makethird
 # Do not specify CFLAGS or LIBS on the make invocation line - specify
 # XCFLAGS or XLIBS instead. Make ignores any lines in the makefile that
 # set a variable that was set on the command line.
-CFLAGS += $(XCFLAGS)  -O3 -Ithirdparty/SDL/i686-w64-mingw32/include -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -IRenderers -Dmain=SDL_main
+CFLAGS += $(XCFLAGS)  -O3 -Wall -Ithirdparty/SDL/i686-w64-mingw32/include -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -IRenderers -Dmain=SDL_main
 #LIBS += $(XLIBS) -lm  -lSDL2
 #LIBS += $(XLIBS) -lm  -lthirdparty/SDL/i686-w64-mingw32/lib/libSDL2.dll.a
 LIBS += $(XLIBS) -lm  -L./thirdparty/SDL/i686-w64-mingw32/lib -lmingw32 -lSDL2main -lSDL2 -mwindows -Wl,--no-undefined -lm -ldinput8 -ldxguid -ldxerr8 -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion -luuid -static-libgcc
