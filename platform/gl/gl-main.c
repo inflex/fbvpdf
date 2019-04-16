@@ -1240,7 +1240,8 @@ static int do_status_footer(void) {
 				, KEYB_combo_to_string(d, sizeof(d), keyboard_map[PDFK_SEARCH_PREV_PAGE])
 				);
 	} else if (this_search.not_found) {
-		snprintf(ss, sizeof(ss), "Search not found '%50s' [ Press ESC to clear ]", this_search.a);
+		snprintf(ss, sizeof(ss), "Search not found '%s' [ Press ESC to clear ]", this_search.a);
+
 	} else {
 		char a[20],b[20],c[20];
 		char d[20],e[20];
@@ -1685,6 +1686,7 @@ int ddi_process(char *ddi_data) {
 			this_search.direction = 1;
 			this_search.not_found = 0;
 			this_search.has_hits = 0;
+			this_search.page = 0;
 		}
 	}
 
@@ -2419,7 +2421,8 @@ static void run_processing_loop(void) {
 				this_search.has_hits = 0;
 				this_search.active = 1;
 				this_search.direction = 1;
-				this_search.page = currently_viewed_page;
+				//this_search.page = currently_viewed_page;
+				this_search.page = 0;
 				this_search.inpage_index = -1;
 			}
 		}
