@@ -823,13 +823,14 @@ static void do_search_hits(int xofs, int yofs) {
 			 */
 
 
-			glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO); /* invert destination color */
+//			glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO); /* invert destination color */
+			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			glEnable(GL_BLEND);
-			glColor4f(0.2, 1, 0.2, 1.0f);
+			glColor4f(1, 0.0, 0.2, 0.5f);
 			glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 			glRectf(xofs + r.x0 -offset, yofs + r.y0 -offset, xofs + r.x1 +offset, yofs + r.y1 +offset);
 			glDisable(GL_BLEND);
-
+	/*
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			glEnable(GL_BLEND);
 			glLineWidth(3.0f);
@@ -839,6 +840,7 @@ static void do_search_hits(int xofs, int yofs) {
 			glLineWidth(1.0f);
 			glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 			glDisable(GL_BLEND);
+			*/
 
 		} else {
 			/*
@@ -848,7 +850,7 @@ static void do_search_hits(int xofs, int yofs) {
 		//	glColor4f(1, 0, 0, 0.1f);
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			glEnable(GL_BLEND);
-			glColor4f(1, 0, 0, 0.2f);
+			glColor4f(1, 0.2, 0.2, 0.3f);
 			glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
 			glDisable(GL_BLEND);
 		}
@@ -1771,13 +1773,7 @@ int sort_hits( fz_rect bb[], int count ) {
 		double a1 = (bb[i].x1 -bb[i].x0)*(bb[i].y1 -bb[i].y0); // area for bb1
 		for (j = i+1; j < count; j++) {
 			double a2 = (bb[j].x1 -bb[j].x0)*(bb[j].y1 -bb[j].y0); // area for bb1
-			double ratio = a1/a2;
-
-			if (
-					(((ratio >= 0.5)||(ratio < 1.5)) && (bb[i].y0 > bb[j].y0)) // closer to origin (0) to the front of the list
-					||(ratio < 0.5)
-				)
-				{
+			if (a2 > a1) {
 				fz_rect tmp;
 				tmp = bb[i];
 				bb[i] = bb[j];
