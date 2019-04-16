@@ -848,7 +848,7 @@ static void do_search_hits(int xofs, int yofs) {
 		//	glColor4f(1, 0, 0, 0.1f);
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			glEnable(GL_BLEND);
-			glColor4f(0, 1, 0, 0.3f);
+			glColor4f(1, 0, 0, 0.2f);
 			glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
 			glDisable(GL_BLEND);
 		}
