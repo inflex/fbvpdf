@@ -144,8 +144,9 @@ void ogl_assert(fz_context *ctx, const char *msg) {
 }
 
 void ui_draw_image(struct texture *tex, float x, float y) {
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_BLEND);
+//	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	//glBlendFunc(GL_ONE, GL_DST_COLOR);
+//	glEnable(GL_BLEND);
 	glBindTexture(GL_TEXTURE_2D, tex->id);
 	glEnable(GL_TEXTURE_2D);
 	glBegin(GL_TRIANGLE_STRIP);
@@ -795,6 +796,11 @@ static void do_page_selection(int x0, int y0, int x1, int y1) {
 	}
 }
 
+
+/*
+ * This is where we colour the search hits on a page
+ *
+ */
 static void do_search_hits(int xofs, int yofs) {
 	fz_rect r;
 	int i;
@@ -815,15 +821,26 @@ static void do_search_hits(int xofs, int yofs) {
 			 * highlight the current hit
 			 *
 			 */
-			glColor4f(1, 0, 0, 0.4f);
+			glColor4f(0, 0, 0, 0.8f);
+			glLineWidth(1.2f);
+			glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+			glRectf(xofs + r.x0 -2, yofs + r.y0 -2, xofs + r.x1 +2, yofs + r.y1 +2);
+			glLineWidth(1.0f);
+
+			glColor4f(1, 0, 0, 0.3f);
+			glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
+//			glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
+
 		} else {
 			/*
 			 * standard faded for other hits
 			 *
 			 */
 			glColor4f(1, 0, 0, 0.1f);
+			glColor4f(0, 1, 0, 0.1f);
 		}
 		glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
+//		glRect(xofs + r.x0 -2, yofs + r.y0 -2, xofs + r.x1 +2, yofs + r.y1 +2);
 	}
 
 	glDisable(GL_BLEND);
@@ -1421,6 +1438,7 @@ static void do_canvas(void) {
 	x = canvas_x - scroll_x;
 	y = canvas_y - scroll_y;
 
+
 	ui_draw_image(&page_tex, x - page_tex.x, y - page_tex.y);
 
 	if (!this_search.active) {
@@ -1428,6 +1446,7 @@ static void do_canvas(void) {
 		do_page_selection(x, y, x + page_tex.w, y + page_tex.h);
 		if (currently_viewed_page == this_search.page && this_search.hit_count_a > 0) do_search_hits(x, y);
 	}
+
 }
 
 int ddi_process_keymap( char *ddi_data, char *keystr, int index ) {
@@ -1735,6 +1754,23 @@ int ddi_process(char *ddi_data) {
 
 
 
+int sort_hits( fz_rect bb[], int count ) {
+	int i, j;
+	for (i = 0; i < count -1; i++) {
+		double a1 = (bb[i].x1 -bb[i].x0)*(bb[i].y1 -bb[i].y0); // area for bb1
+		for (j = i+1; j < count; j++) {
+			double a2 = (bb[j].x1 -bb[j].x0)*(bb[j].y1 -bb[j].y0); // area for bb1
+			if (a1 < a2) {
+				fz_rect tmp;
+				tmp = bb[i];
+				bb[i] = bb[j];
+				bb[j] = tmp;
+			}
+		} // for j
+	} // for i
+
+	return 0;
+}
 
 #ifdef UNUSED_CODE
 int do_search_2( void ) {
@@ -1942,6 +1978,8 @@ int do_search_2( void ) {
 
 				p.x = (canvas_w / 2) * 72 / (currentzoom);
 				p.y = (canvas_h / 2) * 72 / (currentzoom);
+
+				sort_hits(this_search.hit_bbox_a, this_search.hit_count_a);
 				bb  = &this_search.hit_bbox_a[this_search.inpage_index];
 
 				flog("%s:%d: Jumping to %d[%f %f]\r\n", FL, this_search.page, bb->x0, bb->y0);
@@ -2344,6 +2382,8 @@ int do_search( void ) {
 
 			p.x = (canvas_w / 2) * 72 / (currentzoom);
 			p.y = (canvas_h / 2) * 72 / (currentzoom);
+
+			sort_hits(this_search.hit_bbox_a, this_search.hit_count_a);
 			bb  = &this_search.hit_bbox_a[this_search.inpage_index];
 			flog("%s:%d: Jumping to %d[%d][%f %f]\r\n", FL, this_search.page+1, this_search.inpage_index, bb->x0, bb->y0);
 			jump_to_page_xy(this_search.page, bb->x0 - p.x, bb->y0 - p.y);
@@ -2357,6 +2397,7 @@ int do_search( void ) {
 
 	} // while search is active
 
+	return 0;
 }
 
 
