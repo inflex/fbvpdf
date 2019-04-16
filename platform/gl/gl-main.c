@@ -1771,12 +1771,18 @@ int sort_hits( fz_rect bb[], int count ) {
 		double a1 = (bb[i].x1 -bb[i].x0)*(bb[i].y1 -bb[i].y0); // area for bb1
 		for (j = i+1; j < count; j++) {
 			double a2 = (bb[j].x1 -bb[j].x0)*(bb[j].y1 -bb[j].y0); // area for bb1
-			if (a1 < a2) {
+			double ratio = a1/a2;
+
+			if (
+					(((ratio >= 0.5)||(ratio < 1.5)) && (bb[i].y0 > bb[j].y0)) // closer to origin (0) to the front of the list
+					||(ratio < 0.5)
+				)
+				{
 				fz_rect tmp;
 				tmp = bb[i];
 				bb[i] = bb[j];
 				bb[j] = tmp;
-			}
+			} 
 		} // for j
 	} // for i
 
