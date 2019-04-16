@@ -808,8 +808,6 @@ static void do_search_hits(int xofs, int yofs) {
 	xofs -= page_tex.x;
 	yofs -= page_tex.y;
 
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_BLEND);
 
 	for (i = 0; i < this_search.hit_count_a; ++i) {
 		r = this_search.hit_bbox_a[i];
@@ -817,33 +815,46 @@ static void do_search_hits(int xofs, int yofs) {
 		fz_transform_rect(&r, &page_ctm);
 
 		if (i == this_search.inpage_index) {
+			float offset = 5.0f;
+			float loffset = 6.0f;
 			/*
 			 * highlight the current hit
 			 *
 			 */
-			glColor4f(0, 0, 0, 0.8f);
-			glLineWidth(1.2f);
-			glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-			glRectf(xofs + r.x0 -2, yofs + r.y0 -2, xofs + r.x1 +2, yofs + r.y1 +2);
-			glLineWidth(1.0f);
 
-			glColor4f(1, 0, 0, 0.3f);
+
+			glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO); /* invert destination color */
+			glEnable(GL_BLEND);
+			glColor4f(0.2, 1, 0.2, 1.0f);
 			glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-//			glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
+			glRectf(xofs + r.x0 -offset, yofs + r.y0 -offset, xofs + r.x1 +offset, yofs + r.y1 +offset);
+			glDisable(GL_BLEND);
+
+			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			glEnable(GL_BLEND);
+			glLineWidth(3.0f);
+			glColor4f(0, 0, 0, 0.20f);
+			glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+			glRectf(xofs + r.x0 -loffset, yofs + r.y0 -loffset, xofs + r.x1 +loffset, yofs + r.y1 +loffset);
+			glLineWidth(1.0f);
+			glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
+			glDisable(GL_BLEND);
 
 		} else {
 			/*
 			 * standard faded for other hits
 			 *
 			 */
-			glColor4f(1, 0, 0, 0.1f);
-			glColor4f(0, 1, 0, 0.1f);
+		//	glColor4f(1, 0, 0, 0.1f);
+			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			glEnable(GL_BLEND);
+			glColor4f(0, 1, 0, 0.3f);
+			glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
+			glDisable(GL_BLEND);
 		}
-		glRectf(xofs + r.x0, yofs + r.y0, xofs + r.x1, yofs + r.y1);
 //		glRect(xofs + r.x0 -2, yofs + r.y0 -2, xofs + r.x1 +2, yofs + r.y1 +2);
 	}
 
-	glDisable(GL_BLEND);
 }
 
 static void toggle_fullscreen(void) {
