@@ -8,6 +8,6 @@ make -f Makefile.macos GIT_BUILD='${G}'  $1
 MR=$?
 if [ $MR -eq 0 ]; then
 	mv build/release/mupdf-gl build/release/mupdf-macos
-	./make-bundle.sh
+	./make-macos-bundle.sh
 fi
 exit $MR
