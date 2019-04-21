@@ -3108,13 +3108,14 @@ int main(int argc, char **argv)
 		flog("%s:%d: update title\r\n", FL);
 		update_title();
 
+		glViewport(0, 0, window_w, window_h);
+		glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
+
 		flog("%s:%d: SDL loop starting\r\n\r\n", FL);
 		while (!doquit) {
 
 			//			if (!(SDL_getWindowFlags() & SDL_WINDOW_SHOWN)) continue;
 
-			glViewport(0, 0, window_w, window_h);
-			glClearColor(0.3f, 0.3f, 0.5f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glMatrixMode(GL_PROJECTION);
 			glLoadIdentity();
@@ -3136,6 +3137,7 @@ int main(int argc, char **argv)
 								//							case SDL_WINDOWEVENT_RESTORED:
 								window_w = sdlEvent.window.data1;
 								window_h = sdlEvent.window.data2;
+								glViewport(0, 0, window_w, window_h);
 								break;
 						}
 						break;
