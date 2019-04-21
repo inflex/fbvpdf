@@ -77,7 +77,8 @@ struct ddi_s ddi;
 
 /* OpenGL capabilities */
 static int has_ARB_texture_non_power_of_two = 1;
-static GLint max_texture_size               = 8192;
+//static GLint max_texture_size               = 8192;
+static GLint max_texture_size               = 65536;
 
 #include <stdio.h>
 
@@ -168,8 +169,8 @@ void ui_draw_image(struct texture *tex, float x, float y) {
 
 static const int zoom_list[] = {18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 450};
 
-#define MINRES (zoom_list[0])
-#define MAXRES (zoom_list[nelem(zoom_list) - 1])
+#define MINRES (zoom_list[0]*retina_factor *0.75)
+#define MAXRES (zoom_list[nelem(zoom_list) - 1]*retina_factor*0.75)
 #define DEFRES 96
 
 #define SEARCH_STATUS_NONE 0
@@ -228,6 +229,8 @@ struct search_s {
 static struct search_s this_search;
 static struct search_s prior_search;
 
+static int drawable_x, drawable_y;
+static int retina_factor = 1;
 static char filename[PATH_MAX];
 static char *password          = "";
 static int raise_on_search     = 0;
@@ -395,6 +398,7 @@ void load_page(void) {
 	fz_irect irect;
 
 	fz_scale(&page_ctm, currentzoom / 72, currentzoom / 72);
+
 	fz_pre_rotate(&page_ctm, -currentrotate);
 	fz_invert_matrix(&page_inv_ctm, &page_ctm);
 
@@ -1275,7 +1279,8 @@ static int do_status_footer(void) {
 	} else {
 		char a[20],b[20],c[20];
 		char d[20],e[20];
-		snprintf(ss, sizeof(ss), "[ F1 = HELP  |  %s = Search, %s = Next, %s = Prev | %s = Previous Page, %s = Next Page ]"
+		snprintf(ss, sizeof(ss), " %d %d [ F1 = HELP  |  %s = Search, %s = Next, %s = Prev | %s = Previous Page, %s = Next Page ]"
+				, drawable_x, drawable_y
 				, KEYB_combo_to_string(a, sizeof(a), keyboard_map[PDFK_SEARCH])
 				, KEYB_combo_to_string(d, sizeof(d), keyboard_map[PDFK_SEARCH_NEXT])
 				, KEYB_combo_to_string(e, sizeof(e), keyboard_map[PDFK_SEARCH_PREV])
@@ -2545,7 +2550,8 @@ static void on_wheel(int direction, int x, int y) {
 		if (direction > 0) {
 			currentzoom *= pct;
 			if (currentzoom > MAXRES) {
-				currentzoom = oz;
+				currentzoom = MAXRES;
+//				currentzoom = oz;
 				return;
 			}
 			desx = tx * pct;
@@ -2556,7 +2562,8 @@ static void on_wheel(int direction, int x, int y) {
 		} else {
 			currentzoom /= pct;
 			if (currentzoom < MINRES) {
-				currentzoom = oz;
+				currentzoom = MINRES;
+//				currentzoom = oz;
 				return;
 			}
 			desx = tx / pct;
@@ -2842,25 +2849,30 @@ int init(void) {
 		success = 0;
 	} else {
 		// Use OpenGL 2.1
-		//		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-		//	    SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-		//		SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+//		SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED,"0");
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+//		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+		SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+//		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+		//SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+//		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+//		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+//		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
 
 		// Create window
 		sdlWindow = SDL_CreateWindow(
-				"FlexBV PDF", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+				"FlexBV Schematic Viewer", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI );
+				//"FlexBV Schematic Viewer", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
 		if (sdlWindow == NULL) {
 			printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
 			success = 0;
+
 		} else {
 			// Create context
+
 			SDL_GLContext glcontext = SDL_GL_CreateContext(sdlWindow);
 			if (glcontext == NULL) {
 				printf("OpenGL context could not be created! SDL Error: %s\n", SDL_GetError());
@@ -2873,6 +2885,15 @@ int init(void) {
 					success = 0;
 				}
 			}
+		}
+	}
+
+	if (success) {
+		SDL_GL_GetDrawableSize(sdlWindow, &drawable_x, &drawable_y);
+		if (drawable_y/window_h > 1.5) {
+			retina_factor = 2;
+			window_w *= retina_factor;
+			window_h *= retina_factor;
 		}
 	}
 
@@ -3134,8 +3155,8 @@ int main(int argc, char **argv)
 							case SDL_WINDOWEVENT_SIZE_CHANGED:
 								//							case SDL_WINDOWEVENT_MAXIMIZED:
 								//							case SDL_WINDOWEVENT_RESTORED:
-								window_w = sdlEvent.window.data1;
-								window_h = sdlEvent.window.data2;
+								window_w = retina_factor  *sdlEvent.window.data1;
+								window_h = retina_factor *sdlEvent.window.data2;
 								break;
 						}
 						break;
@@ -3177,25 +3198,25 @@ int main(int argc, char **argv)
 					case SDL_MOUSEMOTION: {
 													 int x, y;
 													 SDL_GetMouseState(&x, &y);
-													 on_motion(x, y);
+													 on_motion(x*retina_factor, y*retina_factor);
 												 } break;
 
 					case SDL_MOUSEWHEEL: {
 													int x, y;
 													SDL_GetMouseState(&x, &y);
-													on_wheel(sdlEvent.wheel.y, x, y);
+													on_wheel(sdlEvent.wheel.y, x*retina_factor, y*retina_factor);
 												} break;
 
 					case SDL_MOUSEBUTTONDOWN: {
 														  int x, y;
 														  SDL_GetMouseState(&x, &y);
-														  on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x, y, sdlEvent.button.clicks);
+														  on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONDOWN, x*retina_factor, y*retina_factor, sdlEvent.button.clicks);
 													  } break;
 
 					case SDL_MOUSEBUTTONUP: {
 														int x, y;
 														SDL_GetMouseState(&x, &y);
-														on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONUP, x, y, sdlEvent.button.clicks);
+														on_mouse(sdlEvent.button.button, SDL_MOUSEBUTTONUP, x*retina_factor, y*retina_factor, sdlEvent.button.clicks);
 													} break;
 
 				} // switch sdl event type
