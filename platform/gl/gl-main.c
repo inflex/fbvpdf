@@ -152,7 +152,7 @@ void getexepath( char *fullpath, size_t bs ) {
 	 uint32_t pbs = sizeof(pathbuf);
 
 	_NSGetExecutablePath(pathbuf, &pbs);
-	p = strcasestr(pathbuf, "flexbv.app");
+	p = strcasestr(pathbuf, "fbvpdf.app");
 	if (p) *p = '\0';
 	snprintf(fullpath, bs, "%s", pathbuf);
 	return;
@@ -395,6 +395,8 @@ static unsigned int next_power_of_two(unsigned int n) {
 	n |= n >> 16;
 	return ++n;
 }
+
+char exepath[4096];
 
 int flog_init(char *filename) {
 	FILE *f;
@@ -1354,8 +1356,7 @@ static int do_status_footer(void) {
 	} else {
 		char a[20],b[20],c[20];
 		char d[20],e[20];
-		snprintf(ss, sizeof(ss), " %d %d [ F1 = HELP  |  %s = Search, %s = Next, %s = Prev | %s = Previous Page, %s = Next Page ]"
-				, drawable_x, drawable_y
+		snprintf(ss, sizeof(ss), "[ F1 = HELP  |  %s = Search, %s = Next, %s = Prev | %s = Previous Page, %s = Next Page ]"
 				, KEYB_combo_to_string(a, sizeof(a), keyboard_map[PDFK_SEARCH])
 				, KEYB_combo_to_string(d, sizeof(d), keyboard_map[PDFK_SEARCH_NEXT])
 				, KEYB_combo_to_string(e, sizeof(e), keyboard_map[PDFK_SEARCH_PREV])
@@ -1447,6 +1448,11 @@ static void do_help(void) {
 
 	glColor4f(0, 0, 0, 1);
 	y = do_help_line(x, y, "FlexBV PDF Viewer", "");
+
+	y = do_help_line(x, y, "App path", exepath);
+	y = do_help_line(x, y, "Log file", flog_filename);
+	snprintf(ks, sizeof(ks), "%d x %d", drawable_x, drawable_y);
+	y = do_help_line(x, y, "Screen size", ks);
 
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
@@ -2997,7 +3003,6 @@ int main(int argc, char **argv)
 	int check_again  = 0;
 	int wait_for_ddi = 10;
 	int sleepout     = 100;
-	char exepath[4096];
 	char flogpath[4096];
 	char s[10240];
 
