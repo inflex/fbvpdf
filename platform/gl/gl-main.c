@@ -20,6 +20,10 @@
 #include <tlhelp32.h> // for getppid()
 #endif
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h> // for NSGetExecutablePath
+#endif
+
 #define PDFK_HELP 0
 #define PDFK_SEARCH 1
 #define PDFK_SEARCH_NEXT 2
@@ -88,6 +92,74 @@ static GLint max_texture_size               = 65536;
 #else
 
 #endif
+void getexepath( char *fullpath, size_t bs ) {
+#ifdef __WIN32
+	char s[4096];
+
+     // When NULL is passed to GetModuleHandle, the handle of the exe itself is returned
+     HMODULE hModule = GetModuleHandle(NULL);
+     if (hModule != NULL) {
+		  char *p;
+         // Use GetModuleFileName() with module handle to get the path
+         GetModuleFileNameA(hModule, s, sizeof(s));
+//		  s[length] = '\0';
+			 p = strrchr(s, '\\');
+			 if (p) *(p+1) = '\0';
+			 snprintf(fullpath, bs, "%s", s);
+     } else {
+		  flog("exe path is empty");
+     }
+#endif
+
+#ifdef __linux__
+    ssize_t length;
+	 char s[4096];
+	 char *p;
+
+    /*
+     * /proc/self is a symbolic link to the process-ID subdir of /proc, e.g.
+     * /proc/4323 when the pid of the process of this program is 4323.
+     * Inside /proc/<pid> there is a symbolic link to the executable that is
+     * running as this <pid>.  This symbolic link is called "exe". So if we
+     * read the path where the symlink /proc/self/exe points to we have the
+     * full path of the executable. 
+     */
+
+    length = readlink("/proc/self/exe", s, sizeof(s));
+
+    /*
+     * Catch some errors: 
+     */
+    if (length < 0) {
+        //flog("Error resolving symlink /proc/self/exe trying to find full binary path.");
+		  return;
+    }
+    if (length >= (ssize_t)sizeof(s)) {
+        //flog("Exe Path too long.\n");
+		  return;
+    }
+
+    s[length] = '\0';
+	 p = strrchr(s, '/');
+	 if (p) *(p+1) = '\0';
+	 snprintf(fullpath, bs, "%s", s);
+#endif
+
+#ifdef __APPLE__
+    int ret;
+    pid_t pid; 
+    char pathbuf[4096], *p;
+	 uint32_t pbs = sizeof(pathbuf);
+
+	_NSGetExecutablePath(pathbuf, &pbs);
+	p = strcasestr(pathbuf, "flexbv.app");
+	if (p) *p = '\0';
+	snprintf(fullpath, bs, "%s", pathbuf);
+	return;
+#endif
+
+}
+
 
 // Menu handling function declaration
 void menucb(int mitem) {}
@@ -203,6 +275,8 @@ static const int zoom_list[] = {18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288,
 #define SEARCH_FLAG_HEURISTICS 8
 
 #define FLOG_FILENAME "fbvpdf.log"
+
+static char flog_filename[4096];
 
 struct search_s {
 	char search_raw[1024];
@@ -322,9 +396,10 @@ static unsigned int next_power_of_two(unsigned int n) {
 	return ++n;
 }
 
-int flog_init(void) {
+int flog_init(char *filename) {
 	FILE *f;
-	f = fopen(FLOG_FILENAME, "w");
+	snprintf(flog_filename, sizeof(flog_filename), "%s", filename);
+	f = fopen(flog_filename, "w");
 	if (f) {
 		fclose(f);
 	}
@@ -337,7 +412,7 @@ int flog(const char *format, ...) {
 		va_list args;
 		va_start(args, format);
 
-		f = fopen(FLOG_FILENAME, "a");
+		f = fopen(flog_filename, "a");
 		if (f) {
 			fprintf(f, "%ld ", time(NULL));
 			vfprintf(f, format, args);
@@ -2849,23 +2924,31 @@ int init(void) {
 		success = 0;
 	} else {
 		// Use OpenGL 2.1
-		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
-//		SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED,"0");
+//
+		// Create window
+#ifdef __APPLE__
+		SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED,"0");
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 		SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-//		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-//		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-		//SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-//		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-//		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-//		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-
-
-		// Create window
 		sdlWindow = SDL_CreateWindow(
 				"FlexBV Schematic Viewer", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI );
-				//"FlexBV Schematic Viewer", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
+#else
+//		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+		SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+		SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		sdlWindow = SDL_CreateWindow(
+				"FlexBV Schematic Viewer", origin_x, origin_y, window_w, window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
+#endif
+
+
+
 		if (sdlWindow == NULL) {
 			printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
 			success = 0;
@@ -2899,7 +2982,11 @@ int init(void) {
 
 	return success;
 }
-// do other stuff.
+
+
+
+
+
 #ifdef __WIN32
 int main_utf8(int argc, char **argv)
 #else
@@ -2910,10 +2997,14 @@ int main(int argc, char **argv)
 	int check_again  = 0;
 	int wait_for_ddi = 10;
 	int sleepout     = 100;
+	char exepath[4096];
+	char flogpath[4096];
 	char s[10240];
 
 	//debug = 1;
-	flog_init();
+	getexepath(exepath, sizeof(exepath));
+	snprintf(flogpath,sizeof(flogpath),"%s/fbvpdf.log", exepath);
+	flog_init(flogpath);
 	flog("Start.\r\n");
 
 
