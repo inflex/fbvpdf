@@ -107,7 +107,7 @@ void getexepath( char *fullpath, size_t bs ) {
 			 if (p) *(p+1) = '\0';
 			 snprintf(fullpath, bs, "%s", s);
      } else {
-		  flog("exe path is empty");
+		  //flog("exe path is empty");
      }
 #endif
 
