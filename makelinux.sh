@@ -11,7 +11,7 @@ fi
 export G=`git rev-list HEAD --count`
 echo $G
 ZPR="fbvpdf-R${G}-linux.tar.gz"
-make -f Makefile.general GIT_BUILD='${G}'  $1
+make -j4 -f Makefile.general GIT_BUILD='${G}'  $1
 MR=$?
 if [ $MR -eq 0 ]; then
 	mv build/release/mupdf-gl build/release/mupdf-linux

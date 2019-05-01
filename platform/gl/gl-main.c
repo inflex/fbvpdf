@@ -3346,7 +3346,20 @@ int main(int argc, char **argv)
 #endif
 				sleepout = 0;
 				continue;
-			} // puts fbvpdf to sleep if nothing is happening.
+
+			} else {
+				// We've had to put this 1ms interframe sleep in because
+				// SDL2 or something is crashing out with deltaTime issues
+				// (might just be ImGUI)
+#ifdef _WIN32
+				Sleep(5);
+#else
+				usleep(5000);
+#endif
+			}
+
+				// puts fbvpdf to sleep if nothing is happening.
+				//
 
 		} // while !doquit
 
