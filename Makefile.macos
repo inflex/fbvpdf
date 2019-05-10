@@ -15,7 +15,7 @@ include Makethird
 # XCFLAGS or XLIBS instead. Make ignores any lines in the makefile that
 # set a variable that was set on the command line.
 SDL_FRAMEWORK = -F resources/Frameworks -framework SDL2
-CFLAGS += $(XCFLAGS)  -O3 -Wall -mmacosx-version-min=10.11  -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -Iimgui -IRenderers
+CFLAGS += $(XCFLAGS)  -O2 -Wall -mmacosx-version-min=10.11  -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -Iimgui -IRenderers
 LIBS += $(XLIBS) -lm 
 ifeq "$(HAVE_WIN32)" "yes"
 CFLAGS += -static -mwindows
