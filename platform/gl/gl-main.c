@@ -1331,7 +1331,7 @@ static int do_status_footer(void) {
 
 	int x = canvas_x; // + 1 * ui.lineheight;
 	int w = canvas_w;
-	int h = 1.25 * ui.lineheight;
+	int h = 1.125 * ui.lineheight;
 	int y = canvas_h - h; // + 1 * ui.lineheight;
 
 	ss[0] = 0;
@@ -1355,13 +1355,15 @@ static int do_status_footer(void) {
 
 	} else {
 		char a[20],b[20],c[20];
-		char d[20],e[20];
-		snprintf(ss, sizeof(ss), "[ F1 = HELP  |  %s = Search, %s = Next, %s = Prev | %s = Previous Page, %s = Next Page ]"
+		char d[20],e[20],f[20],g[20];
+		snprintf(ss, sizeof(ss), "[ F1 = HELP | Search=%s, Next=%s, Prev=%s | PgUp=%s, PgDn=%s | Rotate CW=%s, CCW=%s ]"
 				, KEYB_combo_to_string(a, sizeof(a), keyboard_map[PDFK_SEARCH])
 				, KEYB_combo_to_string(d, sizeof(d), keyboard_map[PDFK_SEARCH_NEXT])
 				, KEYB_combo_to_string(e, sizeof(e), keyboard_map[PDFK_SEARCH_PREV])
 				, KEYB_combo_to_string(b, sizeof(b), keyboard_map[PDFK_PGUP])
 				, KEYB_combo_to_string(c, sizeof(c), keyboard_map[PDFK_PGDN])
+				, KEYB_combo_to_string(f, sizeof(f), keyboard_map[PDFK_ROTATE_CW])
+				, KEYB_combo_to_string(g, sizeof(g), keyboard_map[PDFK_ROTATE_CCW])
 				);
 	}
 
@@ -1480,9 +1482,6 @@ static void do_help(void) {
 
 	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ROTATE_CCW]);
 	y = do_help_line(x, y, ks, "Rotate Counter-Clockwise");
-
-	KEYB_combo_to_string(ks, sizeof(ks),keyboard_map[PDFK_ROTATE_CW]);
-	y = do_help_line(x, y, ks, "Rotate Clockwise");
 
 	y += ui.lineheight;
 
