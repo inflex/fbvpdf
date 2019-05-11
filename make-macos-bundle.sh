@@ -24,10 +24,14 @@ mkdir $D/Contents
 mkdir $D/Contents/MacOS
 mkdir $D/Contents/Resources
 cp -rv resources/Frameworks $D/Contents/
+rm -rf $D/Contents/Frameworks/SDL2.framework/Versions/A/Headers/
+rm -rf $D/Contents/Frameworks/SDL2.framework/Headers
+
 cp -v Info.plist $D/Contents
 cp -v build/release/mupdf-macos $D/Contents/MacOS/fbvpdf
 cp -v icon-128.png $D/Contents/Resources/fbvpdf.icns
 
+install_name_tool -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/../Frameworks/SDL2.framework/Versions/A/SDL2 $D/Contents/MacOS/fbvpdf
 
 echo "Done"
 
