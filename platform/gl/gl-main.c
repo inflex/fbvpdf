@@ -1454,7 +1454,7 @@ static void do_help(void) {
 	y = do_help_line(x, y, "App path", exepath);
 	y = do_help_line(x, y, "Log file", flog_filename);
 	snprintf(ks, sizeof(ks), "%d x %d", drawable_x, drawable_y);
-	y = do_help_line(x, y, "Screen size", ks);
+	y = do_help_line(x, y, "Window size", ks);
 
 	y += ui.lineheight;
 	y = do_help_line(x, y, "F1", "show this message");
