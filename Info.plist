@@ -33,6 +33,6 @@
 	<key>NSHighResolutionCapable</key>
 	<string>true</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.11.0</string>
+	<string>10.10.0</string>
 </dict>
 </plist>
