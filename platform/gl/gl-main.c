@@ -239,7 +239,7 @@ void ui_draw_image(struct texture *tex, float x, float y) {
 	glDisable(GL_BLEND);
 }
 
-static const int zoom_list[] = {18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 450};
+static const int zoom_list[] = {18, 24, 36, 54, 72, 96, 120, 144, 180, 216, 288, 350, 450, 600};
 
 #define MINRES (zoom_list[0]*retina_factor *0.75)
 #define MAXRES (zoom_list[nelem(zoom_list) - 1]*retina_factor*0.75)

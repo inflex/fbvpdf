@@ -14,6 +14,7 @@ include Makethird
 # Do not specify CFLAGS or LIBS on the make invocation line - specify
 # XCFLAGS or XLIBS instead. Make ignores any lines in the makefile that
 # set a variable that was set on the command line.
+#CFLAGS += $(XCFLAGS) -Wall -O3 -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -Iimgui -IRenderers
 CFLAGS += $(XCFLAGS) -Wall -O3 -Iinclude -I$(OUT)/generated  -DGIT_BUILD=$(GIT_BUILD) -Iimgui -IRenderers
 LIBS += $(XLIBS) -lm  -lSDL2
 ifeq "$(HAVE_WIN32)" "yes"
